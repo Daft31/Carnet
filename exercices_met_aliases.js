@@ -2,7 +2,7 @@
  * kcal_* sont les coefficients source (référence 70 kg). MET est une approximation
  * cohérente dérivée de kcal/min: MET = kcal/min / 1.225 (70 kg). Les fourchettes
  * sont conservées. Formule bloc: durée_min × MET × poids_kg / 200. */
-export const exercicesMetAliases = {
+const exercicesMetAliases = {
   pull_up: {"met": 8.0,"aliases": ["pull up","pull-up","traction pronation","tractions","traction","pullup","tirage"],"type": "reps","kcal_per_rep_70kg": 0.16,"kcal_per_min_70kg": 9.8,"source_name_fr": "Traction pronation","source_name_en": "Pull-Up"},
   chin_up: {"met": 8.0,"aliases": ["chin up","chin-up","traction supination","tractions","traction","pull up","pullup","tirage"],"type": "reps","kcal_per_rep_70kg": 0.16,"kcal_per_min_70kg": 9.8,"source_name_fr": "Traction supination","source_name_en": "Chin-Up"},
   neutral_grip_pull_up: {"met": 8.0,"aliases": ["neutral grip pull up","neutral-grip pull-up","traction prise neutre","tractions","traction","pull up","pullup","tirage"],"type": "reps","kcal_per_rep_70kg": 0.16,"kcal_per_min_70kg": 9.8,"source_name_fr": "Traction prise neutre","source_name_en": "Neutral-Grip Pull-Up"},
@@ -231,4 +231,3 @@ export const exercicesMetAliases = {
   drop_set: {"met": null,"aliases": ["drop set","drop-set","série dégressive"],"type": "set_structure"},
 };
 
-export default exercicesMetAliases;
