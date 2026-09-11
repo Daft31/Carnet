@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carnet</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Carnet - Suivi Quotidien</title>
     <style>
         * {
             margin: 0;
@@ -13,778 +12,757 @@
         }
 
         :root {
-            /* Couleurs vertes du dark mode original */
-            --primary-green: #10b981;
-            --dark-bg: #0f172a;
-            --dark-card: #1a2332;
-            --dark-border: #2d3e52;
-            --text-primary: #f1f5f9;
-            --text-secondary: #cbd5e1;
-            --accent: #06b6d4;
-        }
-
-        html, body {
-            height: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: var(--dark-bg);
-            color: var(--text-primary);
-            overflow: hidden;
+            --primary: #10b981;
+            --primary-dark: #059669;
+            --bg-dark: #1a2332;
+            --bg-darker: #0f1419;
+            --text-light: #e5e7eb;
+            --text-muted: #9ca3af;
+            --border: #374151;
+            --card-bg: #1f2937;
         }
 
         body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, var(--bg-darker) 0%, var(--bg-dark) 100%);
+            color: var(--text-light);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* ============ MOBILE FIRST (< 768px) ============ */
+        
+        .container {
             display: flex;
             flex-direction: column;
+            min-height: 100vh;
+            padding-bottom: 70px;
         }
 
-        /* ==================== MOBILE FIRST ==================== */
+        header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-dark);
+        }
 
-        /* Header */
-        .navbar {
-            background-color: var(--dark-card);
-            border-bottom: 1px solid var(--dark-border);
-            padding: 1rem;
+        header h1 {
+            font-size: 28px;
+            margin-bottom: 4px;
+            color: var(--text-light);
+        }
+
+        header p {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .content {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .section {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* ============ BOTTOM NAV (Mobile) ============ */
+        
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-dark);
+            border-top: 1px solid var(--border);
             display: flex;
-            justify-content: space-between;
+            justify-content: space-around;
+            padding: 8px 0;
+            z-index: 1000;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
             align-items: center;
-            flex-shrink: 0;
-        }
-
-        .navbar h1 {
-            font-size: 1.5rem;
-            color: var(--primary-green);
-        }
-
-        .navbar-buttons {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .navbar-btn {
-            background: var(--dark-border);
-            border: none;
-            color: var(--text-primary);
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
+            gap: 4px;
+            padding: 8px 12px;
             cursor: pointer;
-            display: flex;
-            align-items: center;
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            font-size: 12px;
+            transition: all 0.3s ease;
+            border-radius: 8px;
+            min-height: 50px;
             justify-content: center;
-            transition: background-color 0.2s;
         }
 
-        .navbar-btn:hover {
-            background-color: var(--primary-green);
-            color: var(--dark-bg);
+        .nav-item:active {
+            background: rgba(16, 185, 129, 0.1);
         }
 
-        /* Sidebar Navigation - Hidden on mobile */
+        .nav-item.active {
+            color: var(--primary);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .nav-item span {
+            font-size: 20px;
+        }
+
+        .nav-label {
+            font-size: 11px;
+            text-align: center;
+        }
+
+        /* ============ SIDEBAR (Desktop, hidden on mobile) ============ */
+        
         .sidebar {
             display: none;
-            width: 250px;
-            background-color: var(--dark-card);
-            border-right: 1px solid var(--dark-border);
-            overflow-y: auto;
-            flex-shrink: 0;
         }
 
-        /* Main Content Area */
-        .main-container {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-            min-height: 0;
-        }
-
-        .content-wrapper {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        /* Tabs Mobile - Bottom Navigation */
-        .tabs-mobile {
-            display: flex;
-            background-color: var(--dark-card);
-            border-top: 1px solid var(--dark-border);
-            gap: 0;
-            overflow-x: auto;
-            flex-shrink: 0;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        .tab-button {
-            flex: 1;
-            min-width: 60px;
-            padding: 0.75rem 0.5rem;
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.25rem;
-            font-size: 0.65rem;
-            transition: all 0.2s;
-            border-bottom: 3px solid transparent;
-        }
-
-        .tab-button:hover {
-            color: var(--primary-green);
-        }
-
-        .tab-button.active {
-            color: var(--primary-green);
-            border-bottom-color: var(--primary-green);
-        }
-
-        .tab-button i {
-            font-size: 1.25rem;
-        }
-
-        /* Content Sections */
-        .tab-content {
-            display: none;
-            overflow-y: auto;
-            flex: 1;
-            padding: 1rem;
-        }
-
-        .tab-content.active {
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Cards */
+        /* ============ CARDS & COMPONENTS ============ */
+        
         .card {
-            background-color: var(--dark-card);
-            border: 1px solid var(--dark-border);
+            background: var(--card-bg);
+            border: 1px solid var(--border);
             border-radius: 12px;
-            padding: 1rem;
-            margin-bottom: 1rem;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .card h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .card-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 0.75rem;
-            flex-wrap: wrap;
-            gap: 0.5rem;
+            margin-bottom: 12px;
         }
 
-        .card-title {
-            font-size: 1.125rem;
-            color: var(--primary-green);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .card-badge {
-            background-color: rgba(16, 185, 129, 0.2);
-            color: var(--primary-green);
-            padding: 0.25rem 0.75rem;
+        .status-badge {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--primary);
+            padding: 6px 12px;
             border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: bold;
+            font-size: 12px;
+            font-weight: 600;
         }
 
-        /* Forms */
-        input[type="text"],
-        input[type="email"],
-        input[type="number"],
-        textarea,
-        select {
-            width: 100%;
-            padding: 0.75rem;
-            background-color: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--dark-border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            margin-bottom: 0.75rem;
-            font-size: 1rem;
-            font-family: inherit;
-        }
-
-        input[type="text"]:focus,
-        input[type="email"]:focus,
-        input[type="number"]:focus,
-        textarea:focus,
-        select:focus {
-            outline: none;
-            border-color: var(--primary-green);
-            background-color: rgba(16, 185, 129, 0.1);
-        }
-
-        /* Buttons */
-        button {
-            padding: 0.75rem 1.5rem;
-            background-color: var(--primary-green);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: all 0.2s;
-            font-weight: 500;
-        }
-
-        button:hover {
-            background-color: #059669;
-            transform: translateY(-2px);
-        }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        .btn-secondary {
-            background-color: transparent;
-            color: var(--primary-green);
-            border: 1px solid var(--primary-green);
-        }
-
-        .btn-secondary:hover {
-            background-color: rgba(16, 185, 129, 0.1);
-        }
-
-        /* Lists */
-        .list-item {
+        .stat-row {
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem;
-            background-color: rgba(255, 255, 255, 0.02);
-            border-radius: 8px;
-            margin-bottom: 0.5rem;
-            border: 1px solid var(--dark-border);
-            transition: all 0.2s;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(55, 65, 81, 0.5);
+            font-size: 14px;
         }
 
-        .list-item:hover {
-            background-color: rgba(16, 185, 129, 0.1);
-            border-color: var(--primary-green);
-        }
-
-        .list-item input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-            accent-color: var(--primary-green);
-        }
-
-        .list-item-content {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .list-item-text {
-            word-break: break-word;
-        }
-
-        .list-item-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .btn-icon {
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
-            padding: 0.5rem;
-            display: flex;
-            align-items: center;
-            transition: color 0.2s;
-        }
-
-        .btn-icon:hover {
-            color: var(--primary-green);
-        }
-
-        .btn-icon.danger:hover {
-            color: #ef4444;
-        }
-
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-        }
-
-        .stat-box {
-            background-color: rgba(16, 185, 129, 0.1);
-            border: 1px solid var(--primary-green);
-            border-radius: 8px;
-            padding: 0.75rem;
-            text-align: center;
+        .stat-row:last-child {
+            border-bottom: none;
         }
 
         .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            margin-bottom: 0.25rem;
+            color: var(--text-muted);
         }
 
         .stat-value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: var(--primary-green);
+            font-weight: 600;
+            color: var(--text-light);
+            font-size: 16px;
         }
 
-        /* Progress Bar */
         .progress-bar {
             width: 100%;
             height: 8px;
-            background-color: rgba(255, 255, 255, 0.1);
+            background: rgba(55, 65, 81, 0.5);
             border-radius: 4px;
             overflow: hidden;
-            margin-bottom: 0.75rem;
+            margin: 8px 0;
         }
 
         .progress-fill {
             height: 100%;
-            background-color: var(--primary-green);
+            background: linear-gradient(90deg, var(--primary), #34d399);
             border-radius: 4px;
             transition: width 0.3s ease;
         }
 
-        /* Utilities */
-        .text-center {
-            text-align: center;
+        .button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .mt-1 { margin-top: 1rem; }
-        .mb-1 { margin-bottom: 1rem; }
-        .gap-1 { gap: 1rem; }
+        .button:active {
+            background: var(--primary-dark);
+            transform: scale(0.98);
+        }
 
-        /* ==================== TABLET+ (≥ 768px) ==================== */
+        .button-secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-light);
+        }
+
+        .button-secondary:active {
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .icon-button {
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .icon-button:active {
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-darker);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-light);
+            font-size: 14px;
+            margin-bottom: 12px;
+            min-height: 44px;
+        }
+
+        .input-field::placeholder {
+            color: var(--text-muted);
+        }
+
+        .meal-item {
+            background: var(--bg-darker);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .meal-item-label {
+            color: var(--text-muted);
+        }
+
+        .meal-item-value {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .list-item {
+            padding: 12px;
+            border-bottom: 1px solid rgba(55, 65, 81, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .list-item-text {
+            flex: 1;
+        }
+
+        .list-item-check {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            background: transparent;
+        }
+
+        .list-item-check:active {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        /* ============ TABLET & DESKTOP (≥ 768px) ============ */
+        
         @media (min-width: 768px) {
-            body {
-                flex-direction: row;
-            }
-
-            .navbar {
-                display: none;
+            .container {
+                display: grid;
+                grid-template-columns: 250px 1fr;
+                padding-bottom: 0;
             }
 
             .sidebar {
                 display: flex;
                 flex-direction: column;
+                background: var(--bg-dark);
+                border-right: 1px solid var(--border);
+                padding: 20px;
+                position: sticky;
+                top: 0;
+                height: 100vh;
+                overflow-y: auto;
             }
 
-            .main-container {
-                flex-direction: row;
+            .sidebar-item {
+                padding: 12px 16px;
+                margin-bottom: 8px;
+                background: transparent;
+                border: none;
+                color: var(--text-muted);
+                cursor: pointer;
+                border-radius: 8px;
+                font-size: 14px;
+                transition: all 0.3s ease;
+                text-align: left;
             }
 
-            .content-wrapper {
-                flex: 1;
+            .sidebar-item:hover {
+                background: rgba(16, 185, 129, 0.1);
+                color: var(--primary);
             }
 
-            /* Tabs horizontales en haut sur desktop */
-            .tabs-mobile {
-                flex-direction: column;
-                width: auto;
-                border-top: none;
-                border-right: 1px solid var(--dark-border);
-                gap: 0.5rem;
-                padding: 0.5rem;
+            .sidebar-item.active {
+                background: rgba(16, 185, 129, 0.2);
+                color: var(--primary);
+                font-weight: 600;
             }
 
-            .tab-button {
-                flex-direction: row;
-                min-width: 180px;
-                justify-content: flex-start;
-                padding: 0.75rem 1rem;
-                border-bottom: none;
-                border-left: 3px solid transparent;
-                gap: 0.75rem;
-                font-size: 0.9rem;
+            .bottom-nav {
+                display: none;
             }
 
-            .tab-button.active {
-                border-left-color: var(--primary-green);
+            .content {
+                padding: 32px;
             }
 
-            .content-wrapper {
-                display: flex;
-                flex-direction: column;
-            }
-
-            .tab-content {
-                padding: 1.5rem;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(3, 1fr);
+            header {
+                grid-column: 1 / -1;
+                padding: 24px 32px;
             }
 
             .card {
-                padding: 1.5rem;
+                margin-bottom: 24px;
+            }
+
+            .stat-row {
+                padding: 16px 0;
+                font-size: 16px;
+            }
+
+            .stat-value {
+                font-size: 18px;
+            }
+
+            .button {
+                width: auto;
+                padding: 12px 24px;
             }
         }
 
-        /* ==================== DARK MODE SCROLLBAR ==================== */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background-color: var(--dark-bg);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background-color: var(--dark-border);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background-color: var(--primary-green);
+        @media (min-width: 1024px) {
+            .content {
+                max-width: 900px;
+                margin: 0 auto;
+            }
         }
     </style>
 </head>
 <body>
-    <!-- Mobile Header -->
-    <div class="navbar">
-        <h1><i class="fas fa-book"></i> Carnet</h1>
-        <div class="navbar-buttons">
-            <button class="navbar-btn" title="Rechercher">
-                <i class="fas fa-search"></i>
-            </button>
-            <button class="navbar-btn" title="Paramètres">
-                <i class="fas fa-cog"></i>
-            </button>
-        </div>
-    </div>
+    <div class="container">
+        <header>
+            <h1>Carnet</h1>
+            <p>Votre suivi du jour</p>
+        </header>
 
-    <!-- Desktop Sidebar -->
-    <div class="sidebar">
-        <div style="padding: 1.5rem 1rem;">
-            <h2 style="color: var(--primary-green); font-size: 1.5rem; margin-bottom: 2rem;">
-                <i class="fas fa-book"></i> Carnet
-            </h2>
-        </div>
-        <nav class="tabs-mobile" style="border: none; flex-direction: column; width: 100%;">
-            <button class="tab-button active" data-tab="dashboard" style="justify-content: flex-start; border-left: 3px solid var(--primary-green);">
-                <i class="fas fa-chart-line"></i>
-                <span>Tableau de bord</span>
+        <aside class="sidebar">
+            <button class="sidebar-item active" data-tab="today">📅 Aujourd'hui</button>
+            <button class="sidebar-item" data-tab="meals">🍽️ Repas</button>
+            <button class="sidebar-item" data-tab="training">💪 Séances d'entraînement</button>
+            <button class="sidebar-item" data-tab="weight">⚖️ Poids</button>
+            <button class="sidebar-item" data-tab="water">💧 Hydratation</button>
+            <button class="sidebar-item" data-tab="sleep">😴 Sommeil</button>
+            <button class="sidebar-item" data-tab="mood">😊 Humeur</button>
+            <button class="sidebar-item" data-tab="settings">⚙️ Paramètres</button>
+        </aside>
+
+        <main class="content">
+            <!-- TODAY SECTION -->
+            <section id="today" class="section active">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🍽️ Repas du jour</h2>
+                        <span class="status-badge">2/3 REPAS</span>
+                    </div>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Calories consommées</span>
+                        <span class="stat-value">1.850 kcal</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 74%"></div>
+                    </div>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Objectif</span>
+                        <span class="stat-value">2.500 kcal</span>
+                    </div>
+                    
+                    <button class="button">Ajouter un repas</button>
+                </div>
+
+                <div class="card">
+                    <h2>💪 Séances d'entraînement</h2>
+                    <div class="card-header">
+                        <span class="status-badge" style="background: rgba(34, 197, 94, 0.2); color: #22c55e;">✓ COMPLÉTÉ</span>
+                    </div>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Durée totale</span>
+                        <span class="stat-value">45 min</span>
+                    </div>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Calories brûlées</span>
+                        <span class="stat-value">350 kcal</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>💧 Hydratation</h2>
+                    <div class="card-header">
+                        <span class="status-badge">4/8 VERRES</span>
+                    </div>
+                    
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 50%"></div>
+                    </div>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Consommé</span>
+                        <span class="stat-value">1L</span>
+                    </div>
+                    
+                    <button class="button">Ajouter de l'eau</button>
+                </div>
+
+                <div class="card">
+                    <h2>😴 Sommeil</h2>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Durée</span>
+                        <span class="stat-value">7h 30min</span>
+                    </div>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Qualité</span>
+                        <span class="stat-value">Bon</span>
+                    </div>
+                    
+                    <button class="button">Enregistrer le sommeil</button>
+                </div>
+
+                <div class="card">
+                    <h2>😊 Humeur</h2>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Humeur actuelle</span>
+                        <span class="stat-value">😊</span>
+                    </div>
+                    
+                    <button class="button">Mettre à jour l'humeur</button>
+                </div>
+            </section>
+
+            <!-- MEALS SECTION -->
+            <section id="meals" class="section">
+                <div class="card">
+                    <h2>🍽️ Repas du jour</h2>
+                    
+                    <input type="text" class="input-field" placeholder="Ajouter un repas...">
+                    
+                    <div class="meal-item">
+                        <span class="meal-item-label">Petit-déjeuner</span>
+                        <span class="meal-item-value">420 kcal</span>
+                    </div>
+                    
+                    <div class="meal-item">
+                        <span class="meal-item-label">Déjeuner</span>
+                        <span class="meal-item-value">780 kcal</span>
+                    </div>
+                    
+                    <div class="meal-item">
+                        <span class="meal-item-label">Goûter</span>
+                        <span class="meal-item-value">650 kcal</span>
+                    </div>
+                    
+                    <div class="stat-row" style="border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px;">
+                        <span class="stat-label">Total</span>
+                        <span class="stat-value">1.850 kcal</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TRAINING SECTION -->
+            <section id="training" class="section">
+                <div class="card">
+                    <h2>💪 Séances d'entraînement</h2>
+                    
+                    <input type="text" class="input-field" placeholder="Ajouter une séance...">
+                    
+                    <div class="list-item">
+                        <span class="list-item-text">Cardio - 30 min (250 kcal)</span>
+                        <div class="list-item-check">✓</div>
+                    </div>
+                    
+                    <div class="list-item">
+                        <span class="list-item-text">Musculation - 15 min (100 kcal)</span>
+                        <div class="list-item-check">✓</div>
+                    </div>
+                    
+                    <div class="stat-row" style="border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px;">
+                        <span class="stat-label">Total brûlé</span>
+                        <span class="stat-value">350 kcal</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- WEIGHT SECTION -->
+            <section id="weight" class="section">
+                <div class="card">
+                    <h2>⚖️ Suivi du poids</h2>
+                    
+                    <input type="number" class="input-field" placeholder="Poids en kg">
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Poids actuel</span>
+                        <span class="stat-value">72.5 kg</span>
+                    </div>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Objectif</span>
+                        <span class="stat-value">70 kg</span>
+                    </div>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Variation</span>
+                        <span class="stat-value" style="color: var(--primary);">-0.5 kg</span>
+                    </div>
+                    
+                    <button class="button">Enregistrer le poids</button>
+                </div>
+            </section>
+
+            <!-- WATER SECTION -->
+            <section id="water" class="section">
+                <div class="card">
+                    <h2>💧 Hydratation</h2>
+                    
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 50%"></div>
+                    </div>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Consommé</span>
+                        <span class="stat-value">1L / 2L</span>
+                    </div>
+                    
+                    <div class="list-item">
+                        <span class="list-item-text">Verre 1</span>
+                        <div class="list-item-check">✓</div>
+                    </div>
+                    
+                    <div class="list-item">
+                        <span class="list-item-text">Verre 2</span>
+                        <div class="list-item-check">✓</div>
+                    </div>
+                    
+                    <div class="list-item">
+                        <span class="list-item-text">Verre 3</span>
+                        <div class="list-item-check"></div>
+                    </div>
+                    
+                    <div class="list-item">
+                        <span class="list-item-text">Verre 4</span>
+                        <div class="list-item-check"></div>
+                    </div>
+                    
+                    <button class="button">Ajouter de l'eau</button>
+                </div>
+            </section>
+
+            <!-- SLEEP SECTION -->
+            <section id="sleep" class="section">
+                <div class="card">
+                    <h2>😴 Sommeil</h2>
+                    
+                    <input type="time" class="input-field" placeholder="Heure du coucher">
+                    <input type="time" class="input-field" placeholder="Heure du réveil">
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Durée</span>
+                        <span class="stat-value">7h 30min</span>
+                    </div>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Qualité</span>
+                        <span class="stat-value">Bon</span>
+                    </div>
+                    
+                    <button class="button">Enregistrer le sommeil</button>
+                </div>
+            </section>
+
+            <!-- MOOD SECTION -->
+            <section id="mood" class="section">
+                <div class="card">
+                    <h2>😊 Humeur</h2>
+                    
+                    <div class="stat-row">
+                        <span class="stat-label">Humeur actuelle</span>
+                        <span class="stat-value">😊</span>
+                    </div>
+                    
+                    <input type="text" class="input-field" placeholder="Notes sur votre journée...">
+                    
+                    <button class="button">Mettre à jour l'humeur</button>
+                </div>
+            </section>
+
+            <!-- SETTINGS SECTION -->
+            <section id="settings" class="section">
+                <div class="card">
+                    <h2>⚙️ Paramètres</h2>
+                    
+                    <div class="list-item">
+                        <span class="list-item-text">Objectif calorique</span>
+                        <span class="list-item-text" style="color: var(--primary);">2.500 kcal</span>
+                    </div>
+                    
+                    <div class="list-item">
+                        <span class="list-item-text">Notifications</span>
+                        <div class="list-item-check">✓</div>
+                    </div>
+                    
+                    <div class="list-item">
+                        <span class="list-item-text">Mode sombre</span>
+                        <div class="list-item-check">✓</div>
+                    </div>
+                    
+                    <button class="button button-secondary">Exporter les données</button>
+                    <button class="button button-secondary">Réinitialiser</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- BOTTOM NAVIGATION (Mobile only) -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-tab="today">
+                <span>📅</span>
+                <div class="nav-label">Accueil</div>
             </button>
-            <button class="tab-button" data-tab="health" style="justify-content: flex-start;">
-                <i class="fas fa-heart"></i>
-                <span>Santé</span>
+            <button class="nav-item" data-tab="meals">
+                <span>🍽️</span>
+                <div class="nav-label">Repas</div>
             </button>
-            <button class="tab-button" data-tab="meals" style="justify-content: flex-start;">
-                <i class="fas fa-utensils"></i>
-                <span>Repas</span>
+            <button class="nav-item" data-tab="training">
+                <span>💪</span>
+                <div class="nav-label">Entraîn.</div>
             </button>
-            <button class="tab-button" data-tab="training" style="justify-content: flex-start;">
-                <i class="fas fa-dumbbell"></i>
-                <span>Entraînement</span>
+            <button class="nav-item" data-tab="weight">
+                <span>⚖️</span>
+                <div class="nav-label">Poids</div>
             </button>
-            <button class="tab-button" data-tab="habits" style="justify-content: flex-start;">
-                <i class="fas fa-leaf"></i>
-                <span>Habitudes</span>
+            <button class="nav-item" data-tab="water">
+                <span>💧</span>
+                <div class="nav-label">Eau</div>
             </button>
-            <button class="tab-button" data-tab="goals" style="justify-content: flex-start;">
-                <i class="fas fa-target"></i>
-                <span>Objectifs</span>
+            <button class="nav-item" data-tab="sleep">
+                <span>😴</span>
+                <div class="nav-label">Sommeil</div>
             </button>
-            <button class="tab-button" data-tab="notes" style="justify-content: flex-start;">
-                <i class="fas fa-sticky-note"></i>
-                <span>Notes</span>
+            <button class="nav-item" data-tab="mood">
+                <span>😊</span>
+                <div class="nav-label">Humeur</div>
             </button>
-            <button class="tab-button" data-tab="settings" style="justify-content: flex-start;">
-                <i class="fas fa-cog"></i>
-                <span>Paramètres</span>
+            <button class="nav-item" data-tab="settings">
+                <span>⚙️</span>
+                <div class="nav-label">Paramètres</div>
             </button>
         </nav>
     </div>
 
-    <!-- Main Container -->
-    <div class="main-container">
-        <div class="content-wrapper">
-            <!-- Mobile Bottom Tabs -->
-            <nav class="tabs-mobile" style="order: 3;">
-                <button class="tab-button active" data-tab="dashboard" title="Tableau de bord">
-                    <i class="fas fa-chart-line"></i>
-                    <span>Tableau</span>
-                </button>
-                <button class="tab-button" data-tab="health" title="Santé">
-                    <i class="fas fa-heart"></i>
-                    <span>Santé</span>
-                </button>
-                <button class="tab-button" data-tab="meals" title="Repas">
-                    <i class="fas fa-utensils"></i>
-                    <span>Repas</span>
-                </button>
-                <button class="tab-button" data-tab="training" title="Entraînement">
-                    <i class="fas fa-dumbbell"></i>
-                    <span>Entrainement</span>
-                </button>
-                <button class="tab-button" data-tab="habits" title="Habitudes">
-                    <i class="fas fa-leaf"></i>
-                    <span>Habitudes</span>
-                </button>
-                <button class="tab-button" data-tab="goals" title="Objectifs">
-                    <i class="fas fa-target"></i>
-                    <span>Objectifs</span>
-                </button>
-                <button class="tab-button" data-tab="notes" title="Notes">
-                    <i class="fas fa-sticky-note"></i>
-                    <span>Notes</span>
-                </button>
-                <button class="tab-button" data-tab="settings" title="Paramètres">
-                    <i class="fas fa-cog"></i>
-                    <span>Paramètres</span>
-                </button>
-            </nav>
-
-            <!-- Tab Contents -->
-            <div class="tab-content active" id="dashboard">
-                <h2 style="margin-bottom: 1rem;">Tableau de bord</h2>
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <div class="stat-label">Calories</div>
-                        <div class="stat-value">1.850</div>
-                        <div class="stat-label">/ 2.500 kcal</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Eau</div>
-                        <div class="stat-value">2.5L</div>
-                        <div class="stat-label">/ 3L</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Pas</div>
-                        <div class="stat-value">8.234</div>
-                        <div class="stat-label">/ 10.000</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Sommeil</div>
-                        <div class="stat-value">7h30</div>
-                        <div class="stat-label">/ 8h</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Entraînement</div>
-                        <div class="stat-value">1</div>
-                        <div class="stat-label">séance</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Humeur</div>
-                        <div class="stat-value">😊</div>
-                        <div class="stat-label">Bien</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="tab-content" id="health">
-                <h2 style="margin-bottom: 1rem;">Santé</h2>
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-heartbeat"></i> Tension artérielle
-                        </div>
-                    </div>
-                    <div style="margin-bottom: 0.75rem;">
-                        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem;">Systolique</label>
-                        <input type="number" placeholder="ex: 120" value="120">
-                    </div>
-                    <div style="margin-bottom: 0.75rem;">
-                        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem;">Diastolique</label>
-                        <input type="number" placeholder="ex: 80" value="80">
-                    </div>
-                    <button style="width: 100%;">Enregistrer</button>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-weight"></i> Poids
-                        </div>
-                    </div>
-                    <input type="number" placeholder="Votre poids en kg" value="75">
-                    <button style="width: 100%;">Enregistrer</button>
-                </div>
-            </div>
-
-            <div class="tab-content" id="meals">
-                <h2 style="margin-bottom: 1rem;">Repas du jour</h2>
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-apple-alt"></i> Repas
-                        </div>
-                        <span class="card-badge">2/3 REPAS</span>
-                    </div>
-                    <div style="margin-bottom: 1rem;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span>Calories consommées</span>
-                            <span style="color: var(--primary-green); font-weight: bold;">1.850 kcal</span>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: 74%;"></div>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
-                            <span>Objectif</span>
-                            <span style="color: var(--primary-green); font-weight: bold;">2.500 kcal</span>
-                        </div>
-                    </div>
-                    <button style="width: 100%;">+ Ajouter un repas</button>
-                </div>
-            </div>
-
-            <div class="tab-content" id="training">
-                <h2 style="margin-bottom: 1rem;">Entraînement</h2>
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-dumbbell"></i> Séances d'entraînement
-                        </div>
-                        <span class="card-badge" style="background-color: rgba(16, 185, 129, 0.2); color: var(--primary-green);">✓ COMPLÉTÉ</span>
-                    </div>
-                    <div style="margin-bottom: 0.75rem;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>Durée totale</span>
-                            <span style="color: var(--primary-green); font-weight: bold;">45 min</span>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <input type="checkbox" checked>
-                        <div class="list-item-content">
-                            <div class="list-item-text">Cardio - 20 min</div>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <input type="checkbox" checked>
-                        <div class="list-item-content">
-                            <div class="list-item-text">Musculation - 25 min</div>
-                        </div>
-                    </div>
-                    <button style="width: 100%; margin-top: 1rem;">+ Ajouter une séance</button>
-                </div>
-            </div>
-
-            <div class="tab-content" id="habits">
-                <h2 style="margin-bottom: 1rem;">Habitudes</h2>
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-check-circle"></i> Habitudes du jour
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <input type="checkbox" checked>
-                        <div class="list-item-content">
-                            <div class="list-item-text">Boire 3L d'eau</div>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <input type="checkbox">
-                        <div class="list-item-content">
-                            <div class="list-item-text">Méditation 10 min</div>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <input type="checkbox" checked>
-                        <div class="list-item-content">
-                            <div class="list-item-text">Marche 30 min</div>
-                        </div>
-                    </div>
-                    <button style="width: 100%; margin-top: 1rem;">+ Ajouter une habitude</button>
-                </div>
-            </div>
-
-            <div class="tab-content" id="goals">
-                <h2 style="margin-bottom: 1rem;">Objectifs</h2>
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-bullseye"></i> Mes objectifs
-                        </div>
-                    </div>
-                    <div style="margin-bottom: 1.5rem;">
-                        <h4 style="margin-bottom: 0.5rem;">Perte de poids - 5kg</h4>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: 40%;"></div>
-                        </div>
-                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">2kg sur 5kg</div>
-                    </div>
-                    <div style="margin-bottom: 1rem;">
-                        <h4 style="margin-bottom: 0.5rem;">Fitness</h4>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: 60%;"></div>
-                        </div>
-                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">3 séances par semaine</div>
-                    </div>
-                    <button style="width: 100%;">+ Ajouter un objectif</button>
-                </div>
-            </div>
-
-            <div class="tab-content" id="notes">
-                <h2 style="margin-bottom: 1rem;">Notes</h2>
-                <div class="card">
-                    <textarea placeholder="Écrivez vos notes ici..." style="min-height: 150px; resize: vertical;"></textarea>
-                    <button style="width: 100%;">Enregistrer la note</button>
-                </div>
-            </div>
-
-            <div class="tab-content" id="settings">
-                <h2 style="margin-bottom: 1rem;">Paramètres</h2>
-                <div class="card">
-                    <h3 style="margin-bottom: 0.75rem; color: var(--primary-green);">Profil</h3>
-                    <input type="text" placeholder="Nom" value="Jean">
-                    <input type="email" placeholder="Email" value="jean@example.com">
-                    <button style="width: 100%;">Mettre à jour</button>
-                </div>
-
-                <div class="card">
-                    <h3 style="margin-bottom: 0.75rem; color: var(--primary-green);">Préférences</h3>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; cursor: pointer;">
-                        <input type="checkbox" checked>
-                        <span>Notifications activées</span>
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                        <input type="checkbox" checked>
-                        <span>Mode sombre</span>
-                    </label>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
-        // Tab switching
-        const tabButtons = document.querySelectorAll('.tab-button');
-        const tabContents = document.querySelectorAll('.tab-content');
+        // Tab switching functionality
+        const tabButtons = document.querySelectorAll('[data-tab]');
+        const sections = document.querySelectorAll('.section');
 
         tabButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const tabId = this.getAttribute('data-tab');
-
-                // Remove active class from all buttons and contents
+            button.addEventListener('click', () => {
+                const tabName = button.getAttribute('data-tab');
+                
+                // Remove active class from all buttons and sections
                 tabButtons.forEach(btn => btn.classList.remove('active'));
-                tabContents.forEach(content => content.classList.remove('active'));
-
-                // Add active class to clicked button and corresponding content
-                this.classList.add('active');
-                document.getElementById(tabId).classList.add('active');
+                sections.forEach(section => section.classList.remove('active'));
+                
+                // Add active class to clicked button and corresponding section
+                button.classList.add('active');
+                document.getElementById(tabName).classList.add('active');
+                
+                // Scroll to top on mobile
+                document.querySelector('.content').scrollTop = 0;
             });
         });
 
-        // Checkbox functionality
-        document.querySelectorAll('.list-item input[type="checkbox"]').forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                const item = this.closest('.list-item');
-                if (this.checked) {
-                    item.style.opacity = '0.6';
-                } else {
-                    item.style.opacity = '1';
-                }
+        // Close menu on item click (mobile)
+        document.querySelectorAll('.list-item-check').forEach(check => {
+            check.addEventListener('click', () => {
+                check.textContent = check.textContent === '✓' ? '' : '✓';
             });
         });
     </script>
