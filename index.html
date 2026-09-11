@@ -582,7 +582,7 @@ function dayTotals(date){
     if(e.type==='meal'){ kcalIn+=e.kcal; protein+=e.protein; carbs+=e.carbs; fat+=e.fat; }
     else if(e.type==='workout'){ kcalOut += e.kcalBurned; }
   });
-  return {kcalIn,kcalOut,protein,carbs,fat,net:kcalIn-kcalOut};
+  return {kcalIn,kcalOut,protein,carbs,fat,net:kcalIn};
 }
 
 // Les semaines sont ancrées au lundi. Le déficit ignore volontairement les séances :
@@ -677,7 +677,7 @@ function dayBar(){
 
 function viewToday(){
   const t = dayTotals(currentDate);
-  const remaining = settings.calorieGoal - t.net;
+  const remaining = settings.calorieGoal - t.kcalIn;
   const pctRaw = Math.max(0,(t.net/settings.calorieGoal));
   const pct = Math.min(100, pctRaw*100);
   const over = t.net > settings.calorieGoal;
