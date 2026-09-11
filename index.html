@@ -1,770 +1,771 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carnet - Suivi Quotidien</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Carnet</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --paper:#F1F5F0;
+    --surface:#FFFFFF;
+    --surface-2:#E7EEE5;
+    --ink:#1C2B22;
+    --ink-soft:#5B6B5E;
+    --ink-faint:#93A395;
+    --blue:#3A62D8;
+    --blue-soft:#E4E9FC;
+    --rust:#E4602F;
+    --rust-soft:#FCE3D6;
+    --green:#1E8F63;
+    --green-soft:#DEF2E7;
+    --amber:#D99A2B;
+    --accent-neutral:#6E7F72;
+    --accent-neutral-soft:#E8EEE8;
+    --journal-paper:#FBF8F1;
+    --line:#E6E9E3;
+    --radius:16px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:var(--font-sans);
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{max-width:520px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; background:transparent;}
 
-        :root {
-            --primary: #10b981;
-            --primary-dark: #059669;
-            --bg-dark: #1a2332;
-            --bg-darker: #0f1419;
-            --text-light: #e5e7eb;
-            --text-muted: #9ca3af;
-            --border: #374151;
-            --card-bg: #1f2937;
-        }
+  nav.tabs{
+    display:flex; gap:0; background:#fff; border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:10; margin-bottom:16px;
+  }
+  nav.tabs button{
+    flex:1; padding:12px 8px; border:none; background:none; color:var(--ink-soft);
+    font-size:12px; font-weight:600; cursor:pointer; transition:all .2s ease;
+    border-bottom:2px solid transparent;
+  }
+  nav.tabs button:active, nav.tabs button.active{
+    color:var(--green); border-bottom-color:var(--green);
+  }
+  nav.tabs svg{width:18px; height:18px; stroke:currentColor; stroke-width:1.5; fill:none; display:block; margin:0 auto 2px;}
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, var(--bg-darker) 0%, var(--bg-dark) 100%);
-            color: var(--text-light);
-            line-height: 1.6;
-            min-height: 100vh;
-        }
+  section.card{
+    background:var(--surface); border:none; border-radius:20px;
+    padding:18px; margin-bottom:16px;
+    box-shadow:0 1px 3px rgba(28,43,34,.06), 0 8px 24px rgba(28,43,34,.04);
+  }
+  .card h2{margin:0 0 12px; font-size:12.5px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em;}
 
-        /* ============ MOBILE FIRST (< 768px) ============ */
+  .hero-remaining{text-align:left; margin-bottom:6px;}
+  .hero-remaining .num{font-family:var(--font-mono); font-size:46px; font-weight:700; line-height:1; letter-spacing:-0.02em; color:var(--green);}
+  .hero-remaining .num.neg{color:var(--rust);}
+  .hero-remaining .unit{font-family:var(--font-mono); font-size:16px; color:var(--ink-soft); margin-left:6px;}
+  .hero-remaining .desc{font-size:13px; color:var(--ink-soft); margin-top:4px;}
 
-        .container {
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-            padding-bottom: 70px;
-        }
+  .bar{height:9px; border-radius:6px; background:var(--surface-2); overflow:hidden; margin-top:12px;}
+  .bar > div{height:100%; background:var(--green); border-radius:6px; transition:width .25s ease;}
+  .bar.over > div{background:var(--rust);}
 
-        header {
-            padding: 16px;
-            border-bottom: 1px solid var(--border);
-            background: var(--bg-dark);
-        }
+  .trio{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px;}
+  .cell{padding:12px; border-radius:12px; background:var(--surface-2);}
+  .cell.blue{background:var(--blue-soft); color:var(--blue);}
+  .cell.rust{background:var(--rust-soft); color:var(--rust);}
+  .cell.green{background:var(--green-soft); color:var(--green);}
+  .cell .k{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; opacity:.8;}
+  .cell .v{font-size:15px; font-weight:700; margin-top:4px; font-family:var(--font-mono);}
 
-        header h1 {
-            font-size: 28px;
-            margin-bottom: 4px;
-            color: var(--text-light);
-        }
+  .journal{background:var(--journal-paper);}
+  .journal-textarea{width:100%; min-height:90px; padding:12px; border:1px solid var(--line);
+    border-radius:12px; font-family:var(--font-mono); font-size:13px; resize:vertical;
+    background-image:linear-gradient(rgba(180,165,135,.15) 1px, transparent 1px), repeating-linear-gradient(to bottom, transparent 0, transparent 27px, #E6E9E3 27px, #E6E9E3 28px);
+  }
+  .journal-entry{position:relative; padding:12px; margin-bottom:12px; background:#fff; border:1px solid var(--line); border-radius:12px;}
+  .journal-entry .jdate{font-size:11px; color:var(--ink-faint); font-weight:600; margin-bottom:6px;}
+  .journal-entry .jtext{font-size:13px; line-height:1.5; white-space:pre-wrap; word-wrap:break-word;}
+  .journal-entry .jdel{position:absolute; top:8px; right:8px; background:none; border:none; color:var(--ink-faint); cursor:pointer; font-size:16px;}
 
-        header p {
-            font-size: 14px;
-            color: var(--text-muted);
-        }
+  .list-entry{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:11px 0; border-bottom:1px solid var(--line);
+  }
+  .list-entry:last-child{border-bottom:none;}
+  .list-entry .main{flex:1; min-width:0;}
+  .list-entry .title{font-size:14px; font-weight:600;}
+  .list-entry .sub{font-size:12px; color:var(--ink-faint); margin-top:1px; white-space:pre-wrap;}
+  .list-entry .amount{font-family:var(--font-mono); font-size:14px; font-weight:700; margin-left:10px; white-space:nowrap;}
+  .list-entry .amount.rust{color:var(--rust);}
+  .list-entry .amount.blue{color:var(--blue);}
+  .list-entry button.del{
+    background:none; border:none; color:var(--ink-faint); font-size:16px; padding:4px 6px; margin-left:4px; cursor:pointer;
+  }
+  .empty{color:var(--ink-faint); font-size:13px; padding:8px 0;}
 
-        .content {
-            flex: 1;
-            padding: 16px;
-            overflow-y: auto;
-        }
+  input, textarea, select{
+    width:100%; font-family:var(--font-sans); font-size:15px; color:var(--ink);
+    background:var(--paper); border:1px solid transparent; border-radius:10px;
+    padding:11px 12px; margin-top:4px;
+  }
+  input:focus, textarea:focus, select:focus{outline:none; border-color:var(--green); background:var(--surface); box-shadow:0 0 0 3px var(--green-soft);}
+  label{font-size:12px; color:var(--ink-soft); font-weight:600; display:block; margin-top:12px;}
+  label:first-child{margin-top:0;}
+  textarea{min-height:90px; resize:vertical; font-family:var(--font-mono); font-size:13.5px;}
 
-        .section {
-            display: none;
-            animation: fadeIn 0.3s ease-in;
-        }
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    background:var(--green); color:#fff; border:none; border-radius:12px;
+    font-family:var(--font-sans); font-size:14px; font-weight:700; padding:13px 16px;
+    cursor:pointer; width:100%; margin-top:14px;
+  }
+  .btn:active{opacity:.85;}
+  .btn.secondary{background:var(--blue-soft); color:var(--blue); border:none;}
+  .btn.ghost{background:var(--surface-2); color:var(--ink-soft); border:none;}
+  .btn.rust{background:var(--rust);}
+  .btn.small{width:auto; padding:8px 12px; font-size:13px; margin-top:0;}
 
-        .section.active {
-            display: block;
-        }
+  .search-results{margin-top:10px; max-height:260px; overflow-y:auto; border-top:1px solid var(--line);}
+  .food-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 2px; border-bottom:1px solid var(--line); cursor:pointer;
+  }
+  .food-row:active{background:var(--green-soft);}
+  .food-row .fn{font-size:14px; font-weight:600;}
+  .food-row .fm{font-size:11px; color:var(--ink-faint); font-family:var(--font-mono);}
+  .food-row button.edit{background:var(--surface-2); border:none; border-radius:8px; color:var(--ink-soft); font-size:13px; padding:5px 9px; margin-left:8px; cursor:pointer; flex-shrink:0;}
+  .food-row button.edit:active{background:var(--blue-soft); color:var(--blue);}
+  .food-row button.star{background:none; border:none; color:var(--ink-faint); font-size:19px; padding:2px 4px; margin-left:6px; cursor:pointer; flex-shrink:0; line-height:1;}
+  .food-row button.star.active{color:var(--amber);}
 
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
+  .qty-input{display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center; margin-top:12px;}
+  .qty-input input{margin-top:0;}
+  .qty-btn{background:var(--surface-2); border:none; border-radius:8px; color:var(--ink-soft); cursor:pointer; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; transition:all .2s ease;}
+  .qty-btn:active{background:var(--green-soft); color:var(--green);}
 
-        /* ============ BOTTOM NAV (Mobile) ============ */
+  .modal-bg{
+    position:fixed; inset:0; background:rgba(20,30,23,.5); display:flex; align-items:flex-end;
+    z-index:50;
+  }
+  .modal{
+    background:var(--paper); width:100%; max-width:520px; margin:0 auto;
+    border-radius:20px 20px 0 0; padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+    max-height:85vh; overflow-y:auto;
+  }
+  .modal h3{margin:0 0 4px; font-size:16px;}
+  .modal .close{position:absolute; top:14px; right:16px; background:none; border:none; font-size:20px; color:var(--ink-soft);}
+  .modal-wrap{position:relative;}
 
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--bg-dark);
-            border-top: 1px solid var(--border);
-            display: flex;
-            justify-content: space-around;
-            padding: 8px 0;
-            z-index: 1000;
-        }
+  .qty-preview{display:flex; gap:14px; margin-top:14px; padding:12px; background:var(--surface); border:none; border-radius:12px; box-shadow:0 1px 2px rgba(28,43,34,.05), 0 4px 14px rgba(28,43,34,.04);}
+  .qty-preview .item{flex:1; text-align:center;}
+  .qty-preview .item .n{font-family:var(--font-mono); font-weight:700; font-size:15px;}
+  .qty-preview .item .l{font-size:10px; color:var(--ink-faint); margin-top:2px;}
 
-        .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            padding: 8px 12px;
-            cursor: pointer;
-            border: none;
-            background: none;
-            color: var(--text-muted);
-            font-size: 12px;
-            transition: all 0.3s ease;
-            border-radius: 8px;
-            min-height: 50px;
-            justify-content: center;
-        }
+  .toast{
+    position:fixed; bottom:78px; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:var(--surface); padding:9px 16px; border-radius:20px;
+    font-size:13px; z-index:80; opacity:0; pointer-events:none; transition:opacity .2s ease;
+  }
+  .toast.show{opacity:1;}
 
-        .nav-item:active {
-            background: rgba(16, 185, 129, 0.1);
-        }
+  .day-bar{display:flex; gap:8px; margin-bottom:16px; align-items:center;}
+  .day-bar button{flex:1; padding:10px; background:var(--surface); border:1px solid var(--line); border-radius:12px; cursor:pointer; font-size:12px; font-weight:600; color:var(--ink-soft); transition:all .2s ease;}
+  .day-bar button.active{background:var(--green); color:#fff; border-color:var(--green);}
+  .day-bar button:active{opacity:.85;}
+  .day-bar .today{background:var(--green-soft); color:var(--green); border-color:var(--green-soft);}
 
-        .nav-item.active {
-            color: var(--primary);
-            background: rgba(16, 185, 129, 0.1);
-        }
+  h1.page-title{font-size:19px; margin:2px 0 14px; letter-spacing:-0.01em;}
+  .hint{font-size:12px; color:var(--ink-faint); margin-top:6px; line-height:1.4;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
 
-        .nav-item span {
-            font-size: 20px;
-        }
+  /* --- Onglet To-do : objectifs et habitudes quotidiennes --- */
+  .todo-intro{background:linear-gradient(135deg,#193c2d 0%,#245843 100%);color:#fff;position:relative;overflow:hidden;}
+  .todo-intro::after{content:"✓";position:absolute;right:18px;top:8px;font-size:76px;font-weight:800;color:rgba(255,255,255,.09);transform:rotate(-10deg);}
+  .todo-intro h2,.todo-intro p{position:relative;z-index:1}
+  .todo-intro p{color:#c7e4d1;margin:5px 0 0;font-size:12px;line-height:1.45;max-width:330px}
+  .todo-form{display:grid;grid-template-columns:1fr auto;gap:9px;align-items:center;margin-top:12px}
+  .todo-form input{min-width:0}
+  .todo-form .btn{padding-left:14px;padding-right:14px}
+  .todo-options{grid-column:1 / -1;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-soft)}
+  .todo-options input{accent-color:var(--green);width:16px;height:16px}
+  .todo-list{display:flex;flex-direction:column;gap:8px;margin-top:2px}
+  .todo-item{display:flex;align-items:center;gap:10px;padding:11px 10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 2px rgba(28,43,34,.04)}
+  .todo-item.done{background:var(--surface-2)}
+  .todo-item.done .todo-label{text-decoration:line-through;color:var(--ink-faint)}
+  .todo-check{
+    appearance:none; -webkit-appearance:none; width:21px; height:21px; flex:0 0 21px;
+    border:1.5px solid var(--ink-faint); border-radius:7px; background:var(--surface);
+    cursor:pointer; display:grid; place-content:center; transition:all .2s ease;
+  }
+  .todo-check:checked{background:var(--green); border-color:var(--green); color:#fff;}
+  .todo-check:checked::after{content:"✓"; font-weight:700; font-size:13px; color:#fff;}
+  .todo-label{flex:1; font-size:14px; font-weight:500;}
+  .todo-priority{font-size:11px; font-weight:600; text-transform:uppercase; color:var(--ink-soft);}
 
-        .nav-label {
-            font-size: 11px;
-            text-align: center;
-        }
+  .seg{display:flex; gap:6px; margin-top:12px;}
+  .seg button{flex:1; padding:9px 8px; background:var(--surface-2); border:none; color:var(--ink-soft); border-radius:10px; cursor:pointer; font-size:12px; font-weight:600; transition:all .2s ease;}
+  .seg button.active{background:var(--green); color:#fff;}
+  .seg button:active{opacity:.85;}
 
-        /* ============ SIDEBAR (Desktop, hidden on mobile) ============ */
+  .weekly-deficit{
+    background:linear-gradient(135deg,#e6f5f0 0%,#def2e7 100%);
+    border-radius:16px; padding:18px; position:relative; overflow:hidden; margin-bottom:16px;
+  }
+  .weekly-deficit::before{content:"";position:absolute;right:-20px;top:-20px;width:120px;height:120px;background:var(--green);opacity:.05;border-radius:50%;}
+  .weekly-deficit h3{margin:0 0 8px; color:var(--green); font-size:14px; font-weight:700; position:relative; z-index:1;}
+  .weekly-deficit .big{font-family:var(--font-mono); font-size:36px; font-weight:700; color:var(--green); line-height:1; position:relative; z-index:1;}
+  .weekly-deficit .sub{font-size:12px; color:var(--ink-soft); margin-top:4px; position:relative; z-index:1;}
+  .weekly-deficit.past{background:var(--surface-2); color:var(--ink-soft);}
+  .weekly-deficit.past h3{color:var(--ink-soft);}
+  .weekly-deficit.past .big{color:var(--ink-soft);}
 
-        .sidebar {
-            display: none;
-        }
+  .hist-days{display:flex; gap:6px; margin:16px 0;}
+  .hist-day{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 8px; background:var(--surface-2); border-radius:12px; cursor:pointer; transition:all .2s ease;}
+  .hist-day:active{background:var(--green-soft);}
+  .hist-day.active{background:var(--green); color:#fff;}
+  .hist-day .date{font-size:10px; font-weight:600; text-transform:uppercase;}
+  .hist-day .kcal{font-family:var(--font-mono); font-size:13px; font-weight:700;}
+  .hist-day .status{font-size:9px; margin-top:2px;}
 
-        /* ============ CARDS & COMPONENTS ============ */
+  body, body * { transition-property: background-color, color, border-color, fill, stroke; transition-duration: .35s; transition-timing-function: ease; }
 
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
+  body.dark{
+    --paper:#0E1411;
+    --surface:#171F1B;
+    --surface-2:#222C26;
+    --ink:#E8F1EA;
+    --ink-soft:#9CB3A1;
+    --ink-faint:#6D8473;
+    --blue:#7A98F2;
+    --blue-soft:#1F2A4A;
+    --rust:#F0875A;
+    --rust-soft:#3A1F18;
+    --green:#46C18C;
+    --green-soft:#163527;
+    --amber:#E8B85A;
+    --accent-neutral:#8C9D90;
+    --accent-neutral-soft:#243027;
+    --journal-paper:#14201B;
+    --line:#28332C;
+  }
+  body.dark #app{background:transparent;}
+  body.dark section.card{background:var(--surface); box-shadow:0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);}
+  body.dark nav.tabs{background:rgba(23,31,27,.94);}
+  body.dark input, body.dark textarea, body.dark select{background:var(--surface-2); color:var(--ink);}
+  body.dark .journal-textarea{background-image:linear-gradient(rgba(180,165,135,.05) 1px, transparent 1px), repeating-linear-gradient(to bottom, transparent 0, transparent 27px, #243027 27px, #243027 28px);}
+  body.dark .weekly-deficit{background:linear-gradient(135deg,#0F2620 0%,#1B4336 100%);}
+  body.dark .weekly-deficit.past{background:var(--surface);}
+  body.dark .hist-day{background:var(--surface);}
+  body.dark .todo-item{background:var(--surface);}
+  body.dark .todo-intro{background:linear-gradient(135deg,#0F2620 0%,#1B4336 100%);}
+  body.dark .seg button:not(.active){background:var(--surface-2); color:var(--ink-soft);}
 
-        .card h2 {
-            font-size: 18px;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .status-badge {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--primary);
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(55, 65, 81, 0.5);
-            font-size: 14px;
-        }
-
-        .stat-row:last-child {
-            border-bottom: none;
-        }
-
-        .stat-label {
-            color: var(--text-muted);
-        }
-
-        .stat-value {
-            font-weight: 600;
-            color: var(--text-light);
-            font-size: 16px;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: rgba(55, 65, 81, 0.5);
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 8px 0;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--primary), #34d399);
-            border-radius: 4px;
-            transition: width 0.3s ease;
-        }
-
-        .button {
-            width: 100%;
-            padding: 14px;
-            margin-top: 12px;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            min-height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .button:active {
-            background: var(--primary-dark);
-            transform: scale(0.98);
-        }
-
-        .button-secondary {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-light);
-        }
-
-        .button-secondary:active {
-            background: rgba(16, 185, 129, 0.1);
-        }
-
-        .icon-button {
-            width: 44px;
-            height: 44px;
-            padding: 0;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .icon-button:active {
-            background: rgba(16, 185, 129, 0.1);
-        }
-
-        .input-field {
-            width: 100%;
-            padding: 12px;
-            background: var(--bg-darker);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-light);
-            font-size: 14px;
-            margin-bottom: 12px;
-            min-height: 44px;
-        }
-
-        .input-field::placeholder {
-            color: var(--text-muted);
-        }
-
-        .meal-item {
-            background: var(--bg-darker);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 14px;
-        }
-
-        .meal-item-label {
-            color: var(--text-muted);
-        }
-
-        .meal-item-value {
-            color: var(--primary);
-            font-weight: 600;
-        }
-
-        .list-item {
-            padding: 12px;
-            border-bottom: 1px solid rgba(55, 65, 81, 0.3);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 14px;
-        }
-
-        .list-item:last-child {
-            border-bottom: none;
-        }
-
-        .list-item-text {
-            flex: 1;
-        }
-
-        .list-item-check {
-            width: 24px;
-            height: 24px;
-            border: 2px solid var(--border);
-            border-radius: 6px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-            background: transparent;
-        }
-
-        .list-item-check:active {
-            background: var(--primary);
-            border-color: var(--primary);
-        }
-
-        /* ============ TABLET & DESKTOP (≥ 768px) ============ */
-
-        @media (min-width: 768px) {
-            .container {
-                display: grid;
-                grid-template-columns: 250px 1fr;
-                padding-bottom: 0;
-            }
-
-            .sidebar {
-                display: flex;
-                flex-direction: column;
-                background: var(--bg-dark);
-                border-right: 1px solid var(--border);
-                padding: 20px;
-                position: sticky;
-                top: 0;
-                height: 100vh;
-                overflow-y: auto;
-            }
-
-            .sidebar-item {
-                padding: 12px 16px;
-                margin-bottom: 8px;
-                background: transparent;
-                border: none;
-                color: var(--text-muted);
-                cursor: pointer;
-                border-radius: 8px;
-                font-size: 14px;
-                transition: all 0.3s ease;
-                text-align: left;
-            }
-
-            .sidebar-item:hover {
-                background: rgba(16, 185, 129, 0.1);
-                color: var(--primary);
-            }
-
-            .sidebar-item.active {
-                background: rgba(16, 185, 129, 0.2);
-                color: var(--primary);
-                font-weight: 600;
-            }
-
-            .bottom-nav {
-                display: none;
-            }
-
-            .content {
-                padding: 32px;
-            }
-
-            header {
-                grid-column: 1 / -1;
-                padding: 24px 32px;
-            }
-
-            .card {
-                margin-bottom: 24px;
-            }
-
-            .stat-row {
-                padding: 16px 0;
-                font-size: 16px;
-            }
-
-            .stat-value {
-                font-size: 18px;
-            }
-
-            .button {
-                width: auto;
-                padding: 12px 24px;
-            }
-        }
-
-        @media (min-width: 1024px) {
-            .content {
-                max-width: 900px;
-                margin: 0 auto;
-            }
-        }
-    </style>
+  .container{padding:16px 18px 32px;}
+  .container > *:first-child{margin-top:0;}
+</style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Carnet</h1>
-            <p>Votre suivi du jour</p>
-        </header>
+<div id="app">
+  <nav class="tabs">
+    <button data-tab="today" title="Accueil" class="active"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg>Accueil</button>
+    <button data-tab="workouts" title="Entraînement"><svg viewBox="0 0 24 24"><path d="M6 5h12v2H6zM8 9h2v8H8zM14 9h2v8h-2zM9 19h6v2H9z"/></svg>Entraîn.</button>
+    <button data-tab="food" title="Alimentation"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/><path d="M12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>Aliment.</button>
+    <button data-tab="weight" title="Poids"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/><text x="12" y="15" text-anchor="middle" font-size="10" font-weight="bold" fill="currentColor">⚖</text></svg>Poids</button>
+    <button data-tab="notes" title="Notes"><svg viewBox="0 0 24 24"><path d="M6 4h9l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z"/><path d="M14 4v4h4M8 12h8M8 16h5"/></svg>Notes</button>
+    <button data-tab="todos" title="To-do"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="m8 12 2.2 2.2L16 8.5"/></svg>To-do</button>
+    <button data-tab="settings" title="Réglages"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Réglages</button>
+  </nav>
+  <div class="container" id="content"></div>
+</div>
+<div id="toast" class="toast"></div>
+<div id="modal-root"></div>
 
-        <aside class="sidebar">
-            <button class="sidebar-item active" data-tab="today">📅 Aujourd'hui</button>
-            <button class="sidebar-item" data-tab="meals">🍽️ Repas</button>
-            <button class="sidebar-item" data-tab="training">💪 Séances d'entraînement</button>
-            <button class="sidebar-item" data-tab="weight">⚖️ Poids</button>
-            <button class="sidebar-item" data-tab="water">💧 Hydratation</button>
-            <button class="sidebar-item" data-tab="sleep">😴 Sommeil</button>
-            <button class="sidebar-item" data-tab="mood">😊 Humeur</button>
-            <button class="sidebar-item" data-tab="settings">⚙️ Paramètres</button>
-        </aside>
+<script>
+// =============== État global ===============
+let currentDate = new Date().toISOString().split('T')[0];
+let activeTab = 'today';
+let logEntries = [];
+let customFoods = [];
+let foodOverrides = {};
+let favorites = [];
+let weightEntries = [];
+let profile = {sex:'H', age:'', height:'', weight:'', activity:'modere', goalWeight:''};
+let settings = {calorieGoal:2200, proteinGoal:150, carbGoal:220, fatGoal:70};
+let workoutPresets = [];
+let todos = [];
+let LS = {set:(k,v)=>localStorage.setItem('ct_'+k,JSON.stringify(v)), get:(k,d)=>{try{return JSON.parse(localStorage.getItem('ct_'+k))}catch{return d}}};
 
-        <main class="content">
-            <!-- TODAY SECTION -->
-            <section id="today" class="section active">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>🍽️ Repas du jour</h2>
-                        <span class="status-badge">2/3 REPAS</span>
-                    </div>
+function save(){
+  LS.set('logEntries', logEntries);
+  LS.set('customFoods', customFoods);
+  LS.set('foodOverrides', foodOverrides);
+  LS.set('favorites', favorites);
+  LS.set('weightEntries', weightEntries);
+  LS.set('profile', profile);
+  LS.set('settings', settings);
+  LS.set('workoutPresets', workoutPresets);
+  LS.set('todos', todos);
+}
 
-                    <div class="stat-row">
-                        <span class="stat-label">Calories consommées</span>
-                        <span class="stat-value">1.850 kcal</span>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: 74%"></div>
-                    </div>
+function load(){
+  logEntries = LS.get('logEntries', []);
+  customFoods = LS.get('customFoods', []);
+  foodOverrides = LS.get('foodOverrides', {});
+  favorites = LS.get('favorites', []);
+  weightEntries = LS.get('weightEntries', []);
+  profile = LS.get('profile', profile);
+  settings = LS.get('settings', settings);
+  workoutPresets = LS.get('workoutPresets', []);
+  todos = LS.get('todos', []);
+}
 
-                    <div class="stat-row">
-                        <span class="stat-label">Objectif</span>
-                        <span class="stat-value">2.500 kcal</span>
-                    </div>
+function entriesFor(date){
+  return logEntries.filter(e => e.date === date);
+}
 
-                    <button class="button">Ajouter un repas</button>
-                </div>
+function escapeHtml(text){
+  return (text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
-                <div class="card">
-                    <h2>💪 Séances d'entraînement</h2>
-                    <div class="card-header">
-                        <span class="status-badge" style="background: rgba(34, 197, 94, 0.2); color: #22c55e;">✓ COMPLÉTÉ</span>
-                    </div>
+function dateLabel(dateStr){
+  let d = new Date(dateStr+'T00:00:00');
+  let today = new Date().toISOString().split('T')[0];
+  if(dateStr === today) return 'Aujourd\'hui';
+  let y = d.getFullYear(), m = d.getMonth()+1, day = d.getDate();
+  return day+'/'+(m<10?'0'+m:m)+'/'+(y+'').slice(-2);
+}
 
-                    <div class="stat-row">
-                        <span class="stat-label">Durée totale</span>
-                        <span class="stat-value">45 min</span>
-                    </div>
+function todayStr(){
+  return new Date().toISOString().split('T')[0];
+}
 
-                    <div class="stat-row">
-                        <span class="stat-label">Calories brûlées</span>
-                        <span class="stat-value">350 kcal</span>
-                    </div>
-                </div>
+function toast(msg){
+  let t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2000);
+}
 
-                <div class="card">
-                    <h2>💧 Hydratation</h2>
-                    <div class="card-header">
-                        <span class="status-badge">4/8 VERRES</span>
-                    </div>
+// =============== Onglets ===============
+function viewToday(){
+  let today = entriesFor(currentDate).filter(e=>e.type==='meal' || e.type==='workout');
+  let todayDate = currentDate;
+  let deficitEntry = logEntries.find(e=>e.date===todayDate && e.type==='weekly_deficit');
+  let deficitVal = deficitEntry ? deficitEntry.deficitKcal : 0;
+  let remaining = settings.calorieGoal - today.filter(e=>e.type==='meal').reduce((s,e)=>s+(e.kcal||0),0) + today.filter(e=>e.type==='workout').reduce((s,e)=>s+(e.kcalBurned||0),0);
+  return `
+    <h1 class="page-title">${dateLabel(currentDate)}</h1>
+    ${currentDate === todayStr() ? '' : '<div class="day-bar"><button class="btn ghost" style="margin-top:0;" onclick="currentDate=\''+todayStr()+'\'; render();">Retour à aujourd\'hui</button></div>'}
+    <section class="card" style="background:linear-gradient(135deg,#fff 0%,#f9fdf9 100%);">
+      <div class="hero-remaining">
+        <span class="num${remaining<0?' neg':''}">
+          ${Math.abs(Math.round(remaining))}
+        </span>
+        <span class="unit">kcal</span>
+        <div class="desc">${remaining>=0?'Restantes':'Dépassées'}</div>
+      </div>
+      <div class="bar${remaining<0?' over':''}">
+        <div style="width:${Math.min(100, (settings.calorieGoal-remaining)/settings.calorieGoal*100)}%"></div>
+      </div>
+    </section>
+    <section class="card">
+      <h2>📊 Macros</h2>
+      <div class="trio">
+        <div class="cell blue">
+          <div class="k">Protéines</div>
+          <div class="v">${today.reduce((s,e)=>s+(e.protein||0),0)|0}g</div>
+        </div>
+        <div class="cell rust">
+          <div class="k">Glucides</div>
+          <div class="v">${today.reduce((s,e)=>s+(e.carbs||0),0)|0}g</div>
+        </div>
+        <div class="cell green">
+          <div class="k">Lipides</div>
+          <div class="v">${today.reduce((s,e)=>s+(e.fat||0),0)|0}g</div>
+        </div>
+      </div>
+    </section>
+    <section class="card">
+      <h2>📈 Historique</h2>
+      <div class="hist-days">
+        ${[6,5,4,3,2,1,0].map(i=>{
+          let d = new Date(); d.setDate(d.getDate()-i);
+          let ds = d.toISOString().split('T')[0];
+          let kcals = entriesFor(ds).filter(e=>e.type==='meal').reduce((s,e)=>s+(e.kcal||0),0);
+          let active = ds === currentDate;
+          return `<div class="hist-day${active?' active':''}" onclick="currentDate='${ds}'; render()">
+            <div class="date">${['L','M','M','J','V','S','D'][d.getDay()]}</div>
+            <div class="kcal">${kcals}</div>
+            <div class="status">${kcals>=settings.calorieGoal?'✓':'−'}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </section>
+    <section class="card">
+      <h2>🏋️ Entraînements (${today.filter(e=>e.type==='workout').length})</h2>
+      ${today.filter(e=>e.type==='workout').length ? today.filter(e=>e.type==='workout').map(e=>`<div class="list-entry">
+        <div class="main">
+          <div class="title">${escapeHtml(e.name||'')}</div>
+          <div class="sub">${e.duration||''}min${e.kcalBurned?' · '+Math.round(e.kcalBurned)+'kcal':''}</div>
+        </div>
+        <button class="del" onclick="logEntries=logEntries.filter(x=>x.id!=='${e.id}'); save(); render();">✕</button>
+      </div>`).join('') : '<div class="empty">Aucun entraînement.</div>'}
+      <button class="btn" onclick="activeTab='workouts'; render();">Ajouter un entraînement</button>
+    </section>
+    <section class="card">
+      <h2>🍽️ Repas (${today.filter(e=>e.type==='meal').length})</h2>
+      ${today.filter(e=>e.type==='meal').length ? today.filter(e=>e.type==='meal').map(e=>`<div class="list-entry">
+        <div class="main">
+          <div class="title">${escapeHtml(e.name||'')}</div>
+          <div class="sub">${e.qty||1} × ${escapeHtml(e.foodName||'')}</div>
+        </div>
+        <div class="amount">${Math.round(e.kcal||0)}kcal</div>
+        <button class="del" onclick="logEntries=logEntries.filter(x=>x.id!=='${e.id}'); save(); render();">✕</button>
+      </div>`).join('') : '<div class="empty">Aucun repas.</div>'}
+      <button class="btn" onclick="activeTab='food'; render();">Ajouter un repas</button>
+    </section>
+  `;
+}
 
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: 50%"></div>
-                    </div>
+function viewWorkouts(){
+  let today = entriesFor(currentDate).filter(e=>e.type==='workout');
+  return `
+    <h1 class="page-title">Entraînements</h1>
+    <section class="card">
+      <h2>➕ Nouvel entraînement</h2>
+      <label>Type</label>
+      <select id="wkType" onchange="render();">
+        <option value="cardio">Cardio</option>
+        <option value="muscu">Musculation</option>
+        <option value="autre">Autre</option>
+      </select>
+      <label>Nom</label>
+      <input id="wkName" type="text" placeholder="ex: Course 5km">
+      <label>Durée (min)</label>
+      <input id="wkDuration" type="number" placeholder="30">
+      <label>Calories brûlées (optionnel)</label>
+      <input id="wkKcal" type="number" placeholder="Auto-calculé">
+      <button class="btn" onclick="addWorkout();">Ajouter</button>
+    </section>
+    <section class="card">
+      <h2>📋 Aujourd'hui (${today.length})</h2>
+      ${today.length ? today.map(e=>`<div class="list-entry">
+        <div class="main">
+          <div class="title">${escapeHtml(e.name||'')}</div>
+          <div class="sub">${e.duration||''}min</div>
+        </div>
+        <div class="amount">${Math.round(e.kcalBurned||0)}kcal</div>
+        <button class="del" onclick="logEntries=logEntries.filter(x=>x.id!=='${e.id}'); save(); render();">✕</button>
+      </div>`).join('') : '<div class="empty">Aucun.</div>'}
+    </section>
+  `;
+}
 
-                    <div class="stat-row">
-                        <span class="stat-label">Consommé</span>
-                        <span class="stat-value">1L</span>
-                    </div>
+function viewFood(){
+  let today = entriesFor(currentDate).filter(e=>e.type==='meal');
+  return `
+    <h1 class="page-title">Alimentation</h1>
+    <section class="card">
+      <h2>🔍 Chercher un aliment</h2>
+      <input id="foodSearch" type="text" placeholder="Tape un nom...">
+      <div id="foodResults" class="search-results"></div>
+    </section>
+    <section class="card">
+      <h2>Aujourd'hui</h2>
+      ${today.length ? today.map(e=>`<div class="list-entry">
+        <div class="main">
+          <div class="title">${escapeHtml(e.foodName||'')}</div>
+          <div class="sub">${e.qty||1}×${Math.round(e.kcal||0)}kcal</div>
+        </div>
+        <button class="del" onclick="logEntries=logEntries.filter(x=>x.id!=='${e.id}'); save(); render();">✕</button>
+      </div>`).join('') : '<div class="empty">Aucun repas.</div>'}
+    </section>
+  `;
+}
 
-                    <button class="button">Ajouter de l'eau</button>
-                </div>
+function viewWeight(){
+  return `
+    <h1 class="page-title">Suivi du poids</h1>
+    <section class="card">
+      <h2>➕ Nouvelle pesée</h2>
+      <label>Poids (kg)</label>
+      <input id="weightValue" type="number" step="0.1" placeholder="ex: 75.5">
+      <button class="btn" onclick="addWeight();">Enregistrer</button>
+    </section>
+    <section class="card">
+      <h2>📊 Historique</h2>
+      ${weightEntries.length ? weightEntries.slice(-10).reverse().map(e=>`<div class="list-entry">
+        <div class="main">
+          <div class="title">${dateLabel(e.date)}</div>
+        </div>
+        <div class="amount">${e.weight}kg</div>
+      </div>`).join('') : '<div class="empty">Aucune donnée.</div>'}
+    </section>
+  `;
+}
 
-                <div class="card">
-                    <h2>😴 Sommeil</h2>
+function viewNotes(){
+  let today = entriesFor(currentDate).filter(e=>e.type==='note');
+  return `
+    <h1 class="page-title">Notes</h1>
+    <section class="card journal">
+      <h2>✏️ Nouvelle note</h2>
+      <textarea id="noteText" placeholder="Écris quelque chose..."></textarea>
+      <button class="btn ghost" onclick="addNote();">Ajouter</button>
+    </section>
+    <section class="card journal">
+      <h2>Aujourd'hui</h2>
+      ${today.length ? today.map(e=>`<div class="journal-entry">
+        <div class="jdate">${e.time}</div>
+        <div class="jtext">${escapeHtml(e.text||'')}</div>
+        <button class="jdel" onclick="logEntries=logEntries.filter(x=>x.id!=='${e.id}'); save(); render();">✕</button>
+      </div>`).join('') : '<div class="empty">Aucune note.</div>'}
+    </section>
+  `;
+}
 
-                    <div class="stat-row">
-                        <span class="stat-label">Durée</span>
-                        <span class="stat-value">7h 30min</span>
-                    </div>
-
-                    <div class="stat-row">
-                        <span class="stat-label">Qualité</span>
-                        <span class="stat-value">Bon</span>
-                    </div>
-
-                    <button class="button">Enregistrer le sommeil</button>
-                </div>
-
-                <div class="card">
-                    <h2>😊 Humeur</h2>
-
-                    <div class="stat-row">
-                        <span class="stat-label">Humeur actuelle</span>
-                        <span class="stat-value">😊</span>
-                    </div>
-
-                    <button class="button">Mettre à jour l'humeur</button>
-                </div>
-            </section>
-
-            <!-- MEALS SECTION -->
-            <section id="meals" class="section">
-                <div class="card">
-                    <h2>🍽️ Repas du jour</h2>
-
-                    <input type="text" class="input-field" placeholder="Ajouter un repas...">
-
-                    <div class="meal-item">
-                        <span class="meal-item-label">Petit-déjeuner</span>
-                        <span class="meal-item-value">420 kcal</span>
-                    </div>
-
-                    <div class="meal-item">
-                        <span class="meal-item-label">Déjeuner</span>
-                        <span class="meal-item-value">780 kcal</span>
-                    </div>
-
-                    <div class="meal-item">
-                        <span class="meal-item-label">Goûter</span>
-                        <span class="meal-item-value">650 kcal</span>
-                    </div>
-
-                    <div class="stat-row" style="border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px;">
-                        <span class="stat-label">Total</span>
-                        <span class="stat-value">1.850 kcal</span>
-                    </div>
-                </div>
-            </section>
-
-            <!-- TRAINING SECTION -->
-            <section id="training" class="section">
-                <div class="card">
-                    <h2>💪 Séances d'entraînement</h2>
-
-                    <input type="text" class="input-field" placeholder="Ajouter une séance...">
-
-                    <div class="list-item">
-                        <span class="list-item-text">Cardio - 30 min (250 kcal)</span>
-                        <div class="list-item-check">✓</div>
-                    </div>
-
-                    <div class="list-item">
-                        <span class="list-item-text">Musculation - 15 min (100 kcal)</span>
-                        <div class="list-item-check">✓</div>
-                    </div>
-
-                    <div class="stat-row" style="border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px;">
-                        <span class="stat-label">Total brûlé</span>
-                        <span class="stat-value">350 kcal</span>
-                    </div>
-                </div>
-            </section>
-
-            <!-- WEIGHT SECTION -->
-            <section id="weight" class="section">
-                <div class="card">
-                    <h2>⚖️ Suivi du poids</h2>
-
-                    <input type="number" class="input-field" placeholder="Poids en kg">
-
-                    <div class="stat-row">
-                        <span class="stat-label">Poids actuel</span>
-                        <span class="stat-value">72.5 kg</span>
-                    </div>
-
-                    <div class="stat-row">
-                        <span class="stat-label">Objectif</span>
-                        <span class="stat-value">70 kg</span>
-                    </div>
-
-                    <div class="stat-row">
-                        <span class="stat-label">Variation</span>
-                        <span class="stat-value" style="color: var(--primary);">-0.5 kg</span>
-                    </div>
-
-                    <button class="button">Enregistrer le poids</button>
-                </div>
-            </section>
-
-            <!-- WATER SECTION -->
-            <section id="water" class="section">
-                <div class="card">
-                    <h2>💧 Hydratation</h2>
-
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: 50%"></div>
-                    </div>
-
-                    <div class="stat-row">
-                        <span class="stat-label">Consommé</span>
-                        <span class="stat-value">1L / 2L</span>
-                    </div>
-
-                    <div class="list-item">
-                        <span class="list-item-text">Verre 1</span>
-                        <div class="list-item-check">✓</div>
-                    </div>
-
-                    <div class="list-item">
-                        <span class="list-item-text">Verre 2</span>
-                        <div class="list-item-check">✓</div>
-                    </div>
-
-                    <div class="list-item">
-                        <span class="list-item-text">Verre 3</span>
-                        <div class="list-item-check"></div>
-                    </div>
-
-                    <div class="list-item">
-                        <span class="list-item-text">Verre 4</span>
-                        <div class="list-item-check"></div>
-                    </div>
-
-                    <button class="button">Ajouter de l'eau</button>
-                </div>
-            </section>
-
-            <!-- SLEEP SECTION -->
-            <section id="sleep" class="section">
-                <div class="card">
-                    <h2>😴 Sommeil</h2>
-
-                    <input type="time" class="input-field" placeholder="Heure du coucher">
-                    <input type="time" class="input-field" placeholder="Heure du réveil">
-
-                    <div class="stat-row">
-                        <span class="stat-label">Durée</span>
-                        <span class="stat-value">7h 30min</span>
-                    </div>
-
-                    <div class="stat-row">
-                        <span class="stat-label">Qualité</span>
-                        <span class="stat-value">Bon</span>
-                    </div>
-
-                    <button class="button">Enregistrer le sommeil</button>
-                </div>
-            </section>
-
-            <!-- MOOD SECTION -->
-            <section id="mood" class="section">
-                <div class="card">
-                    <h2>😊 Humeur</h2>
-
-                    <div class="stat-row">
-                        <span class="stat-label">Humeur actuelle</span>
-                        <span class="stat-value">😊</span>
-                    </div>
-
-                    <input type="text" class="input-field" placeholder="Notes sur votre journée...">
-
-                    <button class="button">Mettre à jour l'humeur</button>
-                </div>
-            </section>
-
-            <!-- SETTINGS SECTION -->
-            <section id="settings" class="section">
-                <div class="card">
-                    <h2>⚙️ Paramètres</h2>
-
-                    <div class="list-item">
-                        <span class="list-item-text">Objectif calorique</span>
-                        <span class="list-item-text" style="color: var(--primary);">2.500 kcal</span>
-                    </div>
-
-                    <div class="list-item">
-                        <span class="list-item-text">Notifications</span>
-                        <div class="list-item-check">✓</div>
-                    </div>
-
-                    <div class="list-item">
-                        <span class="list-item-text">Mode sombre</span>
-                        <div class="list-item-check">✓</div>
-                    </div>
-
-                    <button class="button button-secondary">Exporter les données</button>
-                    <button class="button button-secondary">Réinitialiser</button>
-                </div>
-            </section>
-        </main>
-
-        <!-- BOTTOM NAVIGATION (Mobile only) -->
-        <nav class="bottom-nav">
-            <button class="nav-item active" data-tab="today">
-                <span>📅</span>
-                <div class="nav-label">Accueil</div>
-            </button>
-            <button class="nav-item" data-tab="meals">
-                <span>🍽️</span>
-                <div class="nav-label">Repas</div>
-            </button>
-            <button class="nav-item" data-tab="training">
-                <span>💪</span>
-                <div class="nav-label">Entraîn.</div>
-            </button>
-            <button class="nav-item" data-tab="weight">
-                <span>⚖️</span>
-                <div class="nav-label">Poids</div>
-            </button>
-            <button class="nav-item" data-tab="water">
-                <span>💧</span>
-                <div class="nav-label">Eau</div>
-            </button>
-            <button class="nav-item" data-tab="sleep">
-                <span>😴</span>
-                <div class="nav-label">Sommeil</div>
-            </button>
-            <button class="nav-item" data-tab="mood">
-                <span>😊</span>
-                <div class="nav-label">Humeur</div>
-            </button>
-            <button class="nav-item" data-tab="settings">
-                <span>⚙️</span>
-                <div class="nav-label">Paramètres</div>
-            </button>
-        </nav>
+function viewTodos(){
+  return `
+    <h1 class="page-title">To-do</h1>
+    <section class="card todo-intro">
+      <h2>✅ Tes objectifs du jour</h2>
+      <p>Coche ce que tu as fait, décoche si tu change d'avis.</p>
+      <div class="todo-form">
+        <input id="todoInput" type="text" placeholder="Ajoute un objectif...">
+        <button class="btn" onclick="addTodo();" style="margin-top:0;">+</button>
+      </div>
+      <div class="todo-options">
+        <label><input type="checkbox"> Afficher les complétés</label>
+      </div>
+    </section>
+    <div class="todo-list">
+      ${todos.map(t=>`<div class="todo-item${t.done?' done':''}">
+        <input type="checkbox" class="todo-check"${t.done?' checked':''} onchange="todos.find(x=>x.id==='${t.id}').done=this.checked; save(); render();">
+        <div class="todo-label">${escapeHtml(t.text||'')}</div>
+        <button class="del" onclick="todos=todos.filter(x=>x.id!=='${t.id}'); save(); render();">✕</button>
+      </div>`).join('')}
     </div>
+  `;
+}
 
-    <script>
-        // Tab switching functionality
-        const tabButtons = document.querySelectorAll('[data-tab]');
-        const sections = document.querySelectorAll('.section');
+function viewSettings(){
+  return `
+    <h1 class="page-title">Réglages</h1>
+    <section class="card">
+      <h2>👤 Profil</h2>
+      <label>Sexe</label>
+      <select id="sex">
+        <option value="H"${profile.sex==='H'?' selected':''}>Homme</option>
+        <option value="F"${profile.sex==='F'?' selected':''}>Femme</option>
+      </select>
+      <label>Âge</label>
+      <input id="age" type="number" value="${profile.age}">
+      <label>Taille (cm)</label>
+      <input id="height" type="number" value="${profile.height}">
+      <label>Poids actuel (kg)</label>
+      <input id="weight" type="number" step="0.1" value="${profile.weight}">
+      <label>Poids objectif (kg)</label>
+      <input id="goalWeight" type="number" step="0.1" value="${profile.goalWeight}">
+      <label>Activité physique</label>
+      <select id="activity">
+        <option value="sedentaire"${profile.activity==='sedentaire'?' selected':''}>Sédentaire</option>
+        <option value="legere"${profile.activity==='legere'?' selected':''}>Légère</option>
+        <option value="modere"${profile.activity==='modere'?' selected':''}>Modérée</option>
+        <option value="intensive"${profile.activity==='intensive'?' selected':''}>Intensive</option>
+      </select>
+      <button class="btn" onclick="updateProfile();">Mettre à jour</button>
+    </section>
+    <section class="card">
+      <h2>⚙️ Objectifs quotidiens</h2>
+      <label>Calories</label>
+      <input id="calGoal" type="number" value="${settings.calorieGoal}">
+      <label>Protéines (g)</label>
+      <input id="proteinGoal" type="number" value="${settings.proteinGoal}">
+      <label>Glucides (g)</label>
+      <input id="carbGoal" type="number" value="${settings.carbGoal}">
+      <label>Lipides (g)</label>
+      <input id="fatGoal" type="number" value="${settings.fatGoal}">
+      <button class="btn" onclick="updateSettings();">Mettre à jour</button>
+    </section>
+    <section class="card">
+      <h2>💾 Données</h2>
+      <button class="btn secondary" onclick="exportData();">Télécharger ma sauvegarde</button>
+      <label style="margin-top:16px;">Importer une sauvegarde</label>
+      <input id="importFile" type="file" accept=".json" style="margin-top:4px;">
+      <button class="btn rust" onclick="resetData();" style="margin-top:16px;">Tout réinitialiser</button>
+    </section>
+    <section class="card">
+      <h2>🌙 Thème</h2>
+      <div class="seg">
+        <button class="seg-btn${LS.get('ct_theme','light')==='light'?' active':''}" onclick="LS.set('ct_theme','light'); applyTheme(); render();">Clair</button>
+        <button class="seg-btn${LS.get('ct_theme','light')==='dark'?' active':''}" onclick="LS.set('ct_theme','dark'); applyTheme(); render();">Sombre</button>
+      </div>
+    </section>
+  `;
+}
 
-        tabButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                const tabName = button.getAttribute('data-tab');
+// =============== Actions ===============
+function addWorkout(){
+  let name = document.getElementById('wkName')?.value || 'Entraînement';
+  let duration = parseInt(document.getElementById('wkDuration')?.value) || 0;
+  let kcal = parseInt(document.getElementById('wkKcal')?.value) || duration * 10;
+  if(!name || !duration) return toast('Remplis les champs');
+  let e = {
+    id: Math.random().toString(36).substr(2,9),
+    date: currentDate,
+    type: 'workout',
+    time: new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}),
+    name: name,
+    duration: duration,
+    kcalBurned: kcal
+  };
+  logEntries.push(e);
+  save();
+  document.getElementById('wkName').value = '';
+  document.getElementById('wkDuration').value = '';
+  render();
+  toast('Entraînement ajouté ✓');
+}
 
-                // Remove active class from all buttons and sections
-                tabButtons.forEach(btn => btn.classList.remove('active'));
-                sections.forEach(section => section.classList.remove('active'));
+function addNote(){
+  let text = document.getElementById('noteText')?.value || '';
+  if(!text) return toast('Écris quelque chose');
+  let e = {
+    id: Math.random().toString(36).substr(2,9),
+    date: currentDate,
+    type: 'note',
+    time: new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}),
+    text: text
+  };
+  logEntries.push(e);
+  save();
+  document.getElementById('noteText').value = '';
+  render();
+  toast('Note ajoutée ✓');
+}
 
-                // Add active class to clicked button and corresponding section
-                button.classList.add('active');
-                document.getElementById(tabName).classList.add('active');
+function addWeight(){
+  let w = document.getElementById('weightValue')?.value || '';
+  if(!w) return toast('Entre ton poids');
+  let e = {date: currentDate, weight: parseFloat(w)};
+  weightEntries.push(e);
+  save();
+  document.getElementById('weightValue').value = '';
+  render();
+  toast('Poids enregistré ✓');
+}
 
-                // Scroll to top on mobile
-                document.querySelector('.content').scrollTop = 0;
-            });
-        });
+function addTodo(){
+  let text = document.getElementById('todoInput')?.value || '';
+  if(!text) return toast('Écris quelque chose');
+  todos.push({id: Math.random().toString(36).substr(2,9), text: text, done: false});
+  save();
+  document.getElementById('todoInput').value = '';
+  render();
+  toast('To-do ajouté ✓');
+}
 
-        // Close menu on item click (mobile)
-        document.querySelectorAll('.list-item-check').forEach(check => {
-            check.addEventListener('click', () => {
-                check.textContent = check.textContent === '✓' ? '' : '✓';
-            });
-        });
-    </script>
+function updateProfile(){
+  profile.sex = document.getElementById('sex')?.value;
+  profile.age = document.getElementById('age')?.value;
+  profile.height = document.getElementById('height')?.value;
+  profile.weight = document.getElementById('weight')?.value;
+  profile.activity = document.getElementById('activity')?.value;
+  profile.goalWeight = document.getElementById('goalWeight')?.value;
+  save();
+  render();
+  toast('Profil mis à jour ✓');
+}
+
+function updateSettings(){
+  settings.calorieGoal = parseInt(document.getElementById('calGoal')?.value) || 2200;
+  settings.proteinGoal = parseInt(document.getElementById('proteinGoal')?.value) || 150;
+  settings.carbGoal = parseInt(document.getElementById('carbGoal')?.value) || 220;
+  settings.fatGoal = parseInt(document.getElementById('fatGoal')?.value) || 70;
+  save();
+  render();
+  toast('Objectifs mis à jour ✓');
+}
+
+function exportData(){
+  let data = {logEntries, customFoods, foodOverrides, favorites, weightEntries, profile, settings, workoutPresets, todos};
+  let blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement('a');
+  a.href = url;
+  a.download = 'carnet-' + todayStr() + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function resetData(){
+  if(!confirm('Tout supprimer ? Irréversible.')) return;
+  logEntries = [];
+  customFoods = [];
+  foodOverrides = {};
+  favorites = [];
+  weightEntries = [];
+  profile = {sex:'H', age:'', height:'', weight:'', activity:'modere', goalWeight:''};
+  settings = {calorieGoal:2200, proteinGoal:150, carbGoal:220, fatGoal:70};
+  workoutPresets = [];
+  todos = [];
+  save();
+  render();
+  toast('Données réinitialisées ✓');
+}
+
+function applyTheme(){
+  let theme = LS.get('ct_theme', 'light');
+  document.body.classList.toggle('dark', theme === 'dark');
+}
+
+// =============== Render ===============
+function render(){
+  let html = '';
+  if(activeTab === 'today') html = viewToday();
+  else if(activeTab === 'workouts') html = viewWorkouts();
+  else if(activeTab === 'food') html = viewFood();
+  else if(activeTab === 'weight') html = viewWeight();
+  else if(activeTab === 'notes') html = viewNotes();
+  else if(activeTab === 'todos') html = viewTodos();
+  else if(activeTab === 'settings') html = viewSettings();
+  
+  document.getElementById('content').innerHTML = html;
+  
+  // Update active tab button
+  document.querySelectorAll('nav.tabs button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab === activeTab);
+  });
+  
+  // Attach event listeners
+  if(activeTab === 'food'){
+    let input = document.getElementById('foodSearch');
+    if(input){
+      input.addEventListener('input', ()=>{
+        let q = input.value.toLowerCase();
+        if(q.length < 2){
+          document.getElementById('foodResults').innerHTML = '';
+          return;
+        }
+        // Stub search
+        document.getElementById('foodResults').innerHTML = '<div class="empty">Aucun résultat</div>';
+      });
+    }
+  }
+}
+
+// =============== Init ===============
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    activeTab = btn.dataset.tab;
+    render();
+  });
+});
+
+load();
+applyTheme();
+render();
+</script>
 </body>
 </html>
