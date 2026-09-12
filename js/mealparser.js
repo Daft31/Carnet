@@ -7,7 +7,7 @@
    qui n'a pas de fonction serverless : on appelle donc explicitement le
    domaine Vercel. Si tu changes de domaine Vercel (ou passes sur un
    domaine perso), mets à jour VERCEL_API_BASE ci-dessous. */
-const VERCEL_API_BASE = 'https://carnet-git-main-daft31.vercel.app';
+const VERCEL_API_BASE = 'https://carnet-self.vercel.app';
 
 function aiMealApiUrl() {
   // Si l'app tourne déjà sur ce même domaine Vercel, un chemin relatif suffit.
