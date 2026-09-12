@@ -38,7 +38,7 @@ function openAIDescribeModal() {
         body: JSON.stringify({ mealDescription: text })
       });
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || json.details || 'Erreur inconnue');
+      if (!res.ok || !json.success) throw new Error(json.details || json.error || 'Erreur inconnue');
       openAIResultModal(json.data);
     } catch (e) {
       statusEl.textContent = '❌ ' + (e.message || "Erreur lors de l'analyse");
