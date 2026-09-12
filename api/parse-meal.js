@@ -3,7 +3,7 @@
 // stockée côté serveur uniquement (jamais exposée au client).
 
 const MAMMOUTH_API_URL = 'https://api.mammouth.ai/v1/chat/completions';
-const MAMMOUTH_MODEL = 'gpt-5-mini';
+const MAMMOUTH_MODEL = 'gpt-5.4-mini';
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
