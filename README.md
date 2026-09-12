@@ -4,6 +4,8 @@ Application web personnelle de suivi sportif et nutritionnel (calories, macros, 
 
 Ce document s'adresse autant à un humain qu'à un futur agent IA qui interviendrait sur ce repo : il explique l'architecture, les pièges connus, et où trouver quoi.
 
+> 🤖 **Agents Claude (Claude Code, etc.)** : un fichier [`CLAUDE.md`](./CLAUDE.md) à la racine du repo condense les règles critiques à ne jamais casser (calcul calorique, clé API Mammouth, domaine Vercel en dur...). Il est généralement lu automatiquement en début de session — le lire avant toute modification, en complément de ce README.
+
 ## Aperçu rapide
 
 - **Frontend** : HTML/CSS/JS vanilla, sans build step, sans framework, sans bundler. Tout l'état est stocké dans le `localStorage` du navigateur.
