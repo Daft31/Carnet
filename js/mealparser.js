@@ -1,7 +1,19 @@
 /* ===================== IA — DÉCRIRE UN REPAS ===================== */
 /* Appelle la fonction serverless /api/parse-meal (Vercel), qui utilise
    l'API Anthropic côté serveur avec CARNET_API_KEY. Aucune clé n'est
-   exposée côté client. */
+   exposée côté client.
+
+   L'app peut être ouverte depuis GitHub Pages (daft31.github.io/carnet),
+   qui n'a pas de fonction serverless : on appelle donc explicitement le
+   domaine Vercel. Si tu changes de domaine Vercel (ou passes sur un
+   domaine perso), mets à jour VERCEL_API_BASE ci-dessous. */
+const VERCEL_API_BASE = 'https://carnet-5nn8cfqx5-daft31.vercel.app';
+
+function aiMealApiUrl() {
+  // Si l'app tourne déjà sur ce même domaine Vercel, un chemin relatif suffit.
+  if (location.hostname.endsWith('.vercel.app')) return '/api/parse-meal';
+  return `${VERCEL_API_BASE}/api/parse-meal`;
+}
 
 function openAIDescribeModal() {
   openModal(`
@@ -20,7 +32,7 @@ function openAIDescribeModal() {
     statusEl.textContent = '🤖 Analyse en cours…';
     btn.disabled = true;
     try {
-      const res = await fetch('/api/parse-meal', {
+      const res = await fetch(aiMealApiUrl(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mealDescription: text })
