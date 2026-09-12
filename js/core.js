@@ -175,10 +175,12 @@ function dayBar(){
 
 function viewToday(){
   const t = dayTotals(currentDate);
-  const remaining = settings.calorieGoal - t.net;
-  const pctRaw = Math.max(0,(t.net/settings.calorieGoal));
+  // Le budget restant ignore volontairement les séances de sport : brûler des
+  // calories ne doit pas "rembourser" de la marge pour manger plus.
+  const remaining = settings.calorieGoal - t.kcalIn;
+  const pctRaw = Math.max(0,(t.kcalIn/settings.calorieGoal));
   const pct = Math.min(100, pctRaw*100);
-  const over = t.net > settings.calorieGoal;
+  const over = t.kcalIn > settings.calorieGoal;
   const macroRow = (name,val,goal,color)=>{
     const p = goal? Math.min(100,(val/goal)*100) : 0;
     return `<div class="macro-row"><div class="name">${name}</div><div class="bar"><div style="width:${p}%; background:${color}"></div></div><div class="amt">${Math.round(val)}${goal? ' / '+goal:''} g</div></div>`;
@@ -218,7 +220,7 @@ function viewToday(){
           transform="rotate(-90 ${cx} ${cy})"
           stroke-dasharray="${C.toFixed(1)}"
           stroke-dashoffset="${(C-dash).toFixed(1)}"/>
-        <text x="${cx}" y="${cy-4}" text-anchor="middle" font-size="26" fill="currentColor">${Math.round(t.net)}</text>
+        <text x="${cx}" y="${cy-4}" text-anchor="middle" font-size="26" fill="currentColor">${Math.round(t.kcalIn)}</text>
         <text x="${cx}" y="${cy+16}" text-anchor="middle" font-size="10" fill="var(--ink-faint)">/ ${settings.calorieGoal} kcal</text>
       </svg>
       <div class="kcal-summary">
@@ -229,8 +231,8 @@ function viewToday(){
     </div>
     <div class="trio">
       <div class="cell blue"><div class="k">Repas</div><div class="v">${Math.round(t.kcalIn)}</div></div>
-      <div class="cell rust"><div class="k">Brûlées</div><div class="v">${Math.round(t.kcalOut)}</div></div>
-      <div class="cell green"><div class="k">Net</div><div class="v">${Math.round(t.net)}</div></div>
+      <div class="cell rust"><div class="k">Brûlées (info)</div><div class="v">${Math.round(t.kcalOut)}</div></div>
+      <div class="cell green"><div class="k">Objectif</div><div class="v">${settings.calorieGoal}</div></div>
     </div>
   </section>
   <section class="card">
@@ -684,7 +686,7 @@ function viewHistory(){
     return `<div class="hist-day">
       <div class="hist-head" data-hist="${d}">
         <div class="d">${dateLabel(d)}</div>
-        <div class="n">net ${Math.round(t.net)} / obj ${settings.calorieGoal}</div>
+        <div class="n">${Math.round(t.kcalIn)} / obj ${settings.calorieGoal}</div>
       </div>
       <div class="hist-body ${open?'open':''}">${dayLogList(d)}</div>
     </div>`;
