@@ -108,15 +108,35 @@ function weeklyRangeLabel(startStr,endStr){
   const fmt = d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   return `${fmt(startStr)} au ${fmt(endStr)}`;
 }
+function weekDayDates(startStr, endStr){
+  return [...new Set(logEntries.filter(e=>e.date>=startStr && e.date<=endStr).map(e=>e.date))].sort();
+}
 function weeklyDeficitCard(week, isCurrent){
   const surplus = week.total < 0;
   const label = surplus ? 'Surplus' : 'Déficit';
-  return `<section class="weekly-deficit ${isCurrent?'current':'past'}">
-    <div class="eyebrow">${isCurrent?'Semaine en cours':'Semaine précédente'} · ${label}</div>
-    <div class="range">Semaine du ${weeklyRangeLabel(week.start,week.end)}</div>
-    <div class="total ${surplus?'surplus':'deficit'}">${week.total < 0 ? '+' : '-'}${Math.round(Math.abs(week.total))} kcal</div>
-    <div class="meta">${week.days.length} jour${week.days.length>1?'s':''} avec repas · objectif ${settings.calorieGoal} kcal/jour · séances non déduites</div>
-    <div class="burned">🔥 <span class="v">${Math.round(week.burned)}</span> kcal brûlées cette semaine (info)</div>
+  const expanded = openHistWeek===week.start;
+  const dayDates = expanded ? weekDayDates(week.start, week.end) : [];
+  const daysDetail = expanded ? (dayDates.length ? dayDates.map(d=>{
+    const t = dayTotals(d);
+    const open = openHistDay===d;
+    return `<div class="hist-day">
+      <div class="hist-head" data-histday="${d}">
+        <div class="d">${dateLabel(d)}</div>
+        <div class="n">${Math.round(t.kcalIn)} / obj ${settings.calorieGoal}</div>
+      </div>
+      <div class="hist-body ${open?'open':''}">${dayLogList(d)}</div>
+    </div>`;
+  }).join('') : `<div class="empty">Rien enregistré cette semaine-là.</div>`) : '';
+  return `<section class="weekly-deficit ${isCurrent?'current':'past'} ${expanded?'expanded':''}">
+    <div class="hist-week-toggle" data-histweek="${week.start}">
+      <div class="eyebrow">${isCurrent?'Semaine en cours':'Semaine précédente'} · ${label}</div>
+      <div class="range">Semaine du ${weeklyRangeLabel(week.start,week.end)}</div>
+      <div class="total ${surplus?'surplus':'deficit'}">${week.total < 0 ? '+' : '-'}${Math.round(Math.abs(week.total))} kcal</div>
+      <div class="meta">${week.days.length} jour${week.days.length>1?'s':''} avec repas · objectif ${settings.calorieGoal} kcal/jour · séances non déduites</div>
+      <div class="burned">🔥 <span class="v">${Math.round(week.burned)}</span> kcal brûlées cette semaine (info)</div>
+      <div class="expand-hint">${expanded?'Masquer le détail ▲':'Voir le détail par jour ▼'}</div>
+    </div>
+    ${expanded?`<div class="hist-week-days">${daysDetail}</div>`:''}
   </section>`;
 }
 
@@ -541,6 +561,7 @@ function viewWorkouts(){
 }
 
 let openHistDay = null;
+let openHistWeek = null;
 function svgWeightTrend(entriesDesc){
   const sorted = [...entriesDesc].sort((a,b)=>a.date.localeCompare(b.date));
   if(sorted.length<2) return '';
@@ -679,21 +700,10 @@ function viewNotes(){
 }
 
 function viewHistory(){
-  const days = [...new Set(logEntries.map(e=>e.date))].sort((a,b)=>b.localeCompare(a));
   const weeks = weeklyDeficits();
-  if(!days.length) return `<h1 class="page-title">Historique</h1><div class="empty">Rien à afficher pour l'instant.</div>`;
-  const weeklyCards = weeks.length ? `<div class="weekly-history-label">Déficit hebdomadaire</div>${weeks.map((week,index)=>weeklyDeficitCard(week,index===0 && week.start===weekStart(todayStr()))).join('')}` : '';
-  return `<h1 class="page-title">Historique</h1>` + weeklyCards + `<div class="weekly-history-label">Jours détaillés</div>` + days.map(d=>{
-    const t = dayTotals(d);
-    const open = openHistDay===d;
-    return `<div class="hist-day">
-      <div class="hist-head" data-hist="${d}">
-        <div class="d">${dateLabel(d)}</div>
-        <div class="n">${Math.round(t.kcalIn)} / obj ${settings.calorieGoal}</div>
-      </div>
-      <div class="hist-body ${open?'open':''}">${dayLogList(d)}</div>
-    </div>`;
-  }).join('');
+  if(!weeks.length) return `<h1 class="page-title">Historique</h1><div class="empty">Rien à afficher pour l'instant.</div>`;
+  const weeklyCards = `<div class="weekly-history-label">Déficit hebdomadaire</div>${weeks.map((week,index)=>weeklyDeficitCard(week,index===0 && week.start===weekStart(todayStr()))).join('')}`;
+  return `<h1 class="page-title">Historique</h1>` + weeklyCards;
 }
 
 function viewSettings(){

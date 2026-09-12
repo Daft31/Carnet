@@ -421,8 +421,15 @@ function bindTabEvents(){
   }
 
   if(activeTab==='history'){
-    document.querySelectorAll('[data-hist]').forEach(h=>h.onclick=()=>{
-      openHistDay = openHistDay===h.dataset.hist ? null : h.dataset.hist; render();
+    document.querySelectorAll('[data-histweek]').forEach(h=>h.onclick=()=>{
+      const wk = h.dataset.histweek;
+      openHistWeek = openHistWeek===wk ? null : wk;
+      openHistDay = null;
+      render();
+    });
+    document.querySelectorAll('[data-histday]').forEach(h=>h.onclick=(ev)=>{
+      ev.stopPropagation();
+      openHistDay = openHistDay===h.dataset.histday ? null : h.dataset.histday; render();
     });
   }
 
