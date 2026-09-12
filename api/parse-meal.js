@@ -3,7 +3,7 @@
 // stockée côté serveur uniquement (jamais exposée au client).
 
 const MAMMOUTH_API_URL = 'https://api.mammouth.ai/v1/chat/completions';
-const MAMMOUTH_MODEL = 'mammouth-recommended';
+const MAMMOUTH_MODEL = 'gpt-5-mini';
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -56,8 +56,8 @@ Description du repas : "${mealDescription}"`;
       body: JSON.stringify({
         model: MAMMOUTH_MODEL,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 800,
+        temperature: 0.2,
+        max_tokens: 400,
       }),
     });
 
