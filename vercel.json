@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm run build || true",
+  "outputDirectory": ".",
+  "env": {
+    "MAMMOUTH_API_KEY": "@mammouth_api_key"
+  },
+  "functions": {
+    "api/**/*.js": {
+      "memory": 512,
+      "maxDuration": 30
+    }
+  }
+}
