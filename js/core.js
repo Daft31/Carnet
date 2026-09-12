@@ -96,7 +96,9 @@ function weeklyDeficit(startStr){
   const endStr = weekEnd(startStr);
   const days = [...new Set(logEntries.filter(e=>e.type==='meal' && e.date>=startStr && e.date<=endStr).map(e=>e.date))].sort();
   const dayValues = days.map(date=>({date, calories:dayTotals(date).kcalIn, deficit:settings.calorieGoal-dayTotals(date).kcalIn}));
-  return {start:startStr, end:endStr, days:dayValues, total:dayValues.reduce((sum,d)=>sum+d.deficit,0)};
+  // Brûlées affichées à titre informatif uniquement : ne participe pas à `total`.
+  const burned = logEntries.filter(e=>e.type==='workout' && e.date>=startStr && e.date<=endStr).reduce((sum,e)=>sum+e.kcalBurned,0);
+  return {start:startStr, end:endStr, days:dayValues, total:dayValues.reduce((sum,d)=>sum+d.deficit,0), burned};
 }
 function weeklyDeficits(){
   const starts = [...new Set(logEntries.filter(e=>e.type==='meal').map(e=>weekStart(e.date)))].sort((a,b)=>b.localeCompare(a));
@@ -114,6 +116,7 @@ function weeklyDeficitCard(week, isCurrent){
     <div class="range">Semaine du ${weeklyRangeLabel(week.start,week.end)}</div>
     <div class="total ${surplus?'surplus':'deficit'}">${week.total < 0 ? '+' : '-'}${Math.round(Math.abs(week.total))} kcal</div>
     <div class="meta">${week.days.length} jour${week.days.length>1?'s':''} avec repas · objectif ${settings.calorieGoal} kcal/jour · séances non déduites</div>
+    <div class="burned">🔥 <span class="v">${Math.round(week.burned)}</span> kcal brûlées cette semaine (info)</div>
   </section>`;
 }
 
