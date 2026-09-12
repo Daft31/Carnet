@@ -15,7 +15,7 @@ let settings = LS.get('ct_settings', {calorieGoal:2200, proteinGoal:150, carbGoa
 let customFoods = LS.get('ct_customFoods', []);
 let foodOverrides = LS.get('ct_foodOverrides', {}); // {builtinId: {name,kcal,protein,carbs,fat}}
 let favorites = LS.get('ct_favorites', []); // array of food ids
-let weightEntries = LS.get('ct_weight', []); // {id,date,weight,bodyFat,muscleMass,note}
+let weightEntries = LS.get('ct_weight', []); // {id,date,weight,bodyFat,muscleMass,water,note}
 let profile = LS.get('ct_profile', {sex:'H', age:'', height:'', activity:'modere', goalWeight:'', rate:'-0.5'});
 let logEntries = LS.get('ct_log', []); // {id,date,type,...}
 let todos = LS.get('ct_todos', []); // {id,text,daily,done,completedDate}
@@ -562,22 +562,97 @@ function viewWorkouts(){
 
 let openHistDay = null;
 let openHistWeek = null;
-function svgWeightTrend(entriesDesc){
-  const sorted = [...entriesDesc].sort((a,b)=>a.date.localeCompare(b.date));
-  if(sorted.length<2) return '';
-  const weights = sorted.map(e=>e.weight);
-  const min = Math.min(...weights), max = Math.max(...weights);
-  const range = (max-min)||1;
-  const w=300,h=70,pad=8;
-  const coords = sorted.map((e,i)=>({
-    x: pad + (i/(sorted.length-1))*(w-2*pad),
-    y: h-pad - ((e.weight-min)/range)*(h-2*pad)
-  }));
+// Géométrie SVG partagée par les graphiques de l'onglet Poids.
+const CHART_W=320, CHART_H=150, CHART_PADL=36, CHART_PADR=14, CHART_PADT=16, CHART_PADB=24;
+function chartXFor(i,n){ return CHART_PADL + (n>1 ? (i/(n-1)) : 0)*(CHART_W-CHART_PADL-CHART_PADR); }
+function chartNiceStep(range){
+  if(range<=3) return 0.5;
+  if(range<=8) return 1;
+  if(range<=20) return 2;
+  if(range<=50) return 5;
+  return 10;
+}
+function chartBounds(values, clampLo, clampHi){
+  const min = Math.min(...values), max = Math.max(...values);
+  const step = chartNiceStep((max-min)||1);
+  let lo = Math.floor(min/step)*step, hi = Math.ceil(max/step)*step;
+  if(hi===lo) hi = lo+step;
+  if(clampLo!=null) lo = Math.max(clampLo, lo);
+  if(clampHi!=null) hi = Math.min(clampHi, hi);
+  return {lo, hi};
+}
+const chartFmtDate = d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+
+// Grille + axes communs. `decimals` contrôle l'arrondi des labels de l'axe Y.
+function chartAxes(lo, hi, dates, decimals){
+  const yFor = v => CHART_PADT + (CHART_H-CHART_PADT-CHART_PADB) * (1 - (v-lo)/((hi-lo)||1));
+  const ticks = [hi, (lo+hi)/2, lo];
+  const gridlines = ticks.map(v=>{
+    const y = yFor(v).toFixed(1);
+    return `<line x1="${CHART_PADL}" y1="${y}" x2="${CHART_W-CHART_PADR}" y2="${y}" class="chart-grid"/>
+      <text x="${CHART_PADL-6}" y="${(+y+3).toFixed(1)}" text-anchor="end" class="chart-tick">${v.toFixed(decimals)}</text>`;
+  }).join('');
+  const dateLabels = dates.length ? `
+    <text x="${CHART_PADL}" y="${CHART_H-6}" text-anchor="start" class="chart-tick">${chartFmtDate(dates[0])}</text>
+    <text x="${CHART_W-CHART_PADR}" y="${CHART_H-6}" text-anchor="end" class="chart-tick">${chartFmtDate(dates[dates.length-1])}</text>` : '';
+  return {yFor, svg: gridlines+dateLabels};
+}
+function chartHoverLayer(){
+  return `<rect class="chart-hit" x="0" y="0" width="${CHART_W}" height="${CHART_H}"/>
+    <line class="chart-crosshair" x1="0" x2="0" y1="${CHART_PADT}" y2="${CHART_H-CHART_PADB}"/>`;
+}
+
+let weightChartPoints = [];
+function svgWeightChart(entriesAsc){
+  if(entriesAsc.length<2) return '';
+  weightChartPoints = entriesAsc.map(e=>({date:e.date, weight:e.weight, bodyFat:e.bodyFat, muscleMass:e.muscleMass, water:e.water}));
+  const n = entriesAsc.length;
+  const {lo,hi} = chartBounds(entriesAsc.map(e=>e.weight));
+  const {yFor, svg:axesSvg} = chartAxes(lo, hi, entriesAsc.map(e=>e.date), 1);
+  const coords = entriesAsc.map((e,i)=>({x:chartXFor(i,n), y:yFor(e.weight)}));
   const pts = coords.map(c=>`${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%; height:70px; margin-top:4px; display:block;">
-    <polyline points="${pts}" fill="none" style="stroke:var(--blue); stroke-width:2"/>
-    ${coords.map(c=>`<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="2.6" style="fill:var(--blue)"/>`).join('')}
-  </svg>`;
+  const last = coords[coords.length-1];
+  return `<div class="chart-wrap" id="weightChartWrap">
+    <svg viewBox="0 0 ${CHART_W} ${CHART_H}" class="trend-chart">
+      ${axesSvg}
+      <polyline points="${pts}" fill="none" class="chart-line" style="stroke:var(--green)"/>
+      ${coords.map((c,i)=>`<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${i===coords.length-1?4:2.6}" class="chart-dot" style="fill:var(--green)"/>`).join('')}
+      <text x="${(last.x-6).toFixed(1)}" y="${(last.y-9).toFixed(1)}" text-anchor="end" class="chart-endlabel">${entriesAsc[n-1].weight} kg</text>
+      ${chartHoverLayer()}
+    </svg>
+    <div class="chart-tooltip"></div>
+  </div>`;
+}
+
+const COMPOSITION_SERIES = [
+  {key:'bodyFat', label:'Masse grasse', color:'var(--chart-fat)', unit:'%'},
+  {key:'muscleMass', label:'Muscle', color:'var(--chart-muscle)', unit:'%'},
+  {key:'water', label:'Eau', color:'var(--chart-water)', unit:'%'}
+];
+function svgCompositionChart(entriesAsc){
+  const n = entriesAsc.length;
+  const series = COMPOSITION_SERIES.map(s=>({
+    ...s,
+    points: entriesAsc.map((e,i)=>({x:chartXFor(i,n), value:e[s.key]})).filter(p=>p.value!=null)
+  })).filter(s=>s.points.length>=2);
+  if(!series.length) return '';
+  const allValues = series.flatMap(s=>s.points.map(p=>p.value));
+  const {lo,hi} = chartBounds(allValues, 0, 100);
+  const {yFor, svg:axesSvg} = chartAxes(lo, hi, entriesAsc.map(e=>e.date), 0);
+  const legend = `<div class="chart-legend">${series.map(s=>`<span class="item"><i class="dot" style="background:${s.color}"></i>${s.label}</span>`).join('')}</div>`;
+  const lines = series.map(s=>{
+    const pts = s.points.map(p=>`${p.x.toFixed(1)},${yFor(p.value).toFixed(1)}`).join(' ');
+    return `<polyline points="${pts}" fill="none" class="chart-line" style="stroke:${s.color}"/>
+      ${s.points.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${yFor(p.value).toFixed(1)}" r="2.6" class="chart-dot" style="fill:${s.color}"/>`).join('')}`;
+  }).join('');
+  return `${legend}<div class="chart-wrap" id="compChartWrap">
+    <svg viewBox="0 0 ${CHART_W} ${CHART_H}" class="trend-chart">
+      ${axesSvg}
+      ${lines}
+      ${chartHoverLayer()}
+    </svg>
+    <div class="chart-tooltip"></div>
+  </div>`;
 }
 function computeGoals(p, weight){
   const age = parseFloat(p.age), height = parseFloat(p.height);
@@ -612,19 +687,29 @@ function viewWeight(){
     <input id="wDate" type="date" value="${todayStr()}">
     <label>Poids (kg)</label>
     <input id="wWeight" type="number" step="0.1" inputmode="decimal" placeholder="ex. 78.4">
-    <div class="row2">
-      <div><label>Masse grasse (%, optionnel)</label><input id="wFat" type="number" step="0.1"></div>
-      <div><label>Masse musculaire (%, optionnel)</label><input id="wMuscle" type="number" step="0.1"></div>
+    <div class="row3">
+      <div><label>Masse grasse (%)</label><input id="wFat" type="number" step="0.1"></div>
+      <div><label>Muscle (%)</label><input id="wMuscle" type="number" step="0.1"></div>
+      <div><label>Eau (%)</label><input id="wWater" type="number" step="0.1"></div>
     </div>
+    <div class="hint">Champs optionnels — pratiques si tu pèses avec une balance à impédancemétrie.</div>
     <label>Note (optionnel)</label>
     <input id="wNote" type="text" placeholder="à jeun, après le sport…">
     <button class="btn" id="saveWeight">Enregistrer la pesée</button>
   </section>
   <section class="card">
+    <h2>Poids</h2>
+    ${sorted.length===0 ? '<div class="empty">Aucune pesée enregistrée.</div>' : svgWeightChart([...sorted].reverse())}
+  </section>
+  <section class="card">
+    <h2>Composition corporelle</h2>
+    ${svgCompositionChart([...sorted].reverse()) || '<div class="empty">Renseigne masse grasse, muscle ou eau sur au moins 2 pesées pour voir ce graphique.</div>'}
+  </section>
+  <section class="card">
     <h2>Historique</h2>
-    ${sorted.length===0 ? '<div class="empty">Aucune pesée enregistrée.</div>' : svgWeightTrend(sorted) + sorted.map(e=>`
+    ${sorted.length===0 ? '<div class="empty">Aucune pesée enregistrée.</div>' : sorted.map(e=>`
       <div class="list-entry">
-        <div class="main"><div class="title">${e.weight} kg</div><div class="sub">${dateLabel(e.date)}${e.bodyFat?' · MG '+e.bodyFat+'%':''}${e.muscleMass?' · MM '+e.muscleMass+'%':''}${e.note? ' · '+escapeHtml(e.note):''}</div></div>
+        <div class="main"><div class="title">${e.weight} kg</div><div class="sub">${dateLabel(e.date)}${e.bodyFat?' · MG '+e.bodyFat+'%':''}${e.muscleMass?' · Muscle '+e.muscleMass+'%':''}${e.water?' · Eau '+e.water+'%':''}${e.note? ' · '+escapeHtml(e.note):''}</div></div>
         <button class="del" data-delw="${e.id}">✕</button>
       </div>`).join('')}
   </section>

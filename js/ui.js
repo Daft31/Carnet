@@ -6,6 +6,36 @@ function openModal(html){
 }
 function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
 
+// Survol des graphiques (onglet Poids) : crosshair + tooltip listant chaque série au point le plus proche.
+function bindChartHover(wrapId, points, seriesDefs){
+  const wrap = document.getElementById(wrapId);
+  if(!wrap || !points || points.length<2) return;
+  const svg = wrap.querySelector('svg');
+  const hit = wrap.querySelector('.chart-hit');
+  const cross = wrap.querySelector('.chart-crosshair');
+  const tip = wrap.querySelector('.chart-tooltip');
+  if(!svg || !hit || !cross || !tip) return;
+  const n = points.length;
+  const move = clientX=>{
+    const rect = svg.getBoundingClientRect();
+    const relX = ((clientX-rect.left)/rect.width)*CHART_W;
+    let idx=0, best=Infinity;
+    for(let i=0;i<n;i++){ const d=Math.abs(chartXFor(i,n)-relX); if(d<best){best=d; idx=i;} }
+    const x = chartXFor(idx,n).toFixed(1);
+    cross.setAttribute('x1',x); cross.setAttribute('x2',x); cross.style.opacity='1';
+    const p = points[idx];
+    const rows = seriesDefs.map(s=> p[s.key]!=null ? `<div class="row"><span class="key"><i class="dot" style="background:${s.color}"></i>${s.label}</span><span class="val">${p[s.key]}${s.unit||''}</span></div>` : '').join('');
+    tip.innerHTML = `<div class="date">${dateLabel(p.date)}</div>${rows}`;
+    tip.style.display='block';
+    const px = (chartXFor(idx,n)/CHART_W)*rect.width;
+    const tipW = tip.offsetWidth||110;
+    tip.style.left = Math.min(Math.max(px-tipW/2,4), rect.width-tipW-4)+'px';
+  };
+  hit.addEventListener('pointermove', e=>move(e.clientX));
+  hit.addEventListener('pointerdown', e=>move(e.clientX));
+  hit.addEventListener('pointerleave', ()=>{ tip.style.display='none'; cross.style.opacity='0'; });
+}
+
 function openQtyModal(food){
   openModal(`
     <h3>${escapeHtml(food.name)}</h3>
@@ -359,6 +389,7 @@ function bindTabEvents(){
         id:uid(), date, weight,
         bodyFat: parseFloat(document.getElementById('wFat').value)||null,
         muscleMass: parseFloat(document.getElementById('wMuscle').value)||null,
+        water: parseFloat(document.getElementById('wWater').value)||null,
         note: document.getElementById('wNote').value.trim()||null
       });
       save(); render(); toast('Pesée enregistrée ✓');
@@ -366,6 +397,14 @@ function bindTabEvents(){
     document.querySelectorAll('[data-delw]').forEach(b=>b.onclick=()=>{
       weightEntries = weightEntries.filter(e=>e.id!==b.dataset.delw); save(); render();
     });
+    bindChartHover('weightChartWrap', weightChartPoints, [
+      {key:'weight', label:'Poids', color:'var(--green)', unit:' kg'}
+    ]);
+    bindChartHover('compChartWrap', weightChartPoints, [
+      {key:'bodyFat', label:'Masse grasse', color:'var(--chart-fat)', unit:'%'},
+      {key:'muscleMass', label:'Muscle', color:'var(--chart-muscle)', unit:'%'},
+      {key:'water', label:'Eau', color:'var(--chart-water)', unit:'%'}
+    ]);
     document.querySelectorAll('#pSexSeg button').forEach(b=>b.onclick=()=>{ profile.sex=b.dataset.sex; render(); });
     document.querySelectorAll('#pActSeg button').forEach(b=>b.onclick=()=>{ profile.activity=b.dataset.act; render(); });
     const saveProfile = document.getElementById('saveProfile');
