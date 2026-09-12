@@ -19,9 +19,10 @@ Add the following secrets to your GitHub repository:
 4. **VERCEL_PROJECT_ID** - Your Vercel project ID
 
 ### Vercel Environment Variables
-Set these in your Vercel project settings:
+Set these directly in your Vercel project settings (Settings → Environment Variables),
+as a plain value — not via the legacy `@secret` reference syntax:
 
-- **CARNET_API_KEY** - Set to `@carnet_api_key` (references the secret)
+- **CARNET_API_KEY** - Your Anthropic API key, used server-side only by `api/parse-meal.js`
 
 ## Deployment Process
 

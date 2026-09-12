@@ -1,272 +1,40 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carnet Nutritionnel & Sportif</title>
-    <link rel="stylesheet" href="css/style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Carnet</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
 </head>
 <body>
-    <!-- TOP NAVIGATION -->
-    <nav class="navbar">
-        <div class="navbar-content">
-            <h1 class="app-title">📊 Carnet Nutritionnel & Sportif</h1>
-            <div class="nav-buttons">
-                <button class="nav-btn" data-tab="home">🏠 Accueil</button>
-                <button class="nav-btn" data-tab="meals">🍽️ Repas</button>
-                <button class="nav-btn" data-tab="workouts">💪 Entraînement</button>
-            </div>
-        </div>
-    </nav>
+<div id="app">
+  <header class="top">
+    <div class="brand">Carnet<small>suivi sport &amp; nutrition</small></div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Basculer le mode sombre" title="Mode sombre"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></button>
+  </header>
+  <main id="main"></main>
+  <nav class="tabs" id="tabs">
+    <button data-tab="today" title="Aujourd'hui"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>Aujourd'hui</button>
+    <button data-tab="meals" title="Repas"><svg viewBox="0 0 24 24"><path d="M6 3v8a2 2 0 002 2h0a2 2 0 002-2V3M6 3v18M10 3v5M18 3c-2 0-3 2-3 5s1 4 3 4v9"/></svg>Repas</button>
+    <button data-tab="workouts" title="Séances"><svg viewBox="0 0 24 24"><path d="M4 12h3M17 12h3M7 12a2 2 0 002-2V8a2 2 0 00-2-2 2 2 0 00-2 2v8a2 2 0 002 2 2 2 0 002-2v-2M17 12a2 2 0 01-2-2V8a2 2 0 012-2 2 2 0 012 2v8a2 2 0 01-2 2 2 2 0 01-2-2v-2"/></svg>Séances</button>
+    <button data-tab="weight" title="Poids"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M9 5l1-2h4l1 2M12 13l2.5-3"/></svg>Poids</button>
+    <button data-tab="history" title="Historique"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-7 3L3 8"/><path d="M3 4v4h4M12 7v5l3 2"/></svg>Historique</button>
+    <button data-tab="notes" title="Notes"><svg viewBox="0 0 24 24"><path d="M6 4h9l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z"/><path d="M14 4v4h4M8 12h8M8 16h5"/></svg>Notes</button>
+    <button data-tab="todos" title="To-do"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="m8 12 2.2 2.2L16 8.5"/></svg>To-do</button>
+    <button data-tab="settings" title="Réglages"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Réglages</button>
+  </nav>
+</div>
+<div id="toast" class="toast"></div>
+<div id="modal-root"></div>
 
-    <!-- MAIN CONTENT -->
-    <main class="main-content">
-
-        <!-- TAB: ACCUEIL -->
-        <section id="home-tab" class="tab-content active">
-            <div class="dashboard">
-                <h2>📈 Tableau de bord</h2>
-                <div id="stats-container" class="stats-grid">
-                    <div class="stat-card">
-                        <span class="stat-label">Calories (aujourd'hui)</span>
-                        <span class="stat-value" id="daily-calories">0</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Protéines</span>
-                        <span class="stat-value" id="daily-proteins">0g</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Glucides</span>
-                        <span class="stat-value" id="daily-carbs">0g</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Lipides</span>
-                        <span class="stat-value" id="daily-fats">0g</span>
-                    </div>
-                </div>
-                <div class="recent-meals">
-                    <h3>📋 Derniers repas</h3>
-                    <div id="recent-meals-list"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- TAB: REPAS -->
-        <section id="meals-tab" class="tab-content">
-            <div class="meals-container">
-                <h2>🍽️ Gestion des repas</h2>
-                
-                <!-- SECTION: AJOUTER UN REPAS -->
-                <div class="add-meal-section">
-                    <h3>➕ Ajouter un repas</h3>
-                    <div class="meal-input-methods">
-                        <!-- Méthode 1: Scanner Code-barres -->
-                        <button class="meal-method-btn scanner-btn" id="open-scanner-btn">
-                            <span class="btn-icon">📷</span>
-                            <span class="btn-text">Scanner un produit</span>
-                            <span class="btn-desc">Scannez un code-barres</span>
-                        </button>
-
-                        <!-- Méthode 2: Saisie IA (Langage Naturel) -->
-                        <button class="meal-method-btn ai-btn" id="open-ai-input-btn">
-                            <span class="btn-icon">🤖</span>
-                            <span class="btn-text">Décrire mon repas</span>
-                            <span class="btn-desc">IA analyse votre description</span>
-                        </button>
-
-                        <!-- Méthode 3: Formulaire Manual (Classique) -->
-                        <button class="meal-method-btn manual-btn" id="open-manual-form-btn">
-                            <span class="btn-icon">✍️</span>
-                            <span class="btn-text">Formulaire Manuel</span>
-                            <span class="btn-desc">Ajout manuel des détails</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Liste des repas du jour -->
-                <div class="meals-list-section">
-                    <h3>📅 Repas du jour</h3>
-                    <div id="meals-list" class="meals-list"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- TAB: ENTRAÎNEMENT -->
-        <section id="workouts-tab" class="tab-content">
-            <div class="workouts-container">
-                <h2>💪 Entraînement</h2>
-                <div id="workouts-content">
-                    <p>Section entraînement en développement...</p>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- ===== MODALS ===== -->
-
-    <!-- MODAL: AI MEAL INPUT -->
-    <div id="ai-meal-input-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>🤖 Décrire votre repas</h2>
-                <button class="modal-close" data-modal="ai-meal-input-modal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="ai-parsing-loading" class="ai-loading-state" style="display: none;">
-                    <div class="spinner"></div>
-                    <p>🤖 Analyse en cours...</p>
-                </div>
-                
-                <form id="ai-meal-form" style="display: flex; flex-direction: column; gap: 1rem;">
-                    <div class="form-group">
-                        <label for="ai-meal-description">Décrivez votre repas naturellement :</label>
-                        <textarea 
-                            id="ai-meal-description" 
-                            name="meal_description" 
-                            placeholder="Exemple: burger classique restaurant avec sa portion de frite&#10;ou: entrecôte 350g avec sa portion de frites maison&#10;ou: 2 œufs avec 100g de pain et du beurre"
-                            rows="4"
-                            required
-                        ></textarea>
-                        <small>💡 Soyez aussi précis que possible (quantités, restaurants, préparation)</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="ai-meal-date">Date du repas :</label>
-                        <input type="date" id="ai-meal-date" name="meal_date" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="ai-restaurant-hint" name="restaurant_hint">
-                            Au restaurant
-                        </label>
-                        <small>Augmente légèrement l'estimation des calories (huile de cuisson)</small>
-                    </div>
-
-                    <div class="ai-quota-info" id="ai-quota-display" style="display: none;">
-                        <small>📊 Quota API: <span id="quota-remaining">0</span> requêtes restantes</small>
-                    </div>
-                </form>
-
-                <div id="ai-error-message" class="alert-error" style="display: none;"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" data-modal="ai-meal-input-modal">Annuler</button>
-                <button class="btn-primary" id="ai-meal-submit-btn">Analyser avec IA</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL: MEAL CONFIRMATION (pour résultats scanner + IA) -->
-    <div id="meal-confirmation-modal" class="modal">
-        <div class="modal-content large">
-            <div class="modal-header">
-                <h2>✅ Vérifier le repas détecté</h2>
-                <button class="modal-close" data-modal="meal-confirmation-modal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="meal-confirmation-content"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" id="meal-confirmation-cancel">Annuler</button>
-                <button class="btn-primary" id="meal-confirmation-confirm">✅ Ajouter ce repas</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL: SCANNER CODE-BARRES -->
-    <div id="scanner-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>📷 Scanner un code-barres</h2>
-                <button class="modal-close" data-modal="scanner-modal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="scanner-loading" class="scanner-loading" style="display: none;">
-                    <div class="spinner"></div>
-                    <p>🔍 Initialisation de la caméra...</p>
-                </div>
-
-                <div id="scanner-video-container" class="scanner-video-container">
-                    <video id="scanner-video"></video>
-                    <canvas id="scanner-canvas"></canvas>
-                    <div class="scanner-overlay">
-                        <div class="scanner-frame"></div>
-                    </div>
-                </div>
-
-                <div id="scanner-result" class="scanner-result" style="display: none;">
-                    <p id="scanner-result-text"></p>
-                </div>
-
-                <div id="scanner-error" class="alert-error" style="display: none;"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" id="scanner-retry-btn" style="display: none;">Réessayer</button>
-                <button class="btn-secondary" data-modal="scanner-modal" id="scanner-close-btn">Fermer</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL: MANUAL FOOD ADD FORM -->
-    <div id="manual-meal-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>✍️ Ajouter un aliment manuellement</h2>
-                <button class="modal-close" data-modal="manual-meal-modal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="manual-food-form">
-                    <div class="form-group">
-                        <label for="manual-food-name">Nom de l'aliment :</label>
-                        <input type="text" id="manual-food-name" name="food_name" placeholder="ex: Poulet grillé" required>
-                        <div id="food-suggestions" class="food-suggestions"></div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="manual-food-quantity">Quantité :</label>
-                        <div class="quantity-input">
-                            <input type="number" id="manual-food-quantity" name="quantity" placeholder="150" required min="1">
-                            <select id="manual-food-unit" name="unit">
-                                <option value="g">g (grammes)</option>
-                                <option value="portion">portion</option>
-                                <option value="piece">pièce</option>
-                                <option value="ml">ml</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Données nutritionnelles (optionnel - auto-calculées sinon) :</label>
-                        <div class="nutrition-inputs">
-                            <input type="number" id="manual-food-calories" name="calories" placeholder="Calories" step="0.1">
-                            <input type="number" id="manual-food-proteins" name="proteins" placeholder="Protéines (g)" step="0.1">
-                            <input type="number" id="manual-food-carbs" name="carbs" placeholder="Glucides (g)" step="0.1">
-                            <input type="number" id="manual-food-fats" name="fats" placeholder="Lipides (g)" step="0.1">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="manual-meal-date">Date du repas :</label>
-                        <input type="date" id="manual-meal-date" name="meal_date" required>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" data-modal="manual-meal-modal">Annuler</button>
-                <button class="btn-primary" id="manual-meal-submit-btn">➕ Ajouter l'aliment</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- SCRIPTS -->
-    <script src="js/core.js"></script>
-    <script src="js/food.js"></script>
-    <script src="js/scanner.js"></script>
-    <script src="js/mealparser.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/app.js"></script>
+<!-- SCRIPTS -->
+<script src="js/core.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/scanner.js"></script>
+<script src="js/mealparser.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
