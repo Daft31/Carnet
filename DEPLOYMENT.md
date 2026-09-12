@@ -1,137 +1,44 @@
-# 🚀 Déploiement Carnet avec API Mammouth Sécurisée
+# Deployment Guide
 
-## Architecture
+## Environment Variables Setup
 
-```
-Frontend (GitHub Pages)
-    ↓ HTTPS
-API Serverless (Vercel)
-    ↓ (clé secrète)
-Mammouth AI
-```
+### GitHub Secrets
+Add the following secrets to your GitHub repository:
 
-**La clé API Mammouth reste TOUJOURS secrète côté serveur !** ✅
+1. **CARNET_API_KEY** - Your Carnet API key
+   - Go to: https://github.com/Daft31/Carnet/settings/secrets/actions
+   - Click "New repository secret"
+   - Name: `CARNET_API_KEY`
+   - Value: Your actual API key
 
----
+2. **VERCEL_TOKEN** - Vercel authentication token
+   - Generated from Vercel dashboard
 
-## 📋 Étapes de Déploiement
+3. **VERCEL_ORG_ID** - Your Vercel organization ID
 
-### **1️⃣ Créer un compte Vercel**
-- Va sur https://vercel.com
-- Connecte-toi avec GitHub
-- Authorize Vercel à accéder à tes repos
+4. **VERCEL_PROJECT_ID** - Your Vercel project ID
 
-### **2️⃣ Importer le repo Carnet**
-1. Clique sur "Add New" → "Project"
-2. Sélectionne `Daft31/Carnet`
-3. Branche : `Dev`
-4. Framework : "Other" (site statique)
+### Vercel Environment Variables
+Set these in your Vercel project settings:
 
-### **3️⃣ Configurer la clé API secrète**
-1. Dans les paramètres du projet Vercel :
-   - Onglet "Settings" → "Environment Variables"
-   - Ajoute une variable :
-     - **Name** : `MAMMOUTH_API_KEY`
-     - **Value** : `sk-1zWXN38jLlkRhFLEn8rdiQ` (ta clé)
-     - **Environments** : Production, Preview, Development (coche tout)
+- **CARNET_API_KEY** - Set to `@carnet_api_key` (references the secret)
 
-2. Redéploie le projet après avoir saisi la clé
+## Deployment Process
 
-### **4️⃣ Récupérer l'URL de l'API**
-Une fois déployé, tu auras une URL comme :
-```
-https://carnet-kappa.vercel.app
-```
+1. Push your changes to the `main` branch
+2. GitHub Actions will automatically:
+   - Run tests using the Carnet API
+   - Deploy to Vercel using the deploy workflow
+   - Deploy static files to GitHub Pages
 
-L'API sera accessible à :
-```
-https://carnet-kappa.vercel.app/api/parse-meal
-```
+## Troubleshooting
 
-### **5️⃣ Mettre à jour le frontend**
-Dans `mealparser.js`, remplace :
-```javascript
-const API_URL = 'https://carnet-kappa.vercel.app/api/parse-meal';
-// ↑ Change par ton vrai domaine Vercel
-```
+### "CARNET_API_KEY not found" error
+- Verify the secret exists in GitHub Settings → Secrets and variables → Actions
+- Ensure the secret name is exactly `CARNET_API_KEY`
+- Check that Vercel project has `CARNET_API_KEY` configured
 
----
-
-## 🧪 Tester l'API
-
-### Via cURL :
-```bash
-curl -X POST https://carnet-kappa.vercel.app/api/parse-meal \
-  -H "Content-Type: application/json" \
-  -d '{"description": "burger classique restaurant avec sa portion de frite"}'
-```
-
-### Réponse attendue :
-```json
-{
-  "success": true,
-  "meal": {
-    "name": "Burger classique + frites",
-    "calories": 1200,
-    "proteins": 45,
-    "carbs": 95,
-    "fats": 40,
-    "quantity": "1 portion",
-    "confidence": 85,
-    "notes": "Estimation restaurant +20% calories"
-  },
-  "timestamp": "2026-09-12T15:22:00Z"
-}
-```
-
----
-
-## 🔐 Sécurité
-
-✅ La clé API est **dans les variables d'environnement Vercel**, jamais en dur  
-✅ Le frontend **ne voit jamais la clé**  
-✅ Seul Vercel peut l'accéder  
-✅ HTTPS obligatoire (Vercel l'applique)  
-✅ Rate limiting côté Mammouth (10 req/min max)  
-
----
-
-## 📊 Coûts
-
-- **Vercel** : Gratuit (jusqu'à 100GB/mois)
-- **Mammouth API** : ~$0.005 par requête avec gpt-4-mini
-  - À $2/mois, tu peux faire ~400 requêtes/mois
-  - Parfait pour tes besoins !
-
----
-
-## 🆘 Troubleshooting
-
-### Error: "MAMMOUTH_API_KEY not set"
-→ Vérifie que la variable est bien configurée dans les env variables de Vercel
-
-### Error: "401 Unauthorized"
-→ La clé API est invalide ou expirée, regénère-la sur Mammouth
-
-### Error: "Failed to parse AI response"
-→ Le format JSON de la réponse Mammouth a changé, contacte le support Mammouth
-
----
-
-## 📝 Variables d'environnement à configurer
-
-| Plateforme | Variable | Valeur |
-|-----------|----------|--------|
-| **Vercel** | `MAMMOUTH_API_KEY` | `sk-...` (ta clé) |
-| **GitHub** | `MAMMOUTH_API_KEY` | (déjà configuré) |
-
----
-
-## 🎯 Prochaines étapes
-
-1. ✅ Crée un compte Vercel
-2. ✅ Import du repo Carnet
-3. ✅ Configure la clé API en env variable
-4. ✅ Test l'API via cURL
-5. ✅ Mets à jour l'URL dans mealparser.js
-6. ✅ Enjoy ! 🎉
+### Vercel Deployment Fails
+- Check that `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` are set
+- Ensure `CARNET_API_KEY` is configured in Vercel environment variables
+- Review the GitHub Actions logs for detailed error messages
