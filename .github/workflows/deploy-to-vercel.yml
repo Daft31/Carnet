@@ -20,4 +20,4 @@ jobs:
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           vercel-args: --prod
         env:
-          mammoth_api_key: ${{ secrets.MAMMOUTH_API_KEY }}
+         CARNET_api_key: ${{ secrets.CARNET_API_KEY }}
