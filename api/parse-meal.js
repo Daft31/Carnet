@@ -1,122 +1,97 @@
-// api/parse-meal.js
-// API serverless Vercel pour parser les repas avec Mammouth AI
-// La clé API reste secrète côté serveur ✅
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
-export default async function handler(req, res) {
-  // Sécurité : vérifier la méthode
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+// Get API key from environment variable
+const API_KEY = process.env.CARNET_API_KEY;
 
-  // Récupérer la description du repas
-  const { description } = req.body;
+if (!API_KEY) {
+  console.error('❌ Error: CARNET_API_KEY environment variable is not set');
+  process.exit(1);
+}
 
-  if (!description) {
-    return res.status(400).json({ error: 'Missing meal description' });
-  }
+const API_BASE_URL = 'https://api.mammouth.app';
+const MEALS_FILE = path.join(__dirname, '../data/meals.json');
+const DATA_DIR = path.join(__dirname, '../data');
 
-  // Vérifier que la clé API existe
-  const apiKey = process.env.MAMMOUTH_API_KEY;
-  if (!apiKey) {
-    console.error('❌ MAMMOUTH_API_KEY not set in environment variables');
-    return res.status(500).json({ error: 'Server configuration error' });
-  }
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
 
+async function fetchMealsFromAPI() {
   try {
-    // Appeler Mammouth API avec la clé secrète (jamais exposée au client)
-    const response = await fetch('https://api.mammouth.ai/v1/messages', {
-      method: 'POST',
+    console.log('🔄 Fetching meals from Mammouth API...');
+    
+    const response = await axios.get(`${API_BASE_URL}/meals`, {
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4-mini',
-        messages: [
-          {
-            role: 'user',
-            content: `Tu es un expert nutritioniste. Analyse ce repas décrit en langage naturel et retourne UNIQUEMENT un objet JSON valide (aucun texte avant/après).
-
-Description du repas: "${description}"
-
-Réponds avec EXACTEMENT ce format JSON:
-{
-  "name": "nom du repas",
-  "calories": nombre,
-  "proteins": nombre (en grammes),
-  "carbs": nombre (en grammes),
-  "fats": nombre (en grammes),
-  "quantity": "quantité estimée (ex: 1 portion, 250g)",
-  "confidence": nombre entre 0 et 100 (certitude de l'analyse),
-  "notes": "notes utiles si applicable"
-}
-
-Important: Retourne UNIQUEMENT le JSON, pas d'explications.`
-          }
-        ],
-      }),
+        'Authorization': `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json'
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ Mammouth API error:', errorData);
-      return res.status(response.status).json({ 
-        error: 'Mammouth API error',
-        details: errorData 
-      });
-    }
-
-    const data = await response.json();
-    
-    // Extraire le contenu de la réponse
-    const content = data.content?.[0]?.text || data.choices?.[0]?.message?.content;
-    
-    if (!content) {
-      console.error('❌ Unexpected Mammouth response format:', data);
-      return res.status(500).json({ 
-        error: 'Unexpected API response format',
-        raw: data 
-      });
-    }
-
-    // Parser le JSON de la réponse
-    let mealData;
-    try {
-      // Nettoyer la réponse (enlever les backticks si présents)
-      const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
-      mealData = JSON.parse(cleanedContent);
-    } catch (parseError) {
-      console.error('❌ Failed to parse Mammouth JSON response:', content);
-      return res.status(500).json({ 
-        error: 'Failed to parse AI response',
-        raw: content 
-      });
-    }
-
-    // Valider les champs obligatoires
-    const required = ['name', 'calories', 'proteins', 'carbs', 'fats', 'confidence'];
-    const missing = required.filter(field => !(field in mealData));
-    
-    if (missing.length > 0) {
-      return res.status(400).json({ 
-        error: 'Missing required fields in AI response',
-        missing,
-        received: mealData 
-      });
-    }
-
-    // Répondre avec succès ✅
-    return res.status(200).json({
-      success: true,
-      meal: mealData,
-      timestamp: new Date().toISOString()
-    });
-
+    return response.data;
   } catch (error) {
-    console.error('❌ API Error:', error);
-    return res.status(500).json({ 
-      error: 'Internal server error',
-      message: error.message 
-    });
+    console.error('❌ Error fetching from Mammouth API:', error.message);
+    if (error.response) {
+      console.error('Status:', error.response.status);
+      console.error('Data:', error.response.data);
+    }
+    throw error;
   }
 }
+
+async function parseMeals(rawData) {
+  try {
+    console.log('📝 Parsing meal data...');
+    
+    const meals = Array.isArray(rawData) ? rawData : [rawData];
+    
+    const parsedMeals = meals.map(meal => ({
+      id: meal.id || '',
+      name: meal.name || '',
+      description: meal.description || '',
+      date: meal.date || new Date().toISOString(),
+      ingredients: meal.ingredients || [],
+      calories: meal.calories || 0,
+      protein: meal.protein || 0,
+      carbs: meal.carbs || 0,
+      fat: meal.fat || 0,
+      source: 'mammouth-api'
+    }));
+
+    return parsedMeals;
+  } catch (error) {
+    console.error('❌ Error parsing meal data:', error.message);
+    throw error;
+  }
+}
+
+async function saveMealsToFile(meals) {
+  try {
+    console.log(`💾 Saving ${meals.length} meals to file...`);
+    
+    fs.writeFileSync(MEALS_FILE, JSON.stringify(meals, null, 2));
+    console.log('✅ Meals saved successfully');
+  } catch (error) {
+    console.error('❌ Error saving meals to file:', error.message);
+    throw error;
+  }
+}
+
+async function main() {
+  try {
+    console.log('🚀 Starting Mammouth API sync...\n');
+    
+    const rawData = await fetchMealsFromAPI();
+    const parsedMeals = await parseMeals(rawData);
+    await saveMealsToFile(parsedMeals);
+    
+    console.log('\n✅ Sync completed successfully!');
+  } catch (error) {
+    console.error('\n❌ Sync failed:', error.message);
+    process.exit(1);
+  }
+}
+
+main();
