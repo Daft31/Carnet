@@ -2,7 +2,7 @@
   "buildCommand": "npm run build || true",
   "outputDirectory": ".",
   "env": {
-    "MAMMOUTH_API_KEY": "@mammouth_api_key"
+    "MAMMOUTH_API_KEY": "@carnet_api_key"
   },
   "functions": {
     "api/**/*.js": {
