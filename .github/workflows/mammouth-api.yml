@@ -1,27 +1,14 @@
-name: API Call with Mammouth
-
+name: Mammouth API
 on:
-  workflow_run:
-    workflows: ["Deploy to Vercel"]
-    types:
-      - completed
-
+  push:
+    branches:
+      - main
 jobs:
-  call-api:
+  deploy:
     runs-on: ubuntu-latest
+    env:
+      CARNET_API_KEY: ${{ secrets.CARNET_API_KEY }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Call Mammouth API
-        env:
-          CARNET_API_KEY: ${{ secrets.CARNET_API_KEY }}
-        run: |
-          curl -X POST https://api.mammouthai.com/v1/process \
-            -H "Authorization: Bearer $CARNET_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "action": "process_deployment",
-              "repository": "${{ github.repository }}",
-              "commit": "${{ github.sha }}"
-            }'
+      - uses: actions/checkout@v2
+      - name: Run tests
+        run: node api/parse-meal.js
