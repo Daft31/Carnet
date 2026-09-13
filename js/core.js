@@ -208,6 +208,30 @@ function dayBar(){
   </div>`;
 }
 
+// Conseils macros : compare la part du macro déjà consommée à la part de la
+// journée déjà écoulée, pour repérer un macro en avance (à limiter) ou en
+// retard (à privilégier) sur le rythme de la journée — pas juste un % brut.
+function macroTips(t){
+  const now = new Date();
+  const elapsed = (now.getHours()*60+now.getMinutes())/1440;
+  const macros = [
+    {label:'Protéines', color:'var(--blue)', consumed:t.protein, goal:settings.proteinGoal},
+    {label:'Glucides', color:'var(--rust)', consumed:t.carbs, goal:settings.carbGoal},
+    {label:'Lipides', color:'var(--green)', consumed:t.fat, goal:settings.fatGoal}
+  ];
+  const tips = [];
+  macros.forEach(m=>{
+    if(!m.goal) return;
+    const ratio = m.consumed/m.goal;
+    const diff = ratio-elapsed;
+    if(diff>=0.2 && ratio>=0.6){
+      tips.push({...m, text:`déjà ${Math.round(m.consumed)}/${m.goal} g alors que la journée n'est qu'à ${Math.round(elapsed*100)}% — mieux vaut éviter les aliments riches en ${m.label.toLowerCase()} pour la suite.`});
+    } else if(diff<=-0.25 && elapsed>=0.3){
+      tips.push({...m, text:`seulement ${Math.round(m.consumed)}/${m.goal} g pour l'instant — pense à en ajouter dans ton prochain repas.`});
+    }
+  });
+  return tips;
+}
 function viewToday(){
   const t = dayTotals(currentDate);
   // Le budget restant ignore volontairement les séances de sport : brûler des
@@ -288,6 +312,14 @@ function viewToday(){
     ${macroRow('Protéines', t.protein, settings.proteinGoal, 'var(--blue)')}
     ${macroRow('Glucides', t.carbs, settings.carbGoal, 'var(--rust)')}
     ${macroRow('Lipides', t.fat, settings.fatGoal, 'var(--green)')}
+  </section>
+  <section class="card">
+    <h2>Conseils</h2>
+    ${(()=>{
+      const tips = macroTips(t);
+      if(!tips.length) return '<div class="empty">Ton alimentation est bien répartie par rapport à l\'avancée de la journée 👍</div>';
+      return tips.map(tip=>`<p class="macro-tip"><b style="color:${tip.color}">${tip.label}</b> : ${tip.text}</p>`).join('');
+    })()}
   </section>
   <section class="card">
     <h2>Journal du jour</h2>
