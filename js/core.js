@@ -16,6 +16,15 @@ let customFoods = LS.get('ct_customFoods', []);
 let foodOverrides = LS.get('ct_foodOverrides', {}); // {builtinId: {name,kcal,protein,carbs,fat}}
 let favorites = LS.get('ct_favorites', []); // array of food ids
 let weightEntries = LS.get('ct_weight', []); // {id,date,weight,bodyFat,muscleMass,water,note}
+// Migration ponctuelle : le muscle était saisi en % du poids, il est désormais en kg.
+// On convertit une seule fois les anciennes valeurs via le poids de la même pesée.
+if(!LS.get('ct_muscleUnitMigrated', false)){
+  weightEntries.forEach(e=>{
+    if(e.muscleMass!=null && e.weight) e.muscleMass = Math.round(e.weight*e.muscleMass/100*10)/10;
+  });
+  LS.set('ct_weight', weightEntries);
+  LS.set('ct_muscleUnitMigrated', true);
+}
 let profile = LS.get('ct_profile', {sex:'H', age:'', height:'', activity:'modere', goalWeight:'', rate:'-0.5'});
 let logEntries = LS.get('ct_log', []); // {id,date,type,...}
 let todos = LS.get('ct_todos', []); // {id,text,daily,done,completedDate}
@@ -603,30 +612,40 @@ function chartHoverLayer(){
 }
 
 let weightChartPoints = [];
-function svgWeightChart(entriesAsc){
-  if(entriesAsc.length<2) return '';
-  weightChartPoints = entriesAsc.map(e=>({date:e.date, weight:e.weight, bodyFat:e.bodyFat, muscleMass:e.muscleMass, water:e.water}));
+// Graphique mono-série générique (poids ou masse musculaire, tous deux en kg).
+function svgSingleSeriesChart(wrapId, entriesAsc, field, colorVar, unitSuffix, decimals){
   const n = entriesAsc.length;
-  const {lo,hi} = chartBounds(entriesAsc.map(e=>e.weight));
-  const {yFor, svg:axesSvg} = chartAxes(lo, hi, entriesAsc.map(e=>e.date), 1);
-  const coords = entriesAsc.map((e,i)=>({x:chartXFor(i,n), y:yFor(e.weight)}));
+  const points = entriesAsc.map((e,i)=>({x:chartXFor(i,n), value:e[field], date:e.date})).filter(p=>p.value!=null);
+  if(points.length<2) return '';
+  const {lo,hi} = chartBounds(points.map(p=>p.value));
+  const {yFor, svg:axesSvg} = chartAxes(lo, hi, points.map(p=>p.date), decimals);
+  const coords = points.map(p=>({x:p.x, y:yFor(p.value)}));
   const pts = coords.map(c=>`${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
   const last = coords[coords.length-1];
-  return `<div class="chart-wrap" id="weightChartWrap">
+  return `<div class="chart-wrap" id="${wrapId}">
     <svg viewBox="0 0 ${CHART_W} ${CHART_H}" class="trend-chart">
       ${axesSvg}
-      <polyline points="${pts}" fill="none" class="chart-line" style="stroke:var(--green)"/>
-      ${coords.map((c,i)=>`<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${i===coords.length-1?4:2.6}" class="chart-dot" style="fill:var(--green)"/>`).join('')}
-      <text x="${(last.x-6).toFixed(1)}" y="${(last.y-9).toFixed(1)}" text-anchor="end" class="chart-endlabel">${entriesAsc[n-1].weight} kg</text>
+      <polyline points="${pts}" fill="none" class="chart-line" style="stroke:${colorVar}"/>
+      ${coords.map((c,i)=>`<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${i===coords.length-1?4:2.6}" class="chart-dot" style="fill:${colorVar}"/>`).join('')}
+      ${(()=>{ const label=`${points[points.length-1].value}${unitSuffix}`; const lx=last.x-6, ly=last.y-9, lw=label.length*6.3+8;
+        return `<rect x="${(lx-lw).toFixed(1)}" y="${(ly-11).toFixed(1)}" width="${lw.toFixed(1)}" height="15" rx="4" class="chart-endlabel-bg"/>
+        <text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="end" class="chart-endlabel">${label}</text>`; })()}
       ${chartHoverLayer()}
     </svg>
     <div class="chart-tooltip"></div>
   </div>`;
 }
+function svgWeightChart(entriesAsc){
+  weightChartPoints = entriesAsc.map(e=>({date:e.date, weight:e.weight, bodyFat:e.bodyFat, muscleMass:e.muscleMass, water:e.water}));
+  return svgSingleSeriesChart('weightChartWrap', entriesAsc, 'weight', 'var(--green)', ' kg', 1);
+}
+function svgMuscleChart(entriesAsc){
+  return svgSingleSeriesChart('muscleChartWrap', entriesAsc, 'muscleMass', 'var(--chart-muscle)', ' kg', 1);
+}
 
+// Masse grasse et eau restent en % (même axe) ; le muscle est suivi en kg dans son propre graphique.
 const COMPOSITION_SERIES = [
   {key:'bodyFat', label:'Masse grasse', color:'var(--chart-fat)', unit:'%'},
-  {key:'muscleMass', label:'Muscle', color:'var(--chart-muscle)', unit:'%'},
   {key:'water', label:'Eau', color:'var(--chart-water)', unit:'%'}
 ];
 function svgCompositionChart(entriesAsc){
@@ -689,7 +708,7 @@ function viewWeight(){
     <input id="wWeight" type="number" step="0.1" inputmode="decimal" placeholder="ex. 78.4">
     <div class="row3">
       <div><label>Masse grasse (%)</label><input id="wFat" type="number" step="0.1"></div>
-      <div><label>Muscle (%)</label><input id="wMuscle" type="number" step="0.1"></div>
+      <div><label>Muscle (kg)</label><input id="wMuscle" type="number" step="0.1"></div>
       <div><label>Eau (%)</label><input id="wWater" type="number" step="0.1"></div>
     </div>
     <div class="hint">Champs optionnels — pratiques si tu pèses avec une balance à impédancemétrie.</div>
@@ -702,14 +721,18 @@ function viewWeight(){
     ${sorted.length===0 ? '<div class="empty">Aucune pesée enregistrée.</div>' : svgWeightChart([...sorted].reverse())}
   </section>
   <section class="card">
+    <h2>Masse musculaire</h2>
+    ${svgMuscleChart([...sorted].reverse()) || '<div class="empty">Renseigne le muscle (kg) sur au moins 2 pesées pour voir ce graphique.</div>'}
+  </section>
+  <section class="card">
     <h2>Composition corporelle</h2>
-    ${svgCompositionChart([...sorted].reverse()) || '<div class="empty">Renseigne masse grasse, muscle ou eau sur au moins 2 pesées pour voir ce graphique.</div>'}
+    ${svgCompositionChart([...sorted].reverse()) || '<div class="empty">Renseigne masse grasse ou eau sur au moins 2 pesées pour voir ce graphique.</div>'}
   </section>
   <section class="card">
     <h2>Historique</h2>
     ${sorted.length===0 ? '<div class="empty">Aucune pesée enregistrée.</div>' : sorted.map(e=>`
       <div class="list-entry">
-        <div class="main"><div class="title">${e.weight} kg</div><div class="sub">${dateLabel(e.date)}${e.bodyFat?' · MG '+e.bodyFat+'%':''}${e.muscleMass?' · Muscle '+e.muscleMass+'%':''}${e.water?' · Eau '+e.water+'%':''}${e.note? ' · '+escapeHtml(e.note):''}</div></div>
+        <div class="main"><div class="title">${e.weight} kg</div><div class="sub">${dateLabel(e.date)}${e.bodyFat?' · MG '+e.bodyFat+'%':''}${e.muscleMass?' · Muscle '+e.muscleMass+' kg':''}${e.water?' · Eau '+e.water+'%':''}${e.note? ' · '+escapeHtml(e.note):''}</div></div>
         <button class="del" data-delw="${e.id}">✕</button>
       </div>`).join('')}
   </section>

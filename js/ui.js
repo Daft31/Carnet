@@ -400,9 +400,11 @@ function bindTabEvents(){
     bindChartHover('weightChartWrap', weightChartPoints, [
       {key:'weight', label:'Poids', color:'var(--green)', unit:' kg'}
     ]);
+    bindChartHover('muscleChartWrap', weightChartPoints, [
+      {key:'muscleMass', label:'Muscle', color:'var(--chart-muscle)', unit:' kg'}
+    ]);
     bindChartHover('compChartWrap', weightChartPoints, [
       {key:'bodyFat', label:'Masse grasse', color:'var(--chart-fat)', unit:'%'},
-      {key:'muscleMass', label:'Muscle', color:'var(--chart-muscle)', unit:'%'},
       {key:'water', label:'Eau', color:'var(--chart-water)', unit:'%'}
     ]);
     document.querySelectorAll('#pSexSeg button').forEach(b=>b.onclick=()=>{ profile.sex=b.dataset.sex; render(); });
