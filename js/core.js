@@ -223,11 +223,14 @@ function personalFoodPool(){
 }
 // Aliments les plus riches en `key` (protein/carbs/fat) : priorité aux favoris/habitudes
 // de l'utilisateur, repli sur la base complète si son historique n'en fournit pas.
-function topFoodsFor(key){
-  const rank = list => list.filter(f=>f[key]>3).sort((a,b)=>b[key]-a[key]).slice(0,3).map(f=>f.name);
+// `excludeIds` évite de suggérer un aliment déjà déconseillé pour un autre macro
+// (ex. les pistaches sont riches en protéines ET en lipides : si les lipides sont
+// déjà au max, on ne va pas dire ensuite "mange des pistaches" pour les protéines).
+function topFoodsFor(key, excludeIds){
+  const rank = list => list.filter(f=>f[key]>3 && !(excludeIds&&excludeIds.has(f.id))).sort((a,b)=>b[key]-a[key]).slice(0,3);
   const personal = rank(personalFoodPool());
-  if(personal.length) return {names:personal, personal:true};
-  return {names:rank(allFoods()), personal:false};
+  if(personal.length) return {foods:personal, personal:true};
+  return {foods:rank(allFoods()), personal:false};
 }
 function macroTips(t){
   const now = new Date();
@@ -237,20 +240,34 @@ function macroTips(t){
     {key:'carbs', label:'Glucides', color:'var(--rust)', consumed:t.carbs, goal:settings.carbGoal},
     {key:'fat', label:'Lipides', color:'var(--green)', consumed:t.fat, goal:settings.fatGoal}
   ];
-  const tips = [];
-  macros.forEach(m=>{
-    if(!m.goal) return;
+  const statuses = macros.map(m=>{
+    if(!m.goal) return {...m, status:null};
     const ratio = m.consumed/m.goal;
     const diff = ratio-elapsed;
-    if(diff>=0.2 && ratio>=0.6){
+    if(diff>=0.2 && ratio>=0.6) return {...m, status:'avoid'};
+    if(diff<=-0.25 && elapsed>=0.3) return {...m, status:'eat'};
+    return {...m, status:null};
+  });
+  // Les aliments "à éviter" sont calculés d'abord, pour que les suggestions
+  // "à privilégier" ne piochent jamais dedans.
+  const avoidIds = new Set();
+  const avoidResults = {};
+  statuses.filter(m=>m.status==='avoid').forEach(m=>{
+    const r = topFoodsFor(m.key);
+    avoidResults[m.key] = r;
+    r.foods.forEach(f=>avoidIds.add(f.id));
+  });
+  const tips = [];
+  statuses.forEach(m=>{
+    if(m.status==='avoid'){
+      const {foods, personal} = avoidResults[m.key];
       let text = `déjà ${Math.round(m.consumed)}/${m.goal} g alors que la journée n'est qu'à ${Math.round(elapsed*100)}% — mieux vaut éviter les aliments riches en ${m.label.toLowerCase()} pour la suite.`;
-      const {names, personal} = topFoodsFor(m.key);
-      if(names.length) text += ` ${personal?'Chez toi, ça veut dire lever le pied sur':'Par exemple, limite'} ${frenchList(names)}.`;
+      if(foods.length) text += ` ${personal?'Chez toi, ça veut dire lever le pied sur':'Par exemple, limite'} ${frenchList(foods.map(f=>f.name))}.`;
       tips.push({...m, text});
-    } else if(diff<=-0.25 && elapsed>=0.3){
+    } else if(m.status==='eat'){
+      const {foods, personal} = topFoodsFor(m.key, avoidIds);
       let text = `seulement ${Math.round(m.consumed)}/${m.goal} g pour l'instant — pense à en ajouter dans ton prochain repas.`;
-      const {names, personal} = topFoodsFor(m.key);
-      if(names.length) text += ` ${personal?'Une collation avec':'Par exemple avec'} ${frenchList(names)} ferait l\'affaire.`;
+      if(foods.length) text += ` ${personal?'Une collation avec':'Par exemple avec'} ${frenchList(foods.map(f=>f.name))} ferait l\'affaire.`;
       tips.push({...m, text});
     }
   });
