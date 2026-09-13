@@ -481,6 +481,8 @@
 
   /* ---- Recent foods section ---- */
   .recent-label{ display:flex; align-items:center; gap:8px; margin:6px 0 4px; color:var(--ink-soft); font-size:11px; text-transform:uppercase; letter-spacing:.06em; font-weight:700; }
+  .recent-label.list-toggle{ cursor:pointer; }
+  .recent-label.list-toggle .chev{ flex-shrink:0; }
   .recent-label::before{ content:""; flex:0 0 14px; height:2px; background:var(--green-soft); border-radius:2px; }
   .recent-label::after{ content:""; flex:1; height:2px; background:var(--green-soft); border-radius:2px; opacity:.5; }
 

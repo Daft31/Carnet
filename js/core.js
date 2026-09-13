@@ -429,6 +429,17 @@ function recentFoods(limit=6){
   }
   return out;
 }
+function favoritesSection(){
+  const favFoods = favorites.map(id=>allFoods().find(f=>f.id===id)).filter(Boolean);
+  if(!favFoods.length) return '';
+  const chip = f => `
+        <div class="food-chip" data-pick="${f.id}">
+          <button class="chip-star" data-fav="${f.id}" title="Retirer des favoris">★</button>
+          <span class="chip-name">${escapeHtml(f.name)}</span>
+        </div>`;
+  const toggle = `<div class="recent-label list-toggle" data-toggle="favorites">Favoris (${favFoods.length}) <span class="chev">${openFavorites?'▲':'▼'}</span></div>`;
+  return toggle + (openFavorites ? `<div class="food-chips">${favFoods.map(chip).join('')}</div>` : '');
+}
 function viewMeals(){
   const q = normalizeSearch(mealSearchQ.trim());
   let results = [];
@@ -437,17 +448,11 @@ function viewMeals(){
     results.sort((a,b)=> (isFavorite(b.id)-isFavorite(a.id)) || a.name.localeCompare(b.name));
     results = results.slice(0,30);
   }
-  const favFoods = favorites.map(id=>allFoods().find(f=>f.id===id)).filter(Boolean);
   const foodRow = f => `
         <div class="food-row" data-pick="${f.id}">
           <div><div class="fn">${escapeHtml(f.name)}</div><div class="fm">/100g · ${f.kcal} kcal · P${f.protein} G${f.carbs} L${f.fat}</div></div>
           <button class="star ${isFavorite(f.id)?'active':''}" data-fav="${f.id}" title="Favori">${isFavorite(f.id)?'★':'☆'}</button>
           <button class="edit" data-edit="${f.id}" title="Modifier les valeurs">✎</button>
-        </div>`;
-  const favChip = f => `
-        <div class="food-chip" data-pick="${f.id}">
-          <button class="chip-star" data-fav="${f.id}" title="Retirer des favoris">★</button>
-          <span class="chip-name">${escapeHtml(f.name)}</span>
         </div>`;
   return `
   ${dayBar()}
@@ -467,7 +472,7 @@ function viewMeals(){
       ${q.length===0
         ? (function(){
             const recents = recentFoods(6);
-            const favSection = favFoods.length? `<div class="recent-label">Favoris</div><div class="food-chips">${favFoods.map(favChip).join('')}</div>` : '';
+            const favSection = favoritesSection();
             const recSection = recents.length? `<div class="recent-label">Récents</div>${recents.map(foodRow).join('')}` : '';
             const empty = '<div class="empty">Cherche un aliment, ou marque tes aliments récurrents en favoris (★) pour les retrouver ici direct.</div>';
             return favSection + recSection || empty;
@@ -578,6 +583,7 @@ function viewWorkouts(){
 let openHistDay = null;
 let openHistWeek = null;
 let openCustomFoods = false;
+let openFavorites = false;
 // Géométrie SVG partagée par les graphiques de l'onglet Poids.
 const CHART_W=320, CHART_H=150, CHART_PADL=36, CHART_PADR=14, CHART_PADT=16, CHART_PADB=24;
 function chartXFor(i,n){ return CHART_PADL + (n>1 ? (i/(n-1)) : 0)*(CHART_W-CHART_PADL-CHART_PADR); }

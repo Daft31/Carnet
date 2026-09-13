@@ -197,6 +197,8 @@ function bindMealResultEvents(){
     e.stopPropagation();
     toggleFavorite(b.dataset.fav); render();
   });
+  const favToggle = document.querySelector('[data-toggle="favorites"]');
+  if(favToggle) favToggle.onclick = ()=>{ openFavorites = !openFavorites; render(); };
 }
 
 /* ===================== ÉVÉNEMENTS ===================== */
@@ -227,7 +229,6 @@ function bindTabEvents(){
         results.sort((a,b)=> (isFavorite(b.id)-isFavorite(a.id)) || a.name.localeCompare(b.name));
         results = results.slice(0,30);
       }
-      const favFoods = favorites.map(id=>allFoods().find(f=>f.id===id)).filter(Boolean);
       const foodRow = f => `
         <div class="food-row" data-pick="${f.id}">
           <div><div class="fn">${escapeHtml(f.name)}</div><div class="fm">/100g · ${f.kcal} kcal · P${f.protein} G${f.carbs} L${f.fat}</div></div>
@@ -237,7 +238,7 @@ function bindTabEvents(){
       const resultsNode = document.querySelector('#main .search-results');
       if(!resultsNode) return;
       resultsNode.innerHTML = q.length===0
-        ? (favFoods.length ? `<div class="hint" style="margin:8px 0 2px;">Tes favoris</div>${favFoods.map(foodRow).join('')}` : '<div class="empty">Cherche un aliment, ou marque tes aliments récurrents en favoris (★) pour les retrouver ici direct.</div>')
+        ? (favoritesSection() || '<div class="empty">Cherche un aliment, ou marque tes aliments récurrents en favoris (★) pour les retrouver ici direct.</div>')
         : (results.length ? results.map(foodRow).join('') : `<div class="empty">Aucun résultat. Tu peux l'ajouter en aliment perso ci-dessous.</div>`);
       bindMealResultEvents();
     });
