@@ -65,7 +65,7 @@ function openQtyModal(food){
     if(g<=0){ toast('Entre une quantité valide'); return; }
     const f = g/100;
     logEntries.push({
-      id:uid(), date:currentDate, type:'meal', mealSlot, foodName:food.name, grams:g,
+      id:uid(), date:currentDate, type:'meal', mealSlot, foodId:food.id, foodName:food.name, grams:g,
       kcal:food.kcal*f, protein:food.protein*f, carbs:food.carbs*f, fat:food.fat*f,
       time:new Date().toTimeString().slice(0,5)
     });

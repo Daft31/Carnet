@@ -211,13 +211,31 @@ function dayBar(){
 // Conseils macros : compare la part du macro déjà consommée à la part de la
 // journée déjà écoulée, pour repérer un macro en avance (à limiter) ou en
 // retard (à privilégier) sur le rythme de la journée — pas juste un % brut.
+function frenchList(names){
+  if(names.length<=1) return names[0]||'';
+  return names.slice(0,-1).join(', ')+' et '+names[names.length-1];
+}
+// Aliments favoris + déjà mangés au moins une fois (via foodId sur les entrées repas).
+function personalFoodPool(){
+  const ids = new Set(favorites);
+  logEntries.forEach(e=>{ if(e.type==='meal' && e.foodId) ids.add(e.foodId); });
+  return [...ids].map(id=>allFoods().find(f=>f.id===id)).filter(Boolean);
+}
+// Aliments les plus riches en `key` (protein/carbs/fat) : priorité aux favoris/habitudes
+// de l'utilisateur, repli sur la base complète si son historique n'en fournit pas.
+function topFoodsFor(key){
+  const rank = list => list.filter(f=>f[key]>3).sort((a,b)=>b[key]-a[key]).slice(0,3).map(f=>f.name);
+  const personal = rank(personalFoodPool());
+  if(personal.length) return {names:personal, personal:true};
+  return {names:rank(allFoods()), personal:false};
+}
 function macroTips(t){
   const now = new Date();
   const elapsed = (now.getHours()*60+now.getMinutes())/1440;
   const macros = [
-    {label:'Protéines', color:'var(--blue)', consumed:t.protein, goal:settings.proteinGoal},
-    {label:'Glucides', color:'var(--rust)', consumed:t.carbs, goal:settings.carbGoal},
-    {label:'Lipides', color:'var(--green)', consumed:t.fat, goal:settings.fatGoal}
+    {key:'protein', label:'Protéines', color:'var(--blue)', consumed:t.protein, goal:settings.proteinGoal},
+    {key:'carbs', label:'Glucides', color:'var(--rust)', consumed:t.carbs, goal:settings.carbGoal},
+    {key:'fat', label:'Lipides', color:'var(--green)', consumed:t.fat, goal:settings.fatGoal}
   ];
   const tips = [];
   macros.forEach(m=>{
@@ -225,9 +243,15 @@ function macroTips(t){
     const ratio = m.consumed/m.goal;
     const diff = ratio-elapsed;
     if(diff>=0.2 && ratio>=0.6){
-      tips.push({...m, text:`déjà ${Math.round(m.consumed)}/${m.goal} g alors que la journée n'est qu'à ${Math.round(elapsed*100)}% — mieux vaut éviter les aliments riches en ${m.label.toLowerCase()} pour la suite.`});
+      let text = `déjà ${Math.round(m.consumed)}/${m.goal} g alors que la journée n'est qu'à ${Math.round(elapsed*100)}% — mieux vaut éviter les aliments riches en ${m.label.toLowerCase()} pour la suite.`;
+      const {names, personal} = topFoodsFor(m.key);
+      if(names.length) text += ` ${personal?'Chez toi, ça veut dire lever le pied sur':'Par exemple, limite'} ${frenchList(names)}.`;
+      tips.push({...m, text});
     } else if(diff<=-0.25 && elapsed>=0.3){
-      tips.push({...m, text:`seulement ${Math.round(m.consumed)}/${m.goal} g pour l'instant — pense à en ajouter dans ton prochain repas.`});
+      let text = `seulement ${Math.round(m.consumed)}/${m.goal} g pour l'instant — pense à en ajouter dans ton prochain repas.`;
+      const {names, personal} = topFoodsFor(m.key);
+      if(names.length) text += ` ${personal?'Une collation avec':'Par exemple avec'} ${frenchList(names)} ferait l\'affaire.`;
+      tips.push({...m, text});
     }
   });
   return tips;
