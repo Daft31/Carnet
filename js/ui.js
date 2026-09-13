@@ -488,8 +488,10 @@ function bindTabEvents(){
       customFoods = customFoods.filter(f=>f.id!==b.dataset.delfood); save(); render();
     });
     document.querySelectorAll('[data-editfood]').forEach(b=>b.onclick=()=>{
-      const f = customFoods.find(x=>x.id===b.replace('-', '_').dataset.editfood); if(f) openEditFoodModal(f);
+      const f = customFoods.find(x=>x.id===b.dataset.editfood); if(f) openEditFoodModal(f);
     });
+    const customFoodsToggle = document.querySelector('[data-toggle="customFoods"]');
+    if(customFoodsToggle) customFoodsToggle.onclick = ()=>{ openCustomFoods = !openCustomFoods; render(); };
     document.querySelectorAll('[data-delpreset]').forEach(b=>b.onclick=()=>{
       workoutPresets = workoutPresets.filter(p=>p.id!==b.dataset.delpreset); save(); render();
     });

@@ -444,6 +444,11 @@ function viewMeals(){
           <button class="star ${isFavorite(f.id)?'active':''}" data-fav="${f.id}" title="Favori">${isFavorite(f.id)?'★':'☆'}</button>
           <button class="edit" data-edit="${f.id}" title="Modifier les valeurs">✎</button>
         </div>`;
+  const favChip = f => `
+        <div class="food-chip" data-pick="${f.id}">
+          <button class="chip-star" data-fav="${f.id}" title="Retirer des favoris">★</button>
+          <span class="chip-name">${escapeHtml(f.name)}</span>
+        </div>`;
   return `
   ${dayBar()}
   <section class="card">
@@ -462,7 +467,7 @@ function viewMeals(){
       ${q.length===0
         ? (function(){
             const recents = recentFoods(6);
-            const favSection = favFoods.length? `<div class="recent-label">Favoris</div>${favFoods.map(foodRow).join('')}` : '';
+            const favSection = favFoods.length? `<div class="recent-label">Favoris</div><div class="food-chips">${favFoods.map(favChip).join('')}</div>` : '';
             const recSection = recents.length? `<div class="recent-label">Récents</div>${recents.map(foodRow).join('')}` : '';
             const empty = '<div class="empty">Cherche un aliment, ou marque tes aliments récurrents en favoris (★) pour les retrouver ici direct.</div>';
             return favSection + recSection || empty;
@@ -572,6 +577,7 @@ function viewWorkouts(){
 
 let openHistDay = null;
 let openHistWeek = null;
+let openCustomFoods = false;
 // Géométrie SVG partagée par les graphiques de l'onglet Poids.
 const CHART_W=320, CHART_H=150, CHART_PADL=36, CHART_PADR=14, CHART_PADT=16, CHART_PADB=24;
 function chartXFor(i,n){ return CHART_PADL + (n>1 ? (i/(n-1)) : 0)*(CHART_W-CHART_PADL-CHART_PADR); }
@@ -914,11 +920,14 @@ function viewSettings(){
   </section>
   <section class="card">
     <h2>Aliments personnalisés (${customFoods.length})</h2>
-    ${customFoods.length? customFoods.map(f=>`<div class="list-entry">
-      <div class="main"><div class="title">${escapeHtml(f.name)}</div><div class="sub">/100g · ${f.kcal} kcal · P${f.protein} G${f.carbs} L${f.fat}</div></div>
-      <button class="del" data-editfood="${f.id}" style="color:var(--blue);">✎</button>
-      <button class="del" data-delfood="${f.id}">✕</button>
-    </div>`).join('') : '<div class="empty">Pas encore d\'aliment personnalisé.</div>'}
+    ${customFoods.length ? `
+      <button class="settings-toggle" data-toggle="customFoods" type="button">${openCustomFoods?'Masquer la liste ▲':'Voir la liste ▼'}</button>
+      ${openCustomFoods ? customFoods.map(f=>`<div class="list-entry">
+        <div class="main"><div class="title">${escapeHtml(f.name)}</div><div class="sub">/100g · ${f.kcal} kcal · P${f.protein} G${f.carbs} L${f.fat}</div></div>
+        <button class="del" data-editfood="${f.id}" style="color:var(--blue);">✎</button>
+        <button class="del" data-delfood="${f.id}">✕</button>
+      </div>`).join('') : ''}
+    ` : '<div class="empty">Pas encore d\'aliment personnalisé.</div>'}
     ${Object.keys(foodOverrides).length? `<div class="hint" style="margin-top:10px;">${Object.keys(foodOverrides).length} aliment(s) de la base ont des valeurs modifiées par toi.</div>` : ''}
     <button class="btn ghost" id="addCustomFoodBtn2">+ Ajouter un aliment</button>
   </section>
