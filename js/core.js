@@ -222,10 +222,27 @@ function frenchList(names){
 // `excludeIds` évite de suggérer un aliment déjà déconseillé pour un autre macro
 // (ex. les pistaches sont riches en protéines ET en lipides : si les lipides sont
 // déjà au max, on ne va pas dire ensuite "mange des pistaches" pour les protéines).
+// Dans ces catégories, "cru"/"sec" désigne un aliment qu'on ne mange pas tel quel
+// (riz cru, poulet cru, œuf cru...) — contrairement aux légumes/fruits/oléagineux,
+// où le cru est la norme. On les exclut donc des suggestions.
+const RAW_UNSAFE_CATEGORIES = new Set(['grains','legumes','meat_fish','eggs_dairy']);
+const RAW_OR_DRY_RE = /\bcrue?s?\b|\bsecs?\b|s[eè].{0,3}che?s?\b/i;
+function isEdibleAsIs(f){
+  return !(RAW_UNSAFE_CATEGORIES.has(f.category) && RAW_OR_DRY_RE.test(f.name));
+}
 function topFoodsFor(key, excludeIds){
-  return allFoods()
-    .filter(f=>f[key]>3 && !(excludeIds&&excludeIds.has(f.id)))
-    .sort((a,b)=>b[key]-a[key]).slice(0,3);
+  const candidates = allFoods()
+    .filter(f=>f[key]>3 && isEdibleAsIs(f) && !(excludeIds&&excludeIds.has(f.id)))
+    .sort((a,b)=>b[key]-a[key]);
+  // Diversifie : au plus un aliment par catégorie, pour ne pas proposer 3 variantes
+  // du même produit (ex. whey nature/vanille/fraise, ou 3 huiles différentes).
+  const picked = [], seenCategories = new Set();
+  for(const f of candidates){
+    if(seenCategories.has(f.category)) continue;
+    picked.push(f); seenCategories.add(f.category);
+    if(picked.length>=3) break;
+  }
+  return picked;
 }
 function macroTips(t){
   const now = new Date();
