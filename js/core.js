@@ -215,22 +215,17 @@ function frenchList(names){
   if(names.length<=1) return names[0]||'';
   return names.slice(0,-1).join(', ')+' et '+names[names.length-1];
 }
-// Aliments favoris + déjà mangés au moins une fois (via foodId sur les entrées repas).
-function personalFoodPool(){
-  const ids = new Set(favorites);
-  logEntries.forEach(e=>{ if(e.type==='meal' && e.foodId) ids.add(e.foodId); });
-  return [...ids].map(id=>allFoods().find(f=>f.id===id)).filter(Boolean);
-}
-// Aliments les plus riches en `key` (protein/carbs/fat) : priorité aux favoris/habitudes
-// de l'utilisateur, repli sur la base complète si son historique n'en fournit pas.
+// Aliments les plus riches en `key` (protein/carbs/fat) dans la base complète.
+// Piocher dans les favoris/l'historique perso donnait des suggestions bizarres
+// (ex. "fais-toi une collation de pâtes au saumon" parce que c'était le plat le
+// plus riche en glucides déjà loggé) — mieux vaut rester sur des aliments "purs".
 // `excludeIds` évite de suggérer un aliment déjà déconseillé pour un autre macro
 // (ex. les pistaches sont riches en protéines ET en lipides : si les lipides sont
 // déjà au max, on ne va pas dire ensuite "mange des pistaches" pour les protéines).
 function topFoodsFor(key, excludeIds){
-  const rank = list => list.filter(f=>f[key]>3 && !(excludeIds&&excludeIds.has(f.id))).sort((a,b)=>b[key]-a[key]).slice(0,3);
-  const personal = rank(personalFoodPool());
-  if(personal.length) return {foods:personal, personal:true};
-  return {foods:rank(allFoods()), personal:false};
+  return allFoods()
+    .filter(f=>f[key]>3 && !(excludeIds&&excludeIds.has(f.id)))
+    .sort((a,b)=>b[key]-a[key]).slice(0,3);
 }
 function macroTips(t){
   const now = new Date();
@@ -251,23 +246,23 @@ function macroTips(t){
   // Les aliments "à éviter" sont calculés d'abord, pour que les suggestions
   // "à privilégier" ne piochent jamais dedans.
   const avoidIds = new Set();
-  const avoidResults = {};
+  const avoidFoods = {};
   statuses.filter(m=>m.status==='avoid').forEach(m=>{
-    const r = topFoodsFor(m.key);
-    avoidResults[m.key] = r;
-    r.foods.forEach(f=>avoidIds.add(f.id));
+    const foods = topFoodsFor(m.key);
+    avoidFoods[m.key] = foods;
+    foods.forEach(f=>avoidIds.add(f.id));
   });
   const tips = [];
   statuses.forEach(m=>{
     if(m.status==='avoid'){
-      const {foods, personal} = avoidResults[m.key];
+      const foods = avoidFoods[m.key];
       let text = `déjà ${Math.round(m.consumed)}/${m.goal} g alors que la journée n'est qu'à ${Math.round(elapsed*100)}% — mieux vaut éviter les aliments riches en ${m.label.toLowerCase()} pour la suite.`;
-      if(foods.length) text += ` ${personal?'Chez toi, ça veut dire lever le pied sur':'Par exemple, limite'} ${frenchList(foods.map(f=>f.name))}.`;
+      if(foods.length) text += ` Par exemple, limite ${frenchList(foods.map(f=>f.name))}.`;
       tips.push({...m, text});
     } else if(m.status==='eat'){
-      const {foods, personal} = topFoodsFor(m.key, avoidIds);
+      const foods = topFoodsFor(m.key, avoidIds);
       let text = `seulement ${Math.round(m.consumed)}/${m.goal} g pour l'instant — pense à en ajouter dans ton prochain repas.`;
-      if(foods.length) text += ` ${personal?'Une collation avec':'Par exemple avec'} ${frenchList(foods.map(f=>f.name))} ferait l\'affaire.`;
+      if(foods.length) text += ` Par exemple avec ${frenchList(foods.map(f=>f.name))}.`;
       tips.push({...m, text});
     }
   });
