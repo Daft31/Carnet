@@ -237,12 +237,14 @@ function viewToday(){
     days.push({date:ds, kcal: tt.kcalIn, label:['D','L','M','M','J','V','S'][d.getDay()]});
   }
   const maxK = Math.max(settings.calorieGoal, ...days.map(x=>x.kcal), 1);
+  const goalLinePx = Math.round((settings.calorieGoal/maxK)*54);
   const bars = days.map((d,i)=>{
     const h = Math.round((d.kcal/maxK)*54);
     const isToday = d.date===currentDate;
     const isEmpty = d.kcal===0 && !isToday;
-    return `<div class="bar-col ${isToday?'today':''} ${isEmpty?'empty':''}"><div class="b" style="height:${Math.max(2,h)}px"></div><div class="l">${d.label}</div></div>`;
+    return `<div class="bar-col ${isToday?'today':''} ${isEmpty?'empty':''}"><div class="b" style="height:${Math.max(2,h)}px"></div></div>`;
   }).join('');
+  const barLabels = days.map(d=>`<div class="l">${d.label}</div>`).join('');
   const avg = Math.round(days.reduce((s,d)=>s+d.kcal,0)/7);
 
   return `
@@ -272,8 +274,14 @@ function viewToday(){
   </section>
   <section class="card">
     <h2>Calories — 7 derniers jours</h2>
-    <div class="mini-bars">${bars}</div>
-    <div class="axis">Moyenne ${avg} kcal · objectif ${settings.calorieGoal}</div>
+    <div class="mini-bars">
+      <div class="bars-row">
+        <div class="goal-line" style="bottom:${goalLinePx}px"></div>
+        ${bars}
+      </div>
+      <div class="labels-row">${barLabels}</div>
+    </div>
+    <div class="axis">Moyenne ${avg} kcal · objectif ${settings.calorieGoal} <span class="goal-swatch"></span></div>
   </section>
   <section class="card">
     <h2>Macros du jour</h2>

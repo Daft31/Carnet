@@ -494,13 +494,17 @@
   .kcal-summary .pill{ display:inline-block; padding:2px 8px; border-radius:20px; background:var(--surface-2); color:var(--ink-soft); font-size:11px; font-weight:600; margin-top:6px; }
 
   /* ---- Mini bar chart 7 days calories ---- */
-  .mini-bars{ display:flex; align-items:flex-end; gap:6px; height:64px; margin-top:10px; padding:4px 0; }
-  .mini-bars .bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:0; }
+  .mini-bars{ margin-top:10px; padding:4px 0; }
+  .mini-bars .bars-row{ position:relative; display:flex; align-items:flex-end; gap:6px; height:54px; }
+  .mini-bars .bar-col{ flex:1; min-width:0; }
   .mini-bars .bar-col .b{ width:100%; background:var(--green); border-radius:5px 5px 2px 2px; min-height:2px; transition:height .35s ease; }
   .mini-bars .bar-col.today .b{ background:linear-gradient(180deg,var(--green),#46C18C); }
   .mini-bars .bar-col.empty .b{ background:var(--surface-2); }
-  .mini-bars .bar-col .l{ font-size:10px; color:var(--ink-faint); font-weight:600; text-transform:uppercase; }
-  .mini-bars .axis{ font-family:var(--font-mono); font-size:10px; color:var(--ink-faint); text-align:right; margin-top:4px; }
+  .mini-bars .goal-line{ position:absolute; left:0; right:0; height:0; border-top:1.5px dashed var(--rust); z-index:1; pointer-events:none; }
+  .mini-bars .labels-row{ display:flex; gap:6px; margin-top:5px; }
+  .mini-bars .labels-row .l{ flex:1; min-width:0; text-align:center; font-size:10px; color:var(--ink-faint); font-weight:600; text-transform:uppercase; }
+  .mini-bars .axis{ font-family:var(--font-mono); font-size:10px; color:var(--ink-faint); text-align:right; margin-top:4px; display:flex; align-items:center; justify-content:flex-end; gap:5px; }
+  .mini-bars .axis .goal-swatch{ display:inline-block; width:12px; height:0; border-top:1.5px dashed var(--rust); }
 
   /* ---- Recent foods section ---- */
   .recent-label{ display:flex; align-items:center; gap:8px; margin:6px 0 4px; color:var(--ink-soft); font-size:11px; text-transform:uppercase; letter-spacing:.06em; font-weight:700; }
