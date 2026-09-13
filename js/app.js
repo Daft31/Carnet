@@ -1,11 +1,14 @@
 document.getElementById('tabs').addEventListener('click', e=>{
-  if(e.target.closest('#moreToggle')){
+  const moreBtn = e.target.closest('#moreToggle');
+  if(moreBtn){
     document.getElementById('moreMenu').classList.toggle('open');
+    moreBtn.blur();
     return;
   }
   const b = e.target.closest('button[data-tab]'); if(!b) return;
   activeTab = b.dataset.tab; render();
   document.getElementById('moreMenu').classList.remove('open');
+  b.blur();
 });
 document.addEventListener('click', e=>{
   const wrap = document.getElementById('moreWrap');
