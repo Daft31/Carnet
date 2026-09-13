@@ -2,6 +2,8 @@
 
 Instructions pour Claude Code (ou tout agent Claude) travaillant sur ce repo. Lire ce fichier avant toute modification. Le `README.md` contient le détail complet ; ce fichier ne liste que les règles **critiques à ne jamais casser par erreur**.
 
+> ⚠️ **Priorité absolue, avant toute action** : que tu sois l'agent principal ou un agent délégué (spawné pour une tâche précise), tu dois lire **ce fichier en entier** et **le `README.md` en entier** avant d'exécuter, modifier, committer ou pousser quoi que ce soit sur ce repo — même pour une tâche qui semble petite ou isolée. Ces deux fichiers contiennent des règles produit volontaires et des pièges déjà rencontrés qui ne sont pas devinables depuis le code seul. Un agent qui saute cette lecture risque de casser une règle listée ci-dessous sans le savoir.
+
 ## Le projet en une phrase
 
 Carnet : appli web perso de suivi sport/nutrition, 100% statique (HTML/CSS/JS vanilla, sans build, sans framework), données en `localStorage`, une seule fonction serverless (`api/parse-meal.js`) pour la feature IA. Déployée à la fois sur GitHub Pages (statique seul) et Vercel (statique + API).
@@ -26,7 +28,15 @@ Carnet : appli web perso de suivi sport/nutrition, 100% statique (HTML/CSS/JS va
 
 - Le design system (`css/style.css`) et la structure des onglets viennent d'une fusion volontaire entre une ancienne interface plus riche et l'infra actuelle (scanner + IA) — voir section "Historique utile" du `README.md` avant de repartir d'une version antérieure ou de renommer des classes/IDs à la légère (le JS de plusieurs fichiers dépend des mêmes IDs).
 - Reste cohérent avec le thème existant (palette verte/papier, cards arrondies, `--font-mono` pour les chiffres) sauf demande contraire explicite.
+- La nav est un hybride : 5 onglets directs (`data-tab`) + un bouton `#moreToggle` qui déplie `#moreMenu` (Notes/To-do/Réglages). Ces IDs sont câblés en dur dans `js/app.js` (délégation de clic) et `css/style.css` (media query `hover`/`pointer` pour éviter le libellé qui reste collé au tap sur mobile) — ne pas les renommer sans mettre à jour les deux.
+- Le libellé de bouton d'onglet en `:hover`/`:focus-visible` doit rester restreint à `@media (hover:hover) and (pointer:fine)` : sur un vrai appareil tactile il n'existe aucun état de sortie du hover, donc sans cette restriction le libellé reste affiché après un tap (bug déjà rencontré et corrigé).
+
+## Workflow git : quand pousser direct sur `main`, quand passer par une branche + PR
+
+- Pour les changements courants (petites features, fixes, ajustements UI) sur ce projet solo, le workflow historique est un push direct sur `main` après chaque changement testé — c'est le mode par défaut si l'utilisateur ne précise rien d'autre.
+- **Exception explicite : tout chantier qui touche à la persistance des données ou à l'architecture multi-utilisateur (ex. migration vers une vraie base de données / Supabase) doit se faire sur une branche dédiée, testée en profondeur, et n'être mergée sur `main` que via Pull Request.** Ne jamais pousser un tel chantier directement sur `main`, même partiellement — `main` est utilisé en production par l'utilisateur et au moins un autre utilisateur réel (un ami), donc une régression de données y est beaucoup plus coûteuse qu'un bug UI mineur.
+- Si un agent délégué travaille sur un tel chantier, il doit committer/pousser uniquement sur sa branche dédiée et ne jamais ouvrir de PR ni merger sans confirmation explicite de l'utilisateur.
 
 ## Où lire le reste
 
-`README.md` : architecture complète, structure des fichiers, modèle de données localStorage, détails de déploiement.
+`README.md` : architecture complète, structure des fichiers, modèle de données localStorage, détails de déploiement, état des chantiers en cours.

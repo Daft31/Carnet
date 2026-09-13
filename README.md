@@ -1,10 +1,10 @@
 # Carnet
 
-Application web personnelle de suivi sportif et nutritionnel (calories, macros, poids, séances, historique). 100 % en français, pensée pour un usage individuel (une seule personne, pas de comptes multi-utilisateurs).
+Application web personnelle de suivi sportif et nutritionnel (calories, macros, poids, séances, historique). 100 % en français. Conçue au départ pour un usage strictement individuel (une seule personne, pas de comptes), mais utilisée en pratique par plusieurs personnes en parallèle (chacune avec ses propres données locales) — voir la section "Chantier en cours" plus bas pour l'évolution vers un vrai multi-utilisateur.
 
 Ce document s'adresse autant à un humain qu'à un futur agent IA qui interviendrait sur ce repo : il explique l'architecture, les pièges connus, et où trouver quoi.
 
-> 🤖 **Agents Claude (Claude Code, etc.)** : un fichier [`CLAUDE.md`](./CLAUDE.md) à la racine du repo condense les règles critiques à ne jamais casser (calcul calorique, clé API Mammouth, domaine Vercel en dur...). Il est généralement lu automatiquement en début de session — le lire avant toute modification, en complément de ce README.
+> 🤖 **Agents Claude (Claude Code, etc.), y compris tout agent délégué/spawné pour une sous-tâche** : lire **ce README en entier** et [`CLAUDE.md`](./CLAUDE.md) (qui condense les règles critiques à ne jamais casser — calcul calorique, clé API Mammouth, domaine Vercel en dur, workflow git par chantier...) **avant d'entreprendre ou d'exécuter quoi que ce soit** sur ce repo, même pour une tâche qui paraît petite ou isolée. Ne pas se contenter d'une lecture automatique partielle en début de session : vérifier explicitement que les deux fichiers ont été lus avant le premier commit.
 
 ## Aperçu rapide
 
@@ -36,15 +36,17 @@ Aucun fichier `js/food.js` ni `js/workout.js` séparé : cette logique vit direc
 
 ## Fonctionnalités
 
-- **Aujourd'hui** (dashboard) : anneau de calories, macros du jour, mini-graphe 7 jours.
+- **Aujourd'hui** (dashboard) : anneau de calories, macros du jour, mini-graphe "Calories — 7 derniers jours" avec une ligne rouge en pointillés superposée indiquant l'objectif calorique journalier (repère visuel rapide des excès sur la semaine), un bloc **Conseils** qui donne des suggestions concrètes d'aliments (issus de la base intégrée, jamais de l'historique/favoris de l'utilisateur — voir note ci-dessous) selon les macros en retard/excès et l'heure de la journée, et un bloc "Journal du jour" replié par défaut (cliquable pour dérouler).
   - ⚠️ **Règle volontaire** : les calories "restantes" = `objectif − calories mangées`, **jamais** moins les calories brûlées en sport. Les calories brûlées sont affichées séparément ("Brûlées (info)"), à titre purement informatif — le but est d'éviter le biais "j'ai fait du sport donc je peux manger plus". Ne pas réintroduire de soustraction ici sans qu'on te le demande explicitement.
-- **Repas** : recherche dans la base d'aliments intégrée, favoris, aliments personnalisés, + 2 méthodes d'ajout rapide :
-  - **Scanner un code-barres** (caméra + Open Food Facts, aucune clé API requise, tout se passe côté client).
+  - ⚠️ **Suggestions "Conseils" volontairement non personnalisées** : elles piochent dans toute la base d'aliments (`allFoods()`), jamais dans les favoris/l'historique de l'utilisateur. Une tentative de personnalisation a produit des suggestions absurdes (ex. suggérer un plat composite comme "pâtes au saumon" en collation) — ne pas la réintroduire sans revalider soigneusement avec l'utilisateur. Les suggestions appliquent aussi une diversité par catégorie (au plus un aliment par catégorie) et excluent les aliments non comestibles tels quels (champ `state` = `raw`/`dry` sur les catégories où le cru n'est pas normal).
+- **Repas** : recherche dans la base d'aliments intégrée, favoris (affichés en chips compactes, repliées par défaut, cliquables pour dérouler le détail), aliments personnalisés, + 2 méthodes d'ajout rapide :
+  - **Scanner un code-barres** (caméra + Open Food Facts, aucune clé API requise, tout se passe côté client — Open Food Facts n'est utilisé que pour ce lookup produit par produit, jamais fusionné dans la base de recherche locale).
   - **Décrire un repas (IA)** : texte libre → extraction structurée des macros via l'API Mammouth (voir section dédiée).
 - **Séances** : types tapis/vélo/renfo, préréglages, estimation kcal brûlées (affichage informatif uniquement, cf. règle ci-dessus).
-- **Poids** : suivi, calcul BMR/TDEE, objectif calorique adaptatif.
-- **Historique** : détail par jour + déficit hebdomadaire (ignore aussi le sport, par cohérence avec la règle du dashboard).
-- **Notes**, **To-do**, **Réglages** (objectifs manuels, gestion des aliments perso, export/import JSON, reset complet).
+- **Poids** : suivi du poids + graphes SVG (poids, muscle, composition masse grasse/muscle/eau), une carte-résumé en langage courant qui interprète toute la tendance de pesée (pas juste la dernière valeur), calcul BMR/TDEE, objectif calorique adaptatif.
+- **Historique** : détail **par semaine** (regroupement expand/collapse, plus une liste plate qui grossissait sans fin) + déficit hebdomadaire, avec les calories brûlées en sport affichées à titre informatif à côté du déficit (jamais soustraites — cf. règle ci-dessus).
+- **Notes**, **To-do**, **Réglages** (objectifs manuels, gestion des aliments perso — liste repliée par défaut, cliquable pour dérouler —, export/import JSON, reset complet).
+- **Navigation** : hybride 5 onglets directs (Aujourd'hui/Repas/Séances/Poids/Historique) + un bouton "Plus" qui déplie un sous-menu (Notes/To-do/Réglages), pour éviter une barre d'onglets surchargée. Voir la note sur les IDs `#moreToggle`/`#moreMenu` dans `CLAUDE.md` avant d'y toucher.
 
 ## Modèle de données (localStorage)
 
@@ -56,14 +58,18 @@ Tout vit dans le navigateur, clé par clé (`LS.get/set` dans `core.js`) :
 | `ct_customFoods`      | Aliments créés manuellement par l'utilisateur         |
 | `ct_foodOverrides`    | Surcharges de valeurs pour des aliments intégrés      |
 | `ct_favorites`        | IDs des aliments favoris                              |
-| `ct_weight`           | Historique de pesées (poids, masse grasse, muscle...) |
+| `ct_weight`           | Historique de pesées (poids, masse grasse %, muscle **en kg** — anciennement en %, migration automatique une seule fois via `ct_muscleUnitMigrated`, eau) |
 | `ct_profile`          | Profil (sexe, âge, taille, activité, objectif, rythme)|
 | `ct_wpresets`         | Préréglages de séances                                |
 | `ct_log`              | Journal principal : repas + séances + notes           |
 | `ct_todos`            | Tâches à faire                                        |
 | `ct_theme`            | Thème clair/sombre                                    |
 
-Aucune base de données externe, aucun compte utilisateur, aucune synchronisation entre appareils — tout est local à l'appareil/navigateur utilisé. L'export/import JSON (onglet Réglages) est le seul moyen de transférer les données.
+Aucune base de données externe, aucun compte utilisateur, aucune synchronisation entre appareils — tout est local à l'appareil/navigateur utilisé. L'export/import JSON (onglet Réglages) est le seul moyen de transférer les données. (Ce point est justement l'objet du chantier en cours décrit plus bas.)
+
+### Base d'aliments intégrée
+
+`RAW_FOODS`/`BUILTIN_FOODS` dans `js/core.js` (grosse array littérale en ligne 4, à ne pas lire d'un coup avec un outil de lecture classique — préférer `grep`/scripts ciblés). Chaque entrée a une `category` (fruits/vegetables/legumes/grains/meat_fish/eggs_dairy/nuts_seeds/oils_fats/beverages/supplements) et un champ `state` (raw/cooked/baked/dry/boiled/canned/liquid/solid/processed/powder), utilisé notamment par le filtre "comestible tel quel" du bloc Conseils. Les entrées fast-food (ex. McDonald's) ont été retirées volontairement de cette base — la saisie libre via l'IA (Mammouth) reste le moyen de logger ce type de repas. Note connue non corrigée : certains caractères accentués sont corrompus dans les données sources (ex. "sè·®che", "Pâ·®tes") — probablement un artefact de double encodage ; à contourner, pas à "corriger" au cas par cas sans vérifier l'étendue du problème.
 
 ## La fonctionnalité IA (`api/parse-meal.js`)
 
@@ -100,6 +106,17 @@ C'est le point le plus piégeux du repo, à lire avant d'y toucher.
 ### Cache-busting
 
 Les balises `<script>`/`<link>` dans `index.html` portent un paramètre `?v=...`. **Penser à l'incrémenter à chaque modification d'un fichier JS/CSS** (surtout `core.js`, gros et souvent modifié), sinon les navigateurs (en particulier sur GitHub Pages, servi avec un cache HTTP standard) peuvent continuer à charger une version obsolète après déploiement.
+
+## Chantier en cours : migration vers un backend multi-utilisateur (Supabase)
+
+L'appli est utilisée en pratique par plusieurs personnes en parallèle (propriétaire + au moins un ami), chacune avec ses données isolées dans son propre `localStorage`. Pour permettre une vraie synchronisation entre appareils et éviter la perte de données au vidage de cache, un chantier de migration vers **Supabase** (Postgres + authentification par lien magique email + Row Level Security pour l'isolation par utilisateur) est en cours.
+
+Points importants pour tout agent qui reprend ce chantier :
+- **Développement exclusivement sur une branche dédiée** (ex. `claude/supabase-migration`), **jamais** de push direct sur `main` pour cette partie — voir la section workflow git de `CLAUDE.md`. Merge sur `main` uniquement via Pull Request, une fois testé en profondeur (y compris avec plusieurs comptes réels).
+- La couche `LS.get`/`LS.set` (synchrone, utilisée dans tout `core.js`) devra devenir asynchrone — c'est un changement structurel large, pas un patch ponctuel.
+- Une migration one-shot doit uploader automatiquement les données `localStorage` existantes d'un utilisateur vers son compte Supabase à son premier login, sans perte.
+- Si un schéma SQL / plan de migration existe déjà sur une branche de ce chantier, le lire avant de repartir de zéro plutôt que de reconcevoir le schéma en double.
+- Ce n'est pas un projet SaaS avec facturation : juste un multi-utilisateur basique, quelques comptes.
 
 ## Historique utile
 
