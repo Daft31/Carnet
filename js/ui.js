@@ -211,6 +211,8 @@ function bindTabEvents(){
   };
   document.querySelectorAll('[data-act="prevday"]').forEach(b=>b.onclick=()=>{ currentDate=shiftDate(currentDate,-1); render(); });
   document.querySelectorAll('[data-act="nextday"]').forEach(b=>b.onclick=()=>{ currentDate=shiftDate(currentDate,1); render(); });
+  const todayLogToggle = document.querySelector('[data-toggle="todayLog"]');
+  if(todayLogToggle) todayLogToggle.onclick = ()=>{ openTodayLog = !openTodayLog; render(); };
 
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     logEntries = logEntries.filter(e=>e.id!==b.dataset.del); save(); render();

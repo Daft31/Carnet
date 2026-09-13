@@ -291,7 +291,12 @@ function viewToday(){
   </section>
   <section class="card">
     <h2>Journal du jour</h2>
-    ${dayLogList(currentDate)}
+    ${(()=>{
+      const n = entriesFor(currentDate).filter(e=>e.type!=='note').length;
+      if(!n) return '<div class="empty">Rien enregistré ce jour-là.</div>';
+      return `<button class="settings-toggle" data-toggle="todayLog" type="button">${openTodayLog?'Masquer ▲':'Voir le détail ▼'} (${n})</button>
+        ${openTodayLog ? dayLogList(currentDate) : ''}`;
+    })()}
   </section>`;
 }
 
@@ -594,6 +599,7 @@ let openHistDay = null;
 let openHistWeek = null;
 let openCustomFoods = false;
 let openFavorites = false;
+let openTodayLog = false;
 // Géométrie SVG partagée par les graphiques de l'onglet Poids.
 const CHART_W=320, CHART_H=150, CHART_PADL=36, CHART_PADR=14, CHART_PADT=16, CHART_PADB=24;
 function chartXFor(i,n){ return CHART_PADL + (n>1 ? (i/(n-1)) : 0)*(CHART_W-CHART_PADL-CHART_PADR); }
