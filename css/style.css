@@ -205,6 +205,11 @@
   @media (max-width:390px){
     nav.tabs button{font-size:0; padding-top:11px;}
     nav.tabs button svg{width:20px; height:20px;}
+  }
+  /* Le libellé au survol n'a de sens que sur un pointeur qui peut vraiment "hover"
+     (souris) : sur tactile, le focus reste collé après un tap (pas de mouseleave),
+     ce qui affichait le libellé en permanence tant qu'on ne touchait pas ailleurs. */
+  @media (max-width:390px) and (hover:hover) and (pointer:fine){
     nav.tabs button:hover::before, nav.tabs button:focus-visible::before{
       display:block; position:absolute; bottom:48px; left:50%; transform:translateX(-50%);
       white-space:nowrap; background:var(--ink); color:#fff; padding:5px 8px;
