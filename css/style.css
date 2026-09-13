@@ -252,6 +252,8 @@
   .hint{font-size:12px; color:var(--ink-faint); margin-top:6px; line-height:1.4;}
   .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .row3{display:grid; grid-template-columns:repeat(auto-fit,minmax(84px,1fr)); gap:10px;}
+  .weigh-summary p{margin:0 0 8px; font-size:14px; line-height:1.5; color:var(--ink);}
+  .weigh-summary p:last-of-type{margin-bottom:10px;}
 
   /* ---- Graphiques de tendance (onglet Poids) ---- */
   .chart-wrap{position:relative; margin-top:8px;}

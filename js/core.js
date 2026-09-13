@@ -38,6 +38,7 @@ function allFoods(){
 function todayStr(){ return fmtDate(new Date()); }
 function fmtDate(d){ return d.toISOString().slice(0,10); }
 function shiftDate(dateStr, delta){ const d=new Date(dateStr+'T12:00:00'); d.setDate(d.getDate()+delta); return fmtDate(d); }
+function daysBetween(a,b){ return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000); }
 function dateLabel(dateStr){
   const d = new Date(dateStr+'T12:00:00');
   const t = new Date(); const y = new Date(); y.setDate(t.getDate()-1); const tm = new Date(); tm.setDate(t.getDate()+1);
@@ -694,12 +695,94 @@ function computeGoals(p, weight){
   if(carbG < 50){ carbG = 50; fatG = Math.max(20, Math.round((targetKcal - proteinG*4 - carbG*4)/9)); }
   return {bmr:Math.round(bmr), tdee:Math.round(tdee), targetKcal, proteinG, carbG, fatG, weeksToGoal, warning};
 }
+
+// Interprétation en langage simple d'une série de pesées (pas juste la dernière valeur isolée).
+const BODYFAT_BANDS = {
+  H: [[6,'essentielle'],[13,'niveau athlète'],[17,'en forme'],[24,'dans la moyenne'],[Infinity,'élevée']],
+  F: [[14,'essentielle'],[20,'niveau athlète'],[24,'en forme'],[31,'dans la moyenne'],[Infinity,'élevée']]
+};
+function bodyFatBand(pct, sex){
+  const bands = BODYFAT_BANDS[sex==='F'?'F':'H'];
+  for(const [max,label] of bands) if(pct<=max) return label;
+  return bands[bands.length-1][1];
+}
+// Tendance sur une fenêtre récente (30j) si assez de recul, sinon sur tout l'historique dispo.
+function weighInTrend(entriesWithField, field){
+  if(entriesWithField.length<2) return null;
+  const cutoff = shiftDate(entriesWithField[entriesWithField.length-1].date, -30);
+  let windowed = entriesWithField.filter(e=>e.date>=cutoff);
+  if(windowed.length<2) windowed = entriesWithField;
+  const first = windowed[0], last = windowed[windowed.length-1];
+  const days = daysBetween(first.date, last.date);
+  const delta = last[field]-first[field];
+  return {delta, perWeek: days>=3 ? delta/(days/7) : null, recentWindow: windowed.length<entriesWithField.length};
+}
+function weighInSummary(sortedAsc, profile){
+  if(!sortedAsc.length) return null;
+  const latest = sortedAsc[sortedAsc.length-1];
+  const weightTrend = weighInTrend(sortedAsc.map(e=>({date:e.date,weight:e.weight})), 'weight');
+  const fatTrend = weighInTrend(sortedAsc.filter(e=>e.bodyFat!=null).map(e=>({date:e.date,bodyFat:e.bodyFat})), 'bodyFat');
+  const muscleTrend = weighInTrend(sortedAsc.filter(e=>e.muscleMass!=null).map(e=>({date:e.date,muscleMass:e.muscleMass})), 'muscleMass');
+  const lines = [];
+
+  if(weightTrend && weightTrend.perWeek!=null){
+    const r = weightTrend.perWeek;
+    if(Math.abs(r)<0.15){
+      lines.push(`Ton poids est stable ces derniers temps.`);
+    } else {
+      lines.push(`Ton poids est en ${r<0?'baisse':'hausse'} d'environ ${Math.abs(r).toFixed(2)} kg/semaine${weightTrend.recentWindow?'':' depuis le début du suivi'}.`);
+    }
+    const target = parseFloat(profile.rate);
+    if(target && Math.abs(r)>0.1 && Math.sign(target)!==Math.sign(r)){
+      lines.push(`Ton rythme visé est de ${target} kg/semaine — ta tendance actuelle va plutôt dans l'autre sens.`);
+    }
+  } else {
+    lines.push(`Poids actuel : ${latest.weight} kg. Ajoute d'autres pesées pour voir une tendance se dessiner.`);
+  }
+
+  if(latest.bodyFat!=null){
+    let s = `Masse grasse à ${latest.bodyFat}% (${bodyFatBand(latest.bodyFat, profile.sex)})`;
+    if(fatTrend) s += Math.abs(fatTrend.delta)>=0.3 ? (fatTrend.delta<0?', en baisse':', en hausse') : ', stable';
+    lines.push(s+'.');
+  }
+  if(latest.muscleMass!=null){
+    let s = `Muscle à ${latest.muscleMass} kg`;
+    if(muscleTrend) s += Math.abs(muscleTrend.delta)>=0.2 ? (muscleTrend.delta<0?', en baisse':', en hausse') : ', stable';
+    lines.push(s+'.');
+  }
+  if(latest.water!=null) lines.push(`Eau à ${latest.water}%.`);
+
+  if(weightTrend && weightTrend.perWeek!=null && fatTrend && muscleTrend){
+    const wStable = Math.abs(weightTrend.perWeek)<0.15, wDown = weightTrend.perWeek<=-0.15, wUp = weightTrend.perWeek>=0.15;
+    const fatDown = fatTrend.delta<=-0.3, fatUp = fatTrend.delta>=0.3;
+    const muscleUp = muscleTrend.delta>=0.2, muscleDown = muscleTrend.delta<=-0.2;
+    if(wStable && fatDown && muscleUp){
+      lines.push(`À noter : ton poids ne bouge presque pas, mais ta composition évolue dans le bon sens (moins de gras, plus de muscle) — c'est une recomposition corporelle, souvent invisible sur la balance seule.`);
+    } else if(wDown && fatDown && !muscleDown){
+      lines.push(`À noter : ta perte de poids vient surtout de la masse grasse, ton muscle est préservé — une perte bien menée.`);
+    } else if(wDown && muscleDown){
+      lines.push(`À noter : une partie de ta perte de poids touche aussi le muscle — veille à un apport suffisant en protéines et à garder du renforcement dans tes séances.`);
+    } else if(wUp && muscleUp && !fatUp){
+      lines.push(`À noter : ta prise de poids est surtout du muscle — cohérent avec une prise de masse propre.`);
+    } else if(wUp && fatUp && !muscleUp){
+      lines.push(`À noter : ta prise de poids vient surtout de la masse grasse plutôt que du muscle.`);
+    }
+  }
+  return lines;
+}
+
 function viewWeight(){
   const sorted = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date));
   const latest = sorted[0];
   const goals = latest ? computeGoals(profile, latest.weight) : null;
+  const summaryLines = latest ? weighInSummary([...sorted].reverse(), profile) : null;
   return `
   <h1 class="page-title">Poids &amp; objectifs</h1>
+  ${summaryLines ? `<section class="card weigh-summary">
+    <h2>Ce que ça veut dire</h2>
+    ${summaryLines.map(l=>`<p>${l}</p>`).join('')}
+    <div class="hint">Estimation basée sur tes propres pesées, à titre indicatif — pas un avis médical.</div>
+  </section>` : ''}
   <section class="card">
     <h2>Nouvelle pesée</h2>
     <label>Date</label>
