@@ -4,6 +4,16 @@ Statut : **conception + scaffolding seulement**. Rien dans ce commit ne change l
 comportement de l'appli — `js/core.js` continue de lire/écrire exclusivement dans
 `localStorage` via `LS.get`/`LS.set`. Ce document sert de feuille de route pour la suite.
 
+> Note : cette branche contenait déjà un premier jet de schéma (`supabase/schema.sql`,
+> un seul fichier, table `log_entries` en `jsonb`) issu d'une session précédente. Il a
+> été remplacé par le découpage en `supabase/migrations/*.sql` ci-dessous — format
+> standard de la Supabase CLI, plus fidèle aux champs réellement présents dans
+> `ct_customFoods`/`ct_log` (vérifiés directement dans `js/core.js`, `js/ui.js`,
+> `js/mealparser.js`, `js/scanner.js` plutôt que déduits de `BUILTIN_FOODS`), et incluant
+> les tables `recipes`/`recipe_photos` + le bucket Storage demandés pour la feature
+> recette. Les étapes utiles de l'ancien `supabase/README.md` (inscriptions en
+> invitation uniquement, redirect URLs) ont été reprises plus bas.
+
 ## Pourquoi Supabase, pourquoi maintenant
 
 Les données de l'appli (repas, séances, poids, aliments perso, favoris, profil,
@@ -92,10 +102,27 @@ Un agent ne peut pas créer de compte/projet Supabase à la place de l'utilisate
    soit via la Supabase CLI (`supabase link` puis `supabase db push`) si l'utilisateur
    préfère ce workflow.
 5. Dans **Authentication -> Providers**, vérifier que "Email" est activé avec le lien
-   magique (magic link), et configurer l'expéditeur/redirect URL vers le domaine de
-   prod de l'appli (GitHub Pages et/ou Vercel).
-6. Redonner à l'agent : l'URL du projet + la clé anon, pour compléter
-   `js/supabaseClient.js` et démarrer la phase 2.
+   magique (magic link).
+6. Passer les inscriptions en "invitation uniquement" — important puisque l'app est
+   sur une URL publique et que rien n'empêcherait sinon un inconnu de créer un compte :
+   Dashboard -> **Authentication -> Sign In / Providers -> Email**, désactiver
+   "Allow new users to sign up" (l'intitulé exact varie selon la version de l'UI,
+   parfois sous Authentication -> Settings) en gardant le lien magique actif.
+7. Inviter les deux utilisateurs (l'utilisateur + son ami) : Dashboard ->
+   **Authentication -> Users -> Invite user**, une fois par email. Chacun reçoit un
+   lien de connexion.
+8. Dans **Authentication -> URL Configuration**, ajouter en "Redirect URLs" tous les
+   domaines où l'app tourne, sinon le lien magique redirige vers une URL par défaut
+   qui ne correspond pas à l'appli :
+   - `https://daft31.github.io/carnet/`
+   - `https://carnet-self.vercel.app/`
+   - l'URL de preview Vercel de cette branche, si l'utilisateur veut tester avant de merger
+9. Appliquer les migrations de `supabase/migrations/` au projet : soit via le SQL
+   Editor du dashboard (copier/coller chaque fichier dans l'ordre des timestamps),
+   soit via la Supabase CLI (`supabase link` puis `supabase db push`) si l'utilisateur
+   préfère ce workflow.
+10. Redonner à l'agent : l'URL du projet + la clé anon, pour compléter
+    `js/supabaseClient.js` et démarrer la phase 2.
 
 ## Phases restantes (après ce commit)
 
