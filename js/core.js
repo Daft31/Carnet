@@ -186,6 +186,8 @@ function viewTodos(){
 /* ===================== RENDU ===================== */
 function render(){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===activeTab));
+  const moreToggle = document.getElementById('moreToggle');
+  if(moreToggle) moreToggle.classList.toggle('active', ['notes','todos','settings'].includes(activeTab));
   const main = document.getElementById('main');
   if(activeTab==='today') main.innerHTML = viewToday();
   else if(activeTab==='meals') main.innerHTML = viewMeals();
