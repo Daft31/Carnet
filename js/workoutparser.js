@@ -59,7 +59,15 @@ function workoutBlockTypeLabel(type) {
 function exerciseLineHtml(ex) {
   const bits = [];
   if (ex.sets != null) bits.push(`${ex.sets} séries`);
-  if (ex.reps != null) bits.push(`${escapeHtml(String(ex.reps))} reps`);
+  if (ex.reps != null) {
+    // ex.reps est parfois un nombre/plage brut ("8", "8-12") et parfois déjà
+    // du texte libre incluant son unité (ex. "3 reps/minute", "15 cal", cf.
+    // exemples du prompt système) : n'ajouter le mot "reps" que dans le
+    // premier cas, sinon on obtient des doublons ("3 reps/minute reps").
+    const repsStr = String(ex.reps);
+    const isBareNumberOrRange = /^\s*\d+\s*([-–à]\s*\d+\s*)?$/i.test(repsStr);
+    bits.push(isBareNumberOrRange ? `${escapeHtml(repsStr)} reps` : escapeHtml(repsStr));
+  }
   if (ex.tempo != null) bits.push(`tempo ${escapeHtml(String(ex.tempo))}`);
   if (ex.restSec != null) bits.push(`repos ${ex.restSec}s`);
   return `<li><b>${escapeHtml(ex.name)}</b>${bits.length ? ' — ' + bits.join(' · ') : ''}</li>`;
