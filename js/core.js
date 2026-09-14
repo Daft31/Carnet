@@ -208,6 +208,27 @@ function dayBar(){
   </div>`;
 }
 
+// Bandeau des 7 jours de la semaine contenant currentDate, pour sauter directement
+// à un jour récent (inspiré du sélecteur de semaine des apps de suivi nutrition).
+// Complète dayBar() (qui reste le seul moyen d'aller au-delà de cette semaine).
+function weekStrip(){
+  const start = weekStart(currentDate);
+  const dowLetters = ['L','M','M','J','V','S','D'];
+  const todayS = todayStr();
+  const days = [0,1,2,3,4,5,6].map(i=>shiftDate(start,i));
+  return `<div class="week-strip">
+    ${days.map((d,i)=>{
+      const hasEntries = entriesFor(d).some(e=>e.type==='meal');
+      const selected = d===currentDate;
+      const isToday = d===todayS;
+      return `<button class="wstrip-day${selected?' active':''}${isToday?' today':''}" data-jumpdate="${d}" type="button">
+        <span class="wstrip-letter">${dowLetters[i]}</span>
+        <span class="wstrip-dot${hasEntries?' filled':''}"></span>
+      </button>`;
+    }).join('')}
+  </div>`;
+}
+
 // Conseils macros : compare la part du macro déjà consommée à la part de la
 // journée déjà écoulée, pour repérer un macro en avance (à limiter) ou en
 // retard (à privilégier) sur le rythme de la journée — pas juste un % brut.
@@ -325,6 +346,7 @@ function viewToday(){
 
   return `
   ${dayBar()}
+  ${weekStrip()}
   <section class="card">
     <div class="kcal-ring-wrap">
       <svg class="kcal-ring ${over?'over':''}" viewBox="0 0 120 120">

@@ -60,6 +60,24 @@
   .daybar .label{font-weight:700; font-size:14px; text-transform:capitalize;}
   .daybar .label small{display:block; font-weight:500; color:var(--ink-faint); font-size:11px; text-transform:none;}
 
+  .week-strip{display:flex; justify-content:space-between; margin:0 0 16px; padding:2px 0;}
+  .wstrip-day{
+    flex:1; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    background:none; border:none; padding:4px 2px; cursor:pointer; font-family:var(--font-sans);
+  }
+  .wstrip-letter{font-size:11px; font-weight:600; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.02em;}
+  .wstrip-dot{
+    width:26px; height:26px; border-radius:50%; border:1.5px solid var(--line); background:var(--surface);
+    position:relative; transition:background .15s ease, border-color .15s ease;
+  }
+  .wstrip-dot.filled{border-color:var(--green-soft); background:var(--green-soft);}
+  .wstrip-dot.filled::after{content:""; position:absolute; inset:0; margin:auto; width:7px; height:7px; border-radius:50%; background:var(--green); top:0; bottom:0; left:0; right:0;}
+  .wstrip-day.today .wstrip-dot{border-style:dashed; border-color:var(--ink-faint);}
+  .wstrip-day.active .wstrip-letter{color:var(--green); font-weight:700;}
+  .wstrip-day.active .wstrip-dot{background:var(--green); border-color:var(--green); border-style:solid;}
+  .wstrip-day.active .wstrip-dot.filled::after{background:#fff;}
+  .wstrip-day:active .wstrip-dot{transform:scale(.9);}
+
   section.card{
     background:var(--surface); border:none; border-radius:20px;
     padding:18px; margin-bottom:16px;
