@@ -238,6 +238,17 @@ const FASTFOOD_ITEMS = [
   { id: 'quick_moyenne_frites', brand: 'Quick', name: 'Moyenne Frites Quick', aliases: ['moyennes frites quick', 'quick moyennes frites', 'frites quick', 'quick frites'], calories: 296, protein: 4, carbs: 39, fat: 13, fiber: 3.7 },
   { id: 'quick_grande_frites', brand: 'Quick', name: 'Grande Frites Quick', aliases: ['grandes frites quick', 'quick grandes frites'], calories: 404, protein: 5, carbs: 53, fat: 18, fiber: 5.1 },
   { id: 'quick_chicken_dips4', brand: 'Quick', name: 'Chicken dips (4)', aliases: ['chicken dips 4', 'chicken dips'], calories: 178, protein: 11, carbs: 15, fat: 8, fiber: 1.5 },
+  // Five Guys — source officielle (guide nutritionnel PDF fourni par l'utilisateur, France,
+  // 2026). Five Guys est une enseigne "compose ton burger" (steak/bacon/pain/garnitures
+  // vendus séparément, pas de "Cheeseburger" à un total fixe) : le fichier source précise
+  // lui-même ne pas recalculer un total de burger assemblé sans le grammage exact de chaque
+  // composant dans la recette réelle, pour ne pas fabriquer une macro artificielle — même
+  // logique suivie ici, donc seules les FRITES (produit autonome à taille fixe) sont
+  // intégrées, pas les burgers.
+  { id: 'fiveguys_frites_mini', brand: 'Five Guys', name: 'Frites Mini', aliases: ['frites mini five guys', 'five guys frites mini'], calories: 350, protein: 5, carbs: 37, fat: 21, fiber: 3.4 },
+  { id: 'fiveguys_frites_petite', brand: 'Five Guys', name: 'Frites Petite', aliases: ['frites petite five guys', 'five guys frites petite', 'petites frites five guys'], calories: 659, protein: 10, carbs: 70, fat: 39, fiber: 6.3 },
+  { id: 'fiveguys_frites_moyenne', brand: 'Five Guys', name: 'Frites Moyenne', aliases: ['frites moyenne five guys', 'five guys frites moyenne', 'moyennes frites five guys'], calories: 1073, protein: 16, carbs: 115, fat: 63, fiber: 10 },
+  { id: 'fiveguys_frites_grande', brand: 'Five Guys', name: 'Frites Grande', aliases: ['frites grande five guys', 'five guys frites grande', 'grandes frites five guys'], calories: 1509, protein: 23, carbs: 162, fat: 89, fiber: 14 },
 ];
 
 function normalizeFoodText(s) {
