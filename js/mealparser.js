@@ -1,6 +1,6 @@
 /* ===================== IA — DÉCRIRE UN REPAS ===================== */
 /* Appelle la fonction serverless /api/parse-meal (Vercel), qui utilise
-   l'API Anthropic côté serveur avec CARNET_API_KEY. Aucune clé n'est
+   l'API Mammouth AI côté serveur avec CARNET_API_KEY. Aucune clé n'est
    exposée côté client.
 
    L'app peut être ouverte depuis GitHub Pages (daft31.github.io/carnet),
