@@ -36,7 +36,12 @@ Format de sortie — règles strictes :
 Gestion des quantités imprécises :
 - Si une quantité n'est pas précisée (ex. "un poulet basquaise", "des frites"), estime une portion normale de restaurant ou de repas fait maison (ni portion minuscule, ni portion XXL), de façon raisonnable et plutôt conservatrice (ne pas surestimer par excès de prudence dans l'autre sens non plus).
 - Si le repas mentionne plusieurs éléments (plat + accompagnement + boisson), additionne tout dans le total retourné : le JSON représente le repas complet décrit, pas un seul élément.
-- En cas de plat composite dont la recette varie (ex. "tartiflette", "blanquette"), base-toi sur une recette et une portion typiques, pas sur le cas le plus riche ni le plus léger possible.`;
+- En cas de plat composite dont la recette varie (ex. "tartiflette", "blanquette"), base-toi sur une recette et une portion typiques, pas sur le cas le plus riche ni le plus léger possible.
+
+Produits de marque / fast-food (ex. "Big Tasty", "Croq McDo", "Menu Best Of", produits McDonald's/Burger King/KFC/Subway...) :
+- Ce ne sont PAS des plats à improviser librement : ce sont des références précises avec une composition standardisée quasiment fixe d'un restaurant à l'autre. Base-toi sur tes connaissances les plus précises et les plus stables des valeurs nutritionnelles réellement publiées par l'enseigne pour CE produit exact (nom, variante, taille), au lieu d'estimer "une assiette plausible" comme pour un plat maison.
+- Reste cohérent avec toi-même : pour une même description exacte, tes valeurs ne doivent pas varier de façon significative d'une fois à l'autre — traite ça comme un rappel de fait connu, pas comme une nouvelle estimation à chaque fois.
+- Si tu ne connais pas avec confiance un produit de marque précis (nom ambigu, enseigne peu connue), dis-le implicitement en restant sur une estimation raisonnable plutôt que d'inventer un chiffre à fausse précision.`;
 
 // Exemples few-shot calibrés sur des plats français/régionaux, où un modèle
 // généraliste a tendance à être moins précis que sur de la nourriture
@@ -178,7 +183,12 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: MAMMOUTH_MODEL,
         messages: buildMessages(mealDescription),
-        temperature: 0.2,
+        // Baissé de 0.2 à 0.1 : la variance élevée constatée en régénérant plusieurs fois
+        // le même repas (ex. un repas McDonald's précis donnant entre 1200 et 1600 kcal
+        // selon la régénération) venait surtout d'un manque de repère pour les produits de
+        // marque dans le prompt (voir la section "Produits de marque / fast-food" plus haut),
+        // mais une température plus basse réduit aussi la variance résiduelle de décodage.
+        temperature: 0.1,
         max_tokens: 500,
       }),
     });
