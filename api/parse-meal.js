@@ -174,21 +174,30 @@ function checkMacroConsistency(data) {
    collision de sous-chaîne (ex. "double cheeseburger" doit matcher avant "cheeseburger" seul
    — voir `matchFastfoodItems`, qui teste les aliases les plus longs en premier). */
 const FASTFOOD_ITEMS = [
-  // McDonald's — confiance haute
-  { id: 'mcdo_big_mac', brand: 'McDonald\'s', name: 'Big Mac', aliases: ['big mac'], calories: 540, protein: 26, carbs: 46, fat: 28, fiber: 3 },
+  // McDonald's — source officielle mcdonalds.fr (fiche produit par produit, fournie par
+  // l'utilisateur, vérifiée le 2026-09-14), confiance haute pour toutes les entrées de ce
+  // bloc. Remplace les valeurs WebSearch précédentes, moins fiables — corrections notables :
+  // Filet-O-Fish était surestimé à 378kcal (officiel : 329kcal), et surtout Big Tasty 2
+  // viandes n'avait AUCUNE valeur fiable avant (850/877/914/940 selon la source) — résolu.
+  { id: 'mcdo_big_mac', brand: 'McDonald\'s', name: 'Big Mac', aliases: ['big mac'], calories: 530, protein: 27, carbs: 42, fat: 28, fiber: 3.8 },
+  { id: 'mcdo_big_tasty_2v', brand: 'McDonald\'s', name: 'Big Tasty 2 viandes', aliases: ['big tasty 2 viandes', 'double big tasty'], calories: 961, protein: 58, carbs: 46, fat: 60, fiber: 2.6 },
   { id: 'mcdo_mcchicken', brand: 'McDonald\'s', name: 'McChicken', aliases: ['mcchicken', 'mc chicken'], calories: 434, protein: 19, carbs: 45, fat: 19, fiber: 3.3 },
-  { id: 'mcdo_croque', brand: 'McDonald\'s', name: 'Croque McDo', aliases: ['croque mcdo', 'croque-mcdo', 'croq mcdo', 'croq'], calories: 258, protein: 14, carbs: 28, fat: 10 },
-  { id: 'mcdo_filet_o_fish', brand: 'McDonald\'s', name: 'Filet-O-Fish', aliases: ['filet-o-fish', 'filet o fish'], calories: 378, protein: 15.1, carbs: 35.4, fat: 19.6, fiber: 1.9 },
-  { id: 'mcdo_double_cheese', brand: 'McDonald\'s', name: 'Double Cheese', aliases: ['double cheese', 'double cheeseburger'], calories: 451, protein: 25, carbs: 34, fat: 24 },
-  { id: 'mcdo_petite_frite', brand: 'McDonald\'s', name: 'Petite frite', aliases: ['petite frite', 'petites frites'], calories: 236, protein: 3, carbs: 29, fat: 12 },
+  { id: 'mcdo_croque', brand: 'McDonald\'s', name: 'Croque McDo', aliases: ['croque mcdo', 'croque-mcdo', 'croq mcdo', 'croq'], calories: 255, protein: 13, carbs: 28, fat: 9.7, fiber: 1.7 },
+  { id: 'mcdo_filet_o_fish', brand: 'McDonald\'s', name: 'Filet-O-Fish', aliases: ['filet-o-fish', 'filet o fish'], calories: 329, protein: 15, carbs: 36, fat: 14, fiber: 2.2 },
+  { id: 'mcdo_double_cheeseburger', brand: 'McDonald\'s', name: 'Double Cheeseburger', aliases: ['double cheese', 'double cheeseburger'], calories: 442, protein: 27, carbs: 31, fat: 23, fiber: 2.2 },
+  { id: 'mcdo_double_cheese_bacon', brand: 'McDonald\'s', name: 'Double Cheese Bacon', aliases: ['double cheese bacon'], calories: 456, protein: 28, carbs: 31, fat: 24, fiber: 2.0 },
+  { id: 'mcdo_cheeseburger', brand: 'McDonald\'s', name: 'Cheeseburger', aliases: ['cheeseburger'], calories: 300, protein: 16, carbs: 30, fat: 13, fiber: 2.1 },
+  { id: 'mcdo_royal_deluxe', brand: 'McDonald\'s', name: 'Royal Deluxe', aliases: ['royal deluxe', 'royal cheese'], calories: 549, protein: 30, carbs: 34, fat: 32, fiber: 2.7 },
+  { id: 'mcdo_royal_bacon', brand: 'McDonald\'s', name: 'Royal Bacon', aliases: ['royal bacon'], calories: 492, protein: 30, carbs: 38, fat: 24, fiber: 2.6 },
+  { id: 'mcdo_hamburger', brand: 'McDonald\'s', name: 'Hamburger', aliases: ['hamburger mcdo'], calories: 253, protein: 13, carbs: 29, fat: 8.9, fiber: 2.1 },
+  { id: 'mcdo_petite_frite', brand: 'McDonald\'s', name: 'Petite frite', aliases: ['petite frite', 'petites frites'], calories: 231, protein: 2.7, carbs: 29, fat: 11, fiber: 2.8 },
+  { id: 'mcdo_grande_frite', brand: 'McDonald\'s', name: 'Grande frite', aliases: ['grande frite', 'grandes frites'], calories: 328, protein: 3.9, carbs: 41, fat: 16, fiber: 4.0 },
+  // Nuggets : seul le format officiel "4 pièces" est vérifié (174kcal) — les quantités 6/9/20
+  // sont dérivées linéairement (174/4 par pièce), pas des fiches officielles à part entière.
+  // qtyMultipliable + requireQty : ne matche QUE si un nombre est explicitement écrit devant
+  // ("6 nuggets"), jamais sur "des nuggets" seul (éviterait de faire une hypothèse de quantité).
+  { id: 'mcdo_nugget', brand: 'McDonald\'s', name: 'Chicken McNugget', aliases: ['nuggets', 'nugget', 'mcnuggets', 'mcnugget', 'chicken mcnuggets', 'chicken mcnugget'], calories: 43.5, protein: 2.5, carbs: 3.25, fat: 2.25, fiber: 0.15, qtyMultipliable: true, requireQty: true },
   { id: 'mcdo_mcflurry_oreo', brand: 'McDonald\'s', name: 'McFlurry Oreo', aliases: ['mcflurry oreo', 'mc flurry oreo'], calories: 251, protein: 6, carbs: 41, fat: 7 },
-  // McDonald's — confiance moyenne (cohérence 4/4/9 correcte mais source unique ou approximation)
-  { id: 'mcdo_cheeseburger', brand: 'McDonald\'s', name: 'Cheeseburger', aliases: ['cheeseburger'], calories: 313, protein: 15.4, carbs: 33.1, fat: 14 },
-  { id: 'mcdo_royal_cheese', brand: 'McDonald\'s', name: 'Royal Cheese', aliases: ['royal cheese'], calories: 417, protein: 24.1, carbs: 37.9, fat: 19.8, fiber: 2.7 },
-  { id: 'mcdo_frite_moyenne', brand: 'McDonald\'s', name: 'Frite moyenne', aliases: ['frite moyenne', 'frites moyennes', 'moyenne frite'], calories: 320, protein: 4, carbs: 43, fat: 15 },
-  { id: 'mcdo_nuggets6', brand: 'McDonald\'s', name: '6 Chicken McNuggets', aliases: ['6 nuggets', '6 mcnuggets', '6 chicken mcnuggets'], calories: 260, protein: 17, carbs: 18, fat: 13 },
-  { id: 'mcdo_nuggets9', brand: 'McDonald\'s', name: '9 Chicken McNuggets', aliases: ['9 nuggets', '9 mcnuggets', '9 chicken mcnuggets'], calories: 390, protein: 25, carbs: 26, fat: 20 },
-  { id: 'mcdo_nuggets20', brand: 'McDonald\'s', name: '20 Chicken McNuggets', aliases: ['20 nuggets', '20 mcnuggets', '20 chicken mcnuggets'], calories: 868, protein: 55, carbs: 59, fat: 45 },
   // Burger King — confiance haute
   { id: 'bk_whopper', brand: 'Burger King', name: 'Whopper', aliases: ['whopper'], calories: 790, protein: 35.4, carbs: 52.8, fat: 48.4, fiber: 3.2 },
   { id: 'bk_double_cheeseburger', brand: 'Burger King', name: 'Double Cheeseburger', aliases: ['double cheeseburger bk', 'bk double cheeseburger'], calories: 406, protein: 24, carbs: 28, fat: 22 },
@@ -264,8 +273,12 @@ function matchFastfoodItems(mealDescription) {
     const cola = matchCola(seg);
     if (cola) { matched.push({ ...cola, qty: 1 }); return; }
     const hit = allAliases.find(a => seg.includes(a.alias));
-    if (hit) {
-      const qtyMatch = seg.match(/^(\d+)\s/);
+    const qtyMatch = seg.match(/^(\d+)\s/);
+    if (hit && hit.item.requireQty && !qtyMatch) {
+      // Ex. "nuggets" (catalogue générique par pièce) sans nombre devant : pas de quantité
+      // sûre à supposer, on laisse l'IA estimer plutôt que de fixer une quantité arbitraire.
+      unmatchedSegments.push(rawSeg);
+    } else if (hit) {
       const qty = (hit.item.qtyMultipliable && qtyMatch) ? Number(qtyMatch[1]) : 1;
       matched.push({ ...hit.item, qty });
     } else {
