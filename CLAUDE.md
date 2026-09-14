@@ -26,6 +26,8 @@ Kalo (anciennement "Carnet" — voir note de renommage ci-dessous) : appli web p
 
 7. **Ne pas recréer** `deploy-to-vercel.yml` ni `mammouth-api.yml` (supprimés volontairement, cassés depuis le début — le vrai déploiement Vercel passe par l'intégration GitHub native, pas par un workflow Actions).
 
+8. **`sw.js` (service worker PWA)** : stratégie volontairement simple — réseau en priorité, secours sur le cache, **uniquement pour les requêtes GET same-origin**. Ne jamais élargir son `fetch` handler pour intercepter les appels vers l'API Mammouth (`/api/parse-meal`), Open Food Facts, ou les CDN externes (jsbarcode/quagga) : un service worker mal scopé qui met en cache une réponse d'API ou sert une version obsolète du JS peut casser l'appli silencieusement pour les utilisateurs qui l'ont installée en PWA, bien plus difficile à déboguer qu'un simple problème de cache navigateur classique.
+
 ## Avant de modifier l'UI/UX
 
 - Le design system (`css/style.css`) et la structure des onglets viennent d'une fusion volontaire entre une ancienne interface plus riche et l'infra actuelle (scanner + IA) — voir section "Historique utile" du `README.md` avant de repartir d'une version antérieure ou de renommer des classes/IDs à la légère (le JS de plusieurs fichiers dépend des mêmes IDs).

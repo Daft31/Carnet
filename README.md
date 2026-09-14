@@ -26,8 +26,11 @@ js/core.js            État (localStorage), utilitaires, calculs, rendu de tous 
 js/ui.js               Système de modal (openModal/closeModal) + liaison des événements par onglet (bindTabEvents)
 js/scanner.js          Scanner code-barres : Quagga2 (caméra) + Open Food Facts (base produits)
 js/mealparser.js       Feature IA "décrire un repas" : appelle /api/parse-meal
-js/app.js              Point d'entrée : listener des tabs, thème, render() initial
+js/app.js              Point d'entrée : listener des tabs, thème, render() initial, enregistrement du service worker
 api/parse-meal.js     Fonction serverless Vercel : proxy sécurisé vers l'API Mammouth AI
+manifest.json         Manifest PWA (nom, icônes, couleurs, display standalone) — rend Kalo installable sur l'écran d'accueil
+sw.js                  Service worker minimal (réseau en priorité + secours cache, same-origin GET uniquement) — condition technique pour l'installabilité PWA + usage hors-ligne basique
+icons/                 Icônes PWA générées depuis le logo (icon-192.png, icon-512.png, maskable-512.png)
 package.json          Pas de dépendances (l'API function utilise fetch natif de Node)
 vercel.json           Config build Vercel (pas de variables d'env ici, voir plus bas)
 .github/workflows/static.yml   Déploiement automatique vers GitHub Pages à chaque push sur main
@@ -108,6 +111,16 @@ C'est le point le plus piégeux du repo, à lire avant d'y toucher.
 ### Cache-busting
 
 Les balises `<script>`/`<link>` dans `index.html` portent un paramètre `?v=...`. **Penser à l'incrémenter à chaque modification d'un fichier JS/CSS** (surtout `core.js`, gros et souvent modifié), sinon les navigateurs (en particulier sur GitHub Pages, servi avec un cache HTTP standard) peuvent continuer à charger une version obsolète après déploiement.
+
+### PWA (installation sur l'écran d'accueil)
+
+Kalo est une PWA installable depuis `manifest.json` + `sw.js` (service worker minimal, stratégie réseau-prioritaire avec secours cache, uniquement sur les requêtes GET same-origin — n'intercepte jamais les appels vers l'API Mammouth, Open Food Facts ou les CDN externes).
+
+- **Android/Chrome** : un bandeau/menu "Installer l'application" apparaît automatiquement une fois les critères d'installabilité remplis (manifest valide + service worker avec un handler `fetch` + icônes 192/512 — déjà en place). Vérifiable manuellement via Chrome DevTools → onglet Application → Manifest.
+- **iOS/Safari** : pas de prompt d'installation automatique (limitation d'Apple, pas de notre code) — l'utilisateur doit passer par Partager → "Sur l'écran d'accueil" manuellement. Les balises `apple-touch-icon`/`apple-mobile-web-app-*` dans `index.html` améliorent ce cas sans le rendre automatique.
+- Le service worker cache une **copie de secours** de chaque page/asset same-origin visité, ce qui permet de rouvrir l'appli hors-ligne après une première visite — mais ne précharge rien à l'avance (pas de liste figée à maintenir manuellement).
+- Pour changer les icônes : régénérer les PNG dans `icons/` (192, 512, et une variante `maskable-512` avec le fond qui va jusqu'aux bords, sans marge transparente, pour les icônes adaptatives Android) et mettre à jour `manifest.json` si les noms de fichiers changent.
+- Le nom `CACHE` en tête de `sw.js` (`kalo-shell-v1`) n'a besoin d'être incrémenté que si on veut forcer une purge totale du cache installé chez les utilisateurs ; sinon la stratégie réseau-prioritaire suffit à servir les versions à jour (cohérent avec le cache-busting `?v=` existant).
 
 ## Chantier en cours : migration vers un backend multi-utilisateur (Supabase)
 
