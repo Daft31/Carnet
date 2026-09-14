@@ -696,8 +696,13 @@ function clubLevelsFor(sportId){ return CLUB_LEVELS[sportId] || [{key:'loisir',l
    "intense" casual :
    - `collectif` (foot/basket/hand/rugby/volley) : sports intermittents à sprints répétés —
      l'écart loisir→national est marqué (VO2max et capacité à répéter les efforts très
-     supérieurs en national) et le match est nettement plus explosif que l'entraînement
-     technique (davantage d'accélérations/sprints en match réel qu'à l'entraînement).
+     supérieurs en national) et le match est plus explosif que l'entraînement technique
+     (davantage d'accélérations/sprints en match réel qu'à l'entraînement). Multiplicateurs
+     recalibrés à la baisse après un stress-test contre le Compendium (le foot/basket
+     "compétitif" y est déjà référencé à 10.0/8.0 MET — un national/match à +50% de ce
+     chiffre dépassait nettement les études de terrain sur l'intensité moyenne d'un match
+     élite, ~9-10 MET) : national/match retombe désormais proche de ces références plutôt
+     que largement au-dessus.
    - `combat` (boxe/judo/karaté/MMA/lutte) : au niveau national l'effort en compétition est
      quasi maximal (rounds/combats à haute intensité soutenue) — écart le plus marqué de
      toutes les catégories, et le combat/compétition est bien plus intense que l'entraînement
@@ -716,7 +721,7 @@ function clubLevelsFor(sportId){ return CLUB_LEVELS[sportId] || [{key:'loisir',l
      volume comparable — écart notable, la compétition (peu fréquente) un peu plus intense
      que l'entraînement standard. */
 const CLUB_CATEGORY_MULT = {
-  collectif:  {level:{loisir:1.0, semi:1.3,  national:1.6},  mode:{entrainement:1.0, match:1.15}},
+  collectif:  {level:{loisir:1.0, semi:1.2,  national:1.45}, mode:{entrainement:1.0, match:1.1}},
   combat:     {level:{loisir:1.0, semi:1.35, national:1.7},  mode:{entrainement:1.0, match:1.15}},
   raquette:   {level:{loisir:1.0, semi:1.2,  national:1.4},  mode:{entrainement:1.0, match:1.1}},
   endurance:  {level:{loisir:1.0, semi:1.3,  national:1.55}, mode:{entrainement:1.0, match:1.15}},
@@ -725,10 +730,19 @@ const CLUB_CATEGORY_MULT = {
   technique:  {level:{loisir:1.0, semi:1.1,  national:1.2},  mode:{entrainement:1.0, match:1.05}},
   force:      {level:{loisir:1.0, semi:1.2,  national:1.4},  mode:{entrainement:1.0, match:1.1}},
 };
+// Dérogation par sport, à n'utiliser que quand la famille ne colle vraiment pas à UN sport
+// précis (constaté par stress-test, pas par principe — évite de complexifier tout le monde
+// pour un seul cas) : le volley a un rapport casual modéré→intense (4.0→8.0, x2) atypique
+// pour "collectif" (plutôt x1.3-1.5 ailleurs, cf. foot/basket) — le multiplicateur collectif
+// standard laissait le national/match nettement sous le MET "competitive" que le Compendium
+// attribue lui-même au volleyball (8.0), alors qu'un match national doit au moins l'atteindre.
+const CLUB_SPORT_OVERRIDE_MULT = {
+  volleyball: {level:{loisir:1.0, semi:1.5, national:1.9}, mode:{entrainement:1.0, match:1.1}},
+};
 function metSportCasual(sportId, intensity){ return (sportById(sportId).casual||{})[intensity] ?? sportById(sportId).casual.modere; }
 function metSportClub(sportId, level, mode){
   const sport = sportById(sportId);
-  const mult = CLUB_CATEGORY_MULT[sport.cat] || CLUB_CATEGORY_MULT.collectif;
+  const mult = CLUB_SPORT_OVERRIDE_MULT[sportId] || CLUB_CATEGORY_MULT[sport.cat] || CLUB_CATEGORY_MULT.collectif;
   return sport.casual.modere * (mult.level[level]||1) * (mult.mode[mode]||1);
 }
 
