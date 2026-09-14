@@ -100,35 +100,61 @@ function openWorkoutResultModal(data) {
     <div class="qty-preview">
       <div class="item"><div class="n">${blocks.length}</div><div class="l">block${blocks.length > 1 ? 's' : ''}</div></div>
       <div class="item"><div class="n">${totalExercises}</div><div class="l">exercice${totalExercises > 1 ? 's' : ''}</div></div>
-      <div class="item"><div class="n">~${data.estimatedDurationMin || 0}</div><div class="l">min estimées</div></div>
     </div>
     ${warnings.length ? `<div class="hint" style="margin-top:10px;">⚠️ ${warnings.map(escapeHtml).join(' · ')}</div>` : ''}
     <div class="hint" style="margin-top:12px;font-weight:700;color:var(--ink);">Détail</div>
     ${blocks.length ? blocks.map(workoutBlockHtml).join('') : '<div class="empty">Aucun block identifié.</div>'}
-    <div class="hint" style="margin-top:12px;">⚠️ Structure + durée estimées automatiquement — vérifie avant d'enregistrer.</div>
+    <div class="hint" style="margin-top:12px;">⚠️ Durée estimée automatiquement à partir des séries/reps/tempo/repos — ajuste-la si besoin, elle sert directement au calcul des calories ci-dessous.</div>
+    <label>Durée totale (min)</label>
+    <input id="wiDuration" type="number" min="1" value="${Number(data.estimatedDurationMin) || 0}">
+    <label>Intensité</label>
+    <div class="seg" id="wiIntensiteSeg">
+      ${[['faible', 'Faible'], ['moderee', 'Modérée'], ['forte', 'Forte']].map(([k, l]) => `<button type="button" data-int="${k}" class="${k === 'moderee' ? 'active' : ''}">${l}</button>`).join('')}
+    </div>
     <button class="btn rust" id="wiSaveBtn" type="button">Enregistrer la séance</button>
     <button class="btn ghost" id="wiRedoBtn" type="button">Recommencer</button>
+    <div class="wk-estimate" id="wiEstimate">
+      <div class="num" id="wiEstimateNum">—</div>
+      <div class="lbl">kcal estimés — même formule que la saisie manuelle "Renfo" (poids × intensité × durée)</div>
+    </div>
   `);
+  let wiIntensite = 'moderee';
+  // Même formule que le mode Renfo manuel (computeWorkoutKcal), avec les
+  // mêmes réglages exposés (durée, intensité) : la différence de kcal
+  // observée entre les deux modes venait d'une durée différente (estimée ici
+  // par l'IA à partir du texte, tapée à la main là-bas), pas d'un calcul
+  // différent — cf. discussion utilisateur. En les rendant éditables ici, les
+  // deux chemins convergent vers le même résultat à durée/intensité égales,
+  // et l'utilisateur peut corriger une estimation de durée qu'il juge fausse
+  // avant d'enregistrer plutôt que de la découvrir après coup.
+  const weight = getCurrentWeight() || 70;
+  const updateWiEstimate = () => {
+    const duration = Number(document.getElementById('wiDuration').value) || 0;
+    const num = document.getElementById('wiEstimateNum');
+    const kcal = duration > 0 ? computeWorkoutKcal('renfo', { intensite: wiIntensite }, duration, weight) : 0;
+    num.textContent = kcal > 0 ? Math.round(kcal) + ' kcal' : '—';
+  };
+  document.getElementById('wiDuration').addEventListener('input', updateWiEstimate);
+  document.querySelectorAll('#wiIntensiteSeg button').forEach(b => b.onclick = () => {
+    wiIntensite = b.dataset.int;
+    document.querySelectorAll('#wiIntensiteSeg button').forEach(x => x.classList.toggle('active', x === b));
+    updateWiEstimate();
+  });
+  updateWiEstimate();
   document.getElementById('wiSaveBtn').onclick = () => {
     const name = document.getElementById('wiName').value.trim() || defaultName;
     const date = document.getElementById('wiDate').value || currentDate;
-    const estimatedDurationMin = Number(data.estimatedDurationMin) || 0;
-    // Pas de calcul kcal dédié demandé pour ce mode : on réutilise la même
-    // formule que le mode manuel/renfo (MET renfo intensité modérée × poids ×
-    // durée) pour que kcalBurned reste toujours un nombre exploitable — c'est
-    // ce champ qu'utilisent dayTotals()/le déficit hebdomadaire et l'affichage
-    // "amount rust" de la liste de séances (jamais soustrait des calories
-    // restantes, cf. règle CLAUDE.md sur le calcul calorique). Poids par
-    // défaut 70kg si aucune pesée enregistrée, pour ne jamais bloquer la
-    // sauvegarde faute de pesée (contrairement au mode manuel structuré
-    // tapis/vélo/renfo qui, lui, l'exige).
-    const weight = getCurrentWeight() || 70;
-    const kcalBurned = computeWorkoutKcal('renfo', { intensite: 'moderee' }, estimatedDurationMin, weight);
+    const duration = Number(document.getElementById('wiDuration').value) || 0;
+    if (duration <= 0) { toast('Indique la durée'); return; }
+    // Poids par défaut 70kg si aucune pesée enregistrée, pour ne jamais
+    // bloquer la sauvegarde faute de pesée (contrairement au mode manuel
+    // structuré tapis/vélo/renfo qui, lui, l'exige).
+    const kcalBurned = computeWorkoutKcal('renfo', { intensite: wiIntensite }, duration, weight);
     logEntries.push({
       id: uid(), date, type: 'workout', wtype: 'ia',
       time: new Date().toTimeString().slice(0, 5),
-      name, blocks, estimatedDurationMin, warnings,
-      duration: estimatedDurationMin,
+      name, blocks, estimatedDurationMin: duration, warnings,
+      duration, intensite: wiIntensite,
       kcalBurned,
     });
     save(); closeModal(); render(); toast('Séance enregistrée ✓');
