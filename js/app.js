@@ -22,7 +22,7 @@ document.addEventListener('click', e=>{
 });
 
 function applyTheme(){
-  const theme = LS.get('ct_theme', 'light');
+  const theme = LS.get('ct_theme', 'dark');
   document.body.classList.toggle('dark', theme==='dark');
 }
 applyTheme();
