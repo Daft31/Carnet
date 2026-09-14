@@ -731,13 +731,25 @@ const CLUB_CATEGORY_MULT = {
   force:      {level:{loisir:1.0, semi:1.2,  national:1.4},  mode:{entrainement:1.0, match:1.1}},
 };
 // Dérogation par sport, à n'utiliser que quand la famille ne colle vraiment pas à UN sport
-// précis (constaté par stress-test, pas par principe — évite de complexifier tout le monde
-// pour un seul cas) : le volley a un rapport casual modéré→intense (4.0→8.0, x2) atypique
-// pour "collectif" (plutôt x1.3-1.5 ailleurs, cf. foot/basket) — le multiplicateur collectif
-// standard laissait le national/match nettement sous le MET "competitive" que le Compendium
-// attribue lui-même au volleyball (8.0), alors qu'un match national doit au moins l'atteindre.
+// précis (constaté par stress-test sur les 31 sports, pas par principe — évite de
+// complexifier tout le monde pour un seul cas) :
+// - volleyball : rapport casual modéré→intense (4.0→8.0, x2) atypique pour "collectif"
+//   (plutôt x1.3-1.5 ailleurs, cf. foot/basket) — le multiplicateur collectif standard
+//   laissait le national/match sous le MET "competitive" que le Compendium attribue déjà
+//   au volleyball (8.0), alors qu'un match national doit au moins l'atteindre.
+// - tennis : même souci inverse dans "raquette" — plage casual très resserrée (7.3→8, à
+//   peine +9%) qui faisait grimper le national/match à +41% au-dessus du palier "intense",
+//   largement plus que ses voisins raquette (badminton/squash/padel : +12 à +21%).
+// - danse : plage casual large (4.8→7.3, +52%) qui faisait tomber le national/match SOUS
+//   son propre palier "intense" casual (0.83x, impossible physiologiquement — un·e
+//   compétiteur·rice national·e ne peut pas dépenser moins qu'une séance loisir "intense") ;
+//   le multiplicateur "technique" est délibérément plat (golf/yoga ne gagnent pas grand
+//   chose en intensité avec le niveau) mais ne convient pas à la danse compétitive, qui est
+//   réellement plus cardio qu'une séance loisir.
 const CLUB_SPORT_OVERRIDE_MULT = {
   volleyball: {level:{loisir:1.0, semi:1.5, national:1.9}, mode:{entrainement:1.0, match:1.1}},
+  tennis:     {level:{loisir:1.0, semi:1.1, national:1.25}, mode:{entrainement:1.0, match:1.05}},
+  danse:      {level:{loisir:1.0, semi:1.3, national:1.55}, mode:{entrainement:1.0, match:1.15}},
 };
 function metSportCasual(sportId, intensity){ return (sportById(sportId).casual||{})[intensity] ?? sportById(sportId).casual.modere; }
 function metSportClub(sportId, level, mode){
