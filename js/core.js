@@ -28,6 +28,8 @@ if(!LS.get('ct_muscleUnitMigrated', false)){
 let profile = LS.get('ct_profile', {sex:'H', age:'', height:'', activity:'modere', goalWeight:'', rate:'-0.5'});
 let logEntries = LS.get('ct_log', []); // {id,date,type,...}
 let todos = LS.get('ct_todos', []); // {id,text,daily,done,completedDate}
+let shoppingList = LS.get('ct_shoppingList', []); // {id,name,checked,qty,source}
+let recipes = LS.get('ct_recipes', []); // {id,name,ingredients:[{name,qty}],steps,servings,sourceUrl,savedAt} — recettes importées, référence simple (pas de gestion élaborée)
 let currentDate = todayStr();
 let activeTab = 'today';
 
@@ -54,6 +56,8 @@ function save(){
   LS.set('ct_wpresets',workoutPresets);
   LS.set('ct_log',logEntries);
   LS.set('ct_todos',todos);
+  LS.set('ct_shoppingList',shoppingList);
+  LS.set('ct_recipes',recipes);
 }
 function isFavorite(id){ return favorites.includes(id); }
 function toggleFavorite(id){
@@ -183,11 +187,60 @@ function viewTodos(){
   </section>`;
 }
 
+// Petite section "référence" pour les recettes importées via TikTok (js/recipeimport.js) :
+// volontairement minimale (pas d'édition, juste consulter/supprimer) — cf. consigne MVP.
+function recipesSection(){
+  if(!recipes.length) return '';
+  const row = r => `<div class="list-entry">
+    <div class="main recipe-head" data-recipe-toggle="${r.id}">
+      <div class="title">${escapeHtml(r.name)}</div>
+      <div class="sub">${r.ingredients.length} ingrédient${r.ingredients.length>1?'s':''}${r.servings?' · '+r.servings+' pers.':''} ${openRecipeId===r.id?'▲':'▼'}</div>
+    </div>
+    <button class="del" data-recipe-delete="${r.id}" aria-label="Supprimer la recette">✕</button>
+  </div>
+  ${openRecipeId===r.id?`<div class="recipe-detail">
+    ${r.ingredients.length?`<ul class="recipe-ing">${r.ingredients.map(i=>`<li>${escapeHtml(i.name||'')}${i.qty?' — '+escapeHtml(i.qty):''}</li>`).join('')}</ul>`:''}
+    ${r.steps&&r.steps.length?`<ol class="recipe-steps">${r.steps.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ol>`:'<div class="empty">Étapes non précisées dans la légende.</div>'}
+  </div>`:''}`;
+  return `<section class="card"><h2>Recettes importées (${recipes.length})</h2><div class="recipe-list">${recipes.map(row).join('')}</div></section>`;
+}
+
+function viewShoppingList(){
+  const pending = shoppingList.filter(i=>!i.checked);
+  const checked = shoppingList.filter(i=>i.checked);
+  const item = i => `<div class="todo-item ${i.checked?'done':''}">
+    <input class="todo-check" type="checkbox" data-shop-toggle="${i.id}" ${i.checked?'checked':''} aria-label="Marquer ${escapeHtml(i.name)} comme prise">
+    <div class="todo-copy">
+      <div class="todo-label">${escapeHtml(i.name)}</div>
+      ${(i.qty||i.source)?`<span class="todo-kind">${escapeHtml([i.qty, i.source?('via '+i.source):''].filter(Boolean).join(' · '))}</span>`:''}
+    </div>
+    <div class="todo-actions"><button data-shop-delete="${i.id}" aria-label="Supprimer">✕</button></div>
+  </div>`;
+  return `<h1 class="page-title">Liste de courses</h1>
+  <section class="card"><h2>Ajouter un article</h2>
+    <div class="todo-form">
+      <input id="shopName" type="text" maxlength="80" placeholder="Ex. Tomates" autocomplete="off">
+      <button class="btn primary" id="shopAdd">Ajouter</button>
+      <input id="shopQty" type="text" maxlength="40" placeholder="Quantité (optionnel, ex. 500 g)" style="grid-column:1 / -1" autocomplete="off">
+    </div>
+  </section>
+  <section class="card"><h2>À acheter${pending.length?' ('+pending.length+')':''}</h2>
+    <div class="todo-list">${pending.length?pending.map(item).join(''):'<div class="empty">Liste vide — ajoute un article, ou importe une recette depuis le bouton +.</div>'}</div>
+    ${checked.length?`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;">
+      <h2 style="margin:0">Déjà pris (${checked.length})</h2>
+      <button class="btn ghost small" id="shopClearChecked" type="button">Vider les cochés</button>
+    </div>
+    <div class="todo-list">${checked.map(item).join('')}</div>`:''}
+  </section>
+  ${recipesSection()}`;
+}
+
 /* ===================== RENDU ===================== */
 function render(){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===activeTab));
   const moreToggle = document.getElementById('moreToggle');
-  if(moreToggle) moreToggle.classList.toggle('active', ['notes','todos','settings'].includes(activeTab));
+  if(moreToggle) moreToggle.classList.toggle('active', ['notes','todos','shopping','settings'].includes(activeTab));
   const main = document.getElementById('main');
   if(activeTab==='today') main.innerHTML = viewToday();
   else if(activeTab==='meals') main.innerHTML = viewMeals();
@@ -195,6 +248,7 @@ function render(){
   else if(activeTab==='weight') main.innerHTML = viewWeight();
   else if(activeTab==='notes') main.innerHTML = viewNotes();
   else if(activeTab==='todos') main.innerHTML = viewTodos();
+  else if(activeTab==='shopping') main.innerHTML = viewShoppingList();
   else if(activeTab==='history') main.innerHTML = viewHistory();
   else if(activeTab==='settings') main.innerHTML = viewSettings();
   bindTabEvents();
@@ -773,6 +827,7 @@ let openHistWeek = null;
 let openCustomFoods = false;
 let openFavorites = false;
 let openTodayLog = false;
+let openRecipeId = null;
 // Géométrie SVG partagée par les graphiques de l'onglet Poids.
 const CHART_W=320, CHART_H=150, CHART_PADL=36, CHART_PADR=14, CHART_PADT=16, CHART_PADB=24;
 function chartXFor(i,n){ return CHART_PADL + (n>1 ? (i/(n-1)) : 0)*(CHART_W-CHART_PADL-CHART_PADR); }

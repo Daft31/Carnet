@@ -34,6 +34,9 @@ function openFabMenu(){
       <button class="fab-menu-item" id="fabScan" type="button">
         <span class="fmi-ico">📷</span><span class="fmi-txt"><b>Scanner</b><small>Code-barres produit</small></span>
       </button>
+      <button class="fab-menu-item" id="fabRecipeImport" type="button">
+        <span class="fmi-ico">🎬</span><span class="fmi-txt"><b>Importer une recette</b><small>Depuis un lien TikTok</small></span>
+      </button>
       <button class="fab-menu-item" id="fabWorkout" type="button">
         <span class="fmi-ico">🏃</span><span class="fmi-txt"><b>Séance</b><small>Tapis, vélo, renfo…</small></span>
       </button>
@@ -48,6 +51,7 @@ function openFabMenu(){
   };
   document.getElementById('fabAi').onclick = ()=>{ closeModal(); openAIDescribeModal(); };
   document.getElementById('fabScan').onclick = ()=>{ closeModal(); openScannerModal(); };
+  document.getElementById('fabRecipeImport').onclick = ()=>{ closeModal(); openRecipeImportModal(); };
   document.getElementById('fabWorkout').onclick = ()=>{ closeModal(); switchTab('workouts'); };
   document.getElementById('fabWeight').onclick = ()=>{
     closeModal(); switchTab('weight');
@@ -524,6 +528,43 @@ function bindTabEvents(){
     });
   }
 
+  if(activeTab==='shopping'){
+    const addShopItem = ()=>{
+      const nameInput = document.getElementById('shopName');
+      const qtyInput = document.getElementById('shopQty');
+      const name = nameInput?.value.trim();
+      if(!name){ toast('Donne un nom à l\'article'); return; }
+      shoppingList.push({id:uid(), name, qty:(qtyInput?.value||'').trim()||null, checked:false, source:null});
+      save(); render(); toast('Article ajouté ✓');
+    };
+    document.getElementById('shopAdd')?.addEventListener('click', addShopItem);
+    ['shopName','shopQty'].forEach(id=>{
+      document.getElementById(id)?.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addShopItem(); } });
+    });
+    document.querySelectorAll('[data-shop-toggle]').forEach(b=>b.onchange=()=>{
+      const it = shoppingList.find(x=>x.id===b.dataset.shopToggle); if(!it) return;
+      it.checked = b.checked; save(); render();
+    });
+    document.querySelectorAll('[data-shop-delete]').forEach(b=>b.onclick=()=>{
+      shoppingList = shoppingList.filter(x=>x.id!==b.dataset.shopDelete); save(); render();
+    });
+    const clearCheckedBtn = document.getElementById('shopClearChecked');
+    if(clearCheckedBtn) clearCheckedBtn.onclick = ()=>{
+      shoppingList = shoppingList.filter(x=>!x.checked); save(); render(); toast('Articles cochés supprimés ✓');
+    };
+    document.querySelectorAll('[data-recipe-toggle]').forEach(el=>el.onclick=()=>{
+      const id = el.dataset.recipeToggle;
+      openRecipeId = openRecipeId===id ? null : id;
+      render();
+    });
+    document.querySelectorAll('[data-recipe-delete]').forEach(b=>b.onclick=()=>{
+      const id = b.dataset.recipeDelete;
+      recipes = recipes.filter(r=>r.id!==id);
+      if(openRecipeId===id) openRecipeId = null;
+      save(); render(); toast('Recette supprimée');
+    });
+  }
+
   if(activeTab==='history'){
     document.querySelectorAll('[data-histweek]').forEach(h=>h.onclick=()=>{
       const wk = h.dataset.histweek;
@@ -559,7 +600,7 @@ function bindTabEvents(){
       workoutPresets = workoutPresets.filter(p=>p.id!==b.dataset.delpreset); save(); render();
     });
     document.getElementById('exportBtn').onclick = ()=>{
-      const blob = new Blob([JSON.stringify({settings,customFoods,foodOverrides,favorites,weightEntries,profile,workoutPresets,logEntries,todos},null,2)], {type:'application/json'});
+      const blob = new Blob([JSON.stringify({settings,customFoods,foodOverrides,favorites,weightEntries,profile,workoutPresets,logEntries,todos,shoppingList,recipes},null,2)], {type:'application/json'});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href=url; a.download = `carnet-sauvegarde-${todayStr()}.json`; a.click();
       URL.revokeObjectURL(url);
@@ -579,6 +620,8 @@ function bindTabEvents(){
           if(data.workoutPresets) workoutPresets = data.workoutPresets;
           if(data.logEntries) logEntries = data.logEntries;
           if(data.todos) todos = data.todos;
+          if(data.shoppingList) shoppingList = data.shoppingList;
+          if(data.recipes) recipes = data.recipes;
           save(); render(); toast('Import réussi ✓');
         }catch(err){ toast('Fichier invalide'); }
       };
@@ -590,7 +633,7 @@ function bindTabEvents(){
         customFoods = []; foodOverrides = {}; favorites = []; weightEntries = [];
         profile = {sex:'H', age:'', height:'', activity:'modere', goalWeight:'', rate:'-0.5'};
         workoutPresets = [];
-        logEntries = []; todos = []; save(); render(); toast('Données réinitialisées');
+        logEntries = []; todos = []; shoppingList = []; recipes = []; save(); render(); toast('Données réinitialisées');
       }
     };
   }

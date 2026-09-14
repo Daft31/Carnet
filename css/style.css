@@ -417,6 +417,12 @@
   .todo-progress-bar > span{display:block; height:100%; width:var(--progress,0%); border-radius:inherit; background:var(--green); transform-origin:left; animation:progressIn .55s cubic-bezier(.22,1,.36,1);}
   @keyframes progressIn{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 
+  /* --- Onglet Courses + recettes importées (TikTok) --- */
+  .recipe-head{cursor:pointer;}
+  .recipe-detail{padding:2px 0 10px; font-size:13px; color:var(--ink-soft);}
+  .recipe-ing, .recipe-steps{margin:4px 0 0; padding-left:18px;}
+  .recipe-ing li, .recipe-steps li{margin:3px 0;}
+
   /* --- Onglet Notes : style carnet / page de rédaction --- */
   section.card.journal{
     background:var(--journal-paper);
