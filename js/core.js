@@ -642,6 +642,24 @@ function stepsToDurationMin(steps, vitesseKmh, heightCm){
   return (distanceKm/v)*60;
 }
 function workoutSummary(e){
+  // Séance importée via "Coller un programme (IA)" (js/workoutparser.js) :
+  // structure blocks/exercices + durée estimée, indépendante des types
+  // tapis/vélo/renfo/manuel ci-dessous (rétrocompatibilité : les séances plus
+  // anciennes n'ont jamais de champ `blocks`, donc cette branche ne les
+  // concerne jamais).
+  if(Array.isArray(e.blocks) && e.blocks.length){
+    const totalExercises = e.blocks.reduce((n,b)=> n + (Array.isArray(b.exercises)?b.exercises.length:0), 0);
+    const exNames = e.blocks.flatMap(b=>(b.exercises||[]).map(x=>x.name)).filter(Boolean);
+    const title = e.name || 'Séance (programme IA)';
+    const parts = [
+      `${e.blocks.length} block${e.blocks.length>1?'s':''}`,
+      `${totalExercises} exercice${totalExercises>1?'s':''}`,
+    ];
+    if(e.estimatedDurationMin) parts.push(`~${e.estimatedDurationMin} min`);
+    parts.push(e.time);
+    if(exNames.length) parts.push(exNames.slice(0,4).join(', ')+(exNames.length>4?'…':''));
+    return {title, sub: parts.map(escapeHtml).join(' · ')};
+  }
   if(e.wtype==='tapis'){
     return {title:'Tapis incliné', sub:`${e.params.vitesse} km/h · ${e.params.pente}% · ${e.duration} min${e.steps? ' · '+Math.round(e.steps)+' pas':''} · ${e.time}`};
   }
@@ -747,6 +765,7 @@ function viewWorkouts(){
   <section class="card">
     <h2>Nouvelle séance</h2>
     ${!weight ? `<div class="hint">Ajoute une pesée dans l'onglet Poids pour activer le calcul auto des calories (tapis/vélo/renfo). En attendant, utilise le mode "Manuel".</div>` : ''}
+    <button class="btn ghost" id="pasteWorkoutBtn" type="button">📋 Coller un programme (IA)</button>
     <label>Type de séance</label>
     <div class="wk-cards" id="wkTypeSeg">
       ${[

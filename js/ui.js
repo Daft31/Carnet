@@ -319,6 +319,9 @@ function bindTabEvents(){
   }
 
   if(activeTab==='workouts'){
+    const pasteBtn = document.getElementById('pasteWorkoutBtn');
+    if(pasteBtn) pasteBtn.onclick = openWorkoutImportModal;
+
     const captureWorkoutForm = ()=>{
       if(wkType==='tapis'){
         wkParams.vitesse = document.getElementById('wkVitesse')?.value ?? wkParams.vitesse;
