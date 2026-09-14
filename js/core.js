@@ -564,7 +564,7 @@ let workoutPresets = LS.get('ct_wpresets', []);
 let favSports = LS.get('ct_favSports', [{type:'tapis'}, {type:'velo'}]);
 let wkType = 'tapis';
 let wkTapisMode = 'duree';
-let wkParams = {vitesse:'', pente:'', effort:'modere', intensite:'moderee', sport:'football', sportIntensity:'modere', clubLevel:'loisir', clubMode:'entrainement'};
+let wkParams = {vitesse:'', pente:'', effort:'modere', intensite:'moderee', sport:'football', sportIntensity:'modere', clubLevel:'loisir', clubMode:'entrainement', enduranceIntensity:'modere'};
 let wkDuration = '';
 let wkSteps = '';
 function getCurrentWeight(){
@@ -752,8 +752,22 @@ const CLUB_SPORT_OVERRIDE_MULT = {
   danse:      {level:{loisir:1.0, semi:1.3, national:1.55}, mode:{entrainement:1.0, match:1.15}},
 };
 function metSportCasual(sportId, intensity){ return (sportById(sportId).casual||{})[intensity] ?? sportById(sportId).casual.modere; }
-function metSportClub(sportId, level, mode){
+// Sports d'endurance individuels (course/cyclisme/rando/aviron/roller) : contrairement au
+// foot/combat/raquette où le NIVEAU du pratiquant est une bonne proxy de l'intensité d'une
+// séance donnée (un joueur national court plus vite sur tout le match), un coureur national
+// qui fait un footing tranquille n'est pas plus intense qu'un loisir qui pousse fort ce
+// jour-là — ce qui pèse vraiment, c'est l'ALLURE de cette séance précise, pas l'étiquette de
+// niveau (retour croisé avec un stress-test ChatGPT sur ce point précis). Le niveau/contexte
+// gardent un rôle mineur (accès à des allures plus dures, un vrai contexte de course), mais
+// l'intensité de la séance (même échelle léger/modéré/intense que "Choisis ton sport")
+// pilote désormais le calcul.
+const ENDURANCE_CLUB_MINOR_MULT = {level:{loisir:1.0, semi:1.05, national:1.1}, mode:{entrainement:1.0, match:1.1}};
+function metSportClub(sportId, level, mode, sessionIntensity){
   const sport = sportById(sportId);
+  if(sport.cat==='endurance'){
+    const base = metSportCasual(sportId, sessionIntensity||'modere');
+    return base * (ENDURANCE_CLUB_MINOR_MULT.level[level]||1) * (ENDURANCE_CLUB_MINOR_MULT.mode[mode]||1);
+  }
   const mult = CLUB_SPORT_OVERRIDE_MULT[sportId] || CLUB_CATEGORY_MULT[sport.cat] || CLUB_CATEGORY_MULT.collectif;
   return sport.casual.modere * (mult.level[level]||1) * (mult.mode[mode]||1);
 }
@@ -846,7 +860,7 @@ function computeWorkoutKcal(type, params, durationMin, weight){
   else if(type==='velo') met = VELO_MET[params.effort]||6.8;
   else if(type==='renfo') met = RENFO_MET[params.intensite]||5; // rétrocompat affichage/anciennes séances uniquement
   else if(type==='sport') met = metSportCasual(params.sport, params.intensity);
-  else if(type==='club') met = metSportClub(params.sport, params.level, params.mode);
+  else if(type==='club') met = metSportClub(params.sport, params.level, params.mode, params.enduranceIntensity);
   return met * weight * h;
 }
 function stepsToDurationMin(steps, vitesseKmh, heightCm){
@@ -892,7 +906,8 @@ function workoutSummary(e){
   if(e.wtype==='club'){
     const lvlLbl = (clubLevelsFor(e.params?.sport).find(l=>l.key===e.params?.level)||{}).label || e.params?.level;
     const modeLbl = {entrainement:'Entraînement',match:'Match/compétition'}[e.params?.mode]||e.params?.mode;
-    return {title:sportById(e.params?.sport).label+' (club)', sub:`${lvlLbl} · ${modeLbl} · ${e.duration} min · ${e.time}`};
+    const intLbl = e.params?.enduranceIntensity ? ` · Allure ${({leger:'légère',modere:'modérée',intense:'intense'})[e.params.enduranceIntensity]||e.params.enduranceIntensity}` : '';
+    return {title:sportById(e.params?.sport).label+' (club)', sub:`${lvlLbl} · ${modeLbl}${intLbl} · ${e.duration} min · ${e.time}`};
   }
   const d=e.estimation; const detail=d ? ` · reconnus: ${d.recognized.map(x=>x.name).join(', ')||'aucun'}${d.unrecognized.length?' · non reconnus: '+d.unrecognized.join(', '):''} · kcal/min médiane: ${d.kcalPerMin==null?'valeur manquante':d.kcalPerMin}` : '';
   return {title:'Séance', sub:`${escapeHtml(e.text||'')}${e.duration? ' · '+e.duration+' min':''} · ${e.time}${detail}`};
@@ -1064,6 +1079,13 @@ function viewWorkouts(){
       <select id="wkSport">${SPORTS.map(s=>`<option value="${s.id}" ${wkParams.sport===s.id?'selected':''}>${escapeHtml(s.label)}</option>`).join('')}</select>
       <label>Niveau</label>
       <select id="wkClubLevel">${clubLevelsFor(wkParams.sport).map(l=>`<option value="${l.key}" ${wkParams.clubLevel===l.key?'selected':''}>${escapeHtml(l.label)}</option>`).join('')}</select>
+      ${sportById(wkParams.sport).cat==='endurance' ? `
+      <label>Intensité de cette séance</label>
+      <div class="seg" id="wkEnduranceIntSeg">
+        ${[['leger','Léger'],['modere','Modéré'],['intense','Intense']].map(([k,l])=>`<button data-eint="${k}" class="${wkParams.enduranceIntensity===k?'active':''}">${l}</button>`).join('')}
+      </div>
+      <div class="hint">Pour les sports d'endurance, l'allure de cette séance pèse plus dans le calcul que le niveau du pratiquant — un coureur national en footing tranquille n'est pas plus intense qu'un loisir qui pousse fort.</div>
+      ` : ''}
       <label>Contexte</label>
       <div class="seg" id="wkClubModeSeg">
         ${[['entrainement','Entraînement'],['match','Match / compétition']].map(([k,l])=>`<button data-clubmode="${k}" class="${wkParams.clubMode===k?'active':''}">${l}</button>`).join('')}

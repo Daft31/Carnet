@@ -197,7 +197,7 @@ function openPresetNameModal(){
     if(wkType==='tapis') params = {vitesse:wkParams.vitesse, pente:wkParams.pente};
     else if(wkType==='velo') params = {effort:wkParams.effort};
     else if(wkType==='sport') params = {sport:wkParams.sport, sportIntensity:wkParams.sportIntensity};
-    else if(wkType==='club') params = {sport:wkParams.sport, clubLevel:wkParams.clubLevel, clubMode:wkParams.clubMode};
+    else if(wkType==='club') params = {sport:wkParams.sport, clubLevel:wkParams.clubLevel, clubMode:wkParams.clubMode, enduranceIntensity:wkParams.enduranceIntensity};
     workoutPresets.unshift({
       id:'wp'+uid(), name, type:wkType, params,
       defaultDurationMin: wkDuration || null,
@@ -358,6 +358,7 @@ function bindTabEvents(){
     const clubLevelSel = document.getElementById('wkClubLevel');
     if(clubLevelSel) clubLevelSel.addEventListener('change', ()=>{ captureWorkoutForm(); wkParams.clubLevel=clubLevelSel.value; updateEstimate(); });
     document.querySelectorAll('#wkClubModeSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.clubMode=b.dataset.clubmode; render(); });
+    document.querySelectorAll('#wkEnduranceIntSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.enduranceIntensity=b.dataset.eint; render(); });
     // En mode club, changer de sport doit re-render (pas juste recalculer) : les
     // libellés de niveau (#wkClubLevel) sont spécifiques à chaque discipline
     // (CLUB_LEVELS dans core.js) et doivent être regénérés pour le nouveau sport.
@@ -388,7 +389,7 @@ function bindTabEvents(){
         } else if(wkType==='sport'){
           params.sport = wkParams.sport; params.intensity = wkParams.sportIntensity;
         } else if(wkType==='club'){
-          params.sport = wkParams.sport; params.level = wkParams.clubLevel; params.mode = wkParams.clubMode;
+          params.sport = wkParams.sport; params.level = wkParams.clubLevel; params.mode = wkParams.clubMode; params.enduranceIntensity = wkParams.enduranceIntensity;
         }
         if(dur>0 && w) kcal = computeWorkoutKcal(wkType, params, dur, w);
         num.textContent = kcal>0 ? Math.round(kcal) + ' kcal' : '—';
@@ -443,7 +444,7 @@ function bindTabEvents(){
       } else if(wkType==='sport'){
         params = {sport: wkParams.sport, intensity: wkParams.sportIntensity};
       } else if(wkType==='club'){
-        params = {sport: wkParams.sport, level: wkParams.clubLevel, mode: wkParams.clubMode};
+        params = {sport: wkParams.sport, level: wkParams.clubLevel, mode: wkParams.clubMode, enduranceIntensity: wkParams.enduranceIntensity};
       }
       if(duration<=0){ toast('Indique la durée'); return; }
       entry.params = params;
