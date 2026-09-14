@@ -642,8 +642,16 @@ function sportById(id){ return SPORTS.find(s=>s.id===id) || SPORTS[0]; }
 /* ----- "Sport en club" : MET par niveau compétitif, différenciés PAR FAMILLE de sport -----
    Le Compendium ne documente pas de paliers "loisir/semi-amateur/national" — ces
    multiplicateurs sont un raisonnement physiologique explicite (pas une formule unique
-   plaquée partout), appliqué au MET "intense" (le palier casual le plus réaliste pour une
-   pratique sérieuse) de chaque discipline :
+   plaquée partout), appliqué au MET **"modéré"** de chaque discipline (le palier casual du
+   milieu, PAS "intense" — corrigé après retour utilisateur : la 1ère version partait déjà du
+   palier "intense" même pour un niveau "Loisir", donc un pongiste loisir en simple match
+   affichait un MET plus haut que ce que le catalogue "Choisis ton sport" appelle lui-même
+   "intense" pour ce sport, ce qui gonflait le calcul de façon irréaliste — ex. ping-pong
+   loisir/match donnait ~520kcal/h à 75kg, largement au-dessus de ce qu'un match loisir de
+   ping-pong brûle réellement). Le niveau "loisir" = 1.0 (ancré sur l'effort "modéré" casual,
+   cohérent : un pratiquant loisir en club n'est pas plus intense qu'un pratiquant loisir
+   ponctuel), "semi"/"national" amènent progressivement vers, puis au-delà, du palier
+   "intense" casual :
    - `collectif` (foot/basket/hand/rugby/volley) : sports intermittents à sprints répétés —
      l'écart loisir→national est marqué (VO2max et capacité à répéter les efforts très
      supérieurs en national) et le match est nettement plus explosif que l'entraînement
@@ -666,20 +674,20 @@ function sportById(id){ return SPORTS.find(s=>s.id===id) || SPORTS[0]; }
      volume comparable — écart notable, la compétition (peu fréquente) un peu plus intense
      que l'entraînement standard. */
 const CLUB_CATEGORY_MULT = {
-  collectif:  {level:{loisir:1.0, semi:1.25, national:1.55}, mode:{entrainement:1.0, match:1.25}},
-  combat:     {level:{loisir:1.0, semi:1.3,  national:1.65}, mode:{entrainement:1.0, match:1.3}},
-  raquette:   {level:{loisir:1.0, semi:1.2,  national:1.4},  mode:{entrainement:1.0, match:1.15}},
-  endurance:  {level:{loisir:1.0, semi:1.25, national:1.55}, mode:{entrainement:1.0, match:1.2}},
-  nautique:   {level:{loisir:1.0, semi:1.15, national:1.3},  mode:{entrainement:1.0, match:1.1}},
-  hiver:      {level:{loisir:1.0, semi:1.15, national:1.3},  mode:{entrainement:1.0, match:1.1}},
+  collectif:  {level:{loisir:1.0, semi:1.3,  national:1.6},  mode:{entrainement:1.0, match:1.15}},
+  combat:     {level:{loisir:1.0, semi:1.35, national:1.7},  mode:{entrainement:1.0, match:1.15}},
+  raquette:   {level:{loisir:1.0, semi:1.2,  national:1.4},  mode:{entrainement:1.0, match:1.1}},
+  endurance:  {level:{loisir:1.0, semi:1.3,  national:1.55}, mode:{entrainement:1.0, match:1.15}},
+  nautique:   {level:{loisir:1.0, semi:1.15, national:1.3},  mode:{entrainement:1.0, match:1.08}},
+  hiver:      {level:{loisir:1.0, semi:1.15, national:1.3},  mode:{entrainement:1.0, match:1.08}},
   technique:  {level:{loisir:1.0, semi:1.1,  national:1.2},  mode:{entrainement:1.0, match:1.05}},
-  force:      {level:{loisir:1.0, semi:1.2,  national:1.4},  mode:{entrainement:1.0, match:1.15}},
+  force:      {level:{loisir:1.0, semi:1.2,  national:1.4},  mode:{entrainement:1.0, match:1.1}},
 };
 function metSportCasual(sportId, intensity){ return (sportById(sportId).casual||{})[intensity] ?? sportById(sportId).casual.modere; }
 function metSportClub(sportId, level, mode){
   const sport = sportById(sportId);
   const mult = CLUB_CATEGORY_MULT[sport.cat] || CLUB_CATEGORY_MULT.collectif;
-  return sport.casual.intense * (mult.level[level]||1) * (mult.mode[mode]||1);
+  return sport.casual.modere * (mult.level[level]||1) * (mult.mode[mode]||1);
 }
 
 /* ----- Favoris de séance (bloc dédié dans le sélecteur) -----
