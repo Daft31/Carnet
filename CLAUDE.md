@@ -6,7 +6,9 @@ Instructions pour Claude Code (ou tout agent Claude) travaillant sur ce repo. Li
 
 ## Le projet en une phrase
 
-Carnet : appli web perso de suivi sport/nutrition, 100% statique (HTML/CSS/JS vanilla, sans build, sans framework), données en `localStorage`, une seule fonction serverless (`api/parse-meal.js`) pour la feature IA. Déployée à la fois sur GitHub Pages (statique seul) et Vercel (statique + API).
+Kalo (anciennement "Carnet" — voir note de renommage ci-dessous) : appli web perso de suivi sport/nutrition, 100% statique (HTML/CSS/JS vanilla, sans build, sans framework), données en `localStorage`, une seule fonction serverless (`api/parse-meal.js`) pour la feature IA. Déployée à la fois sur GitHub Pages (statique seul) et Vercel (statique + API).
+
+**Note de renommage** : le nom visible de l'appli (titre `<title>`, texte du header, logo) est "Kalo" depuis le renommage. L'infrastructure historique garde volontairement le nom "Carnet" : nom du repo GitHub, domaine Vercel (`carnet-self.vercel.app`), chemin GitHub Pages (`daft31.github.io/carnet`), variable d'environnement `CARNET_API_KEY`, préfixe `ct_*` des clés `localStorage`. Ne pas renommer ces éléments d'infra à l'occasion d'une simple demande de rebranding UI — ce sont des changements séparés, plus risqués (domaines cassés, perte de données existantes), à ne faire que sur demande explicite et avec un vrai plan de migration.
 
 ## Règles à ne jamais casser sans confirmation explicite de l'utilisateur
 

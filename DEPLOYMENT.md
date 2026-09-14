@@ -5,7 +5,7 @@
 ### GitHub Secrets
 Add the following secrets to your GitHub repository:
 
-1. **CARNET_API_KEY** - Your Carnet API key
+1. **CARNET_API_KEY** - Your Mammouth AI API key (nom de variable historique, gardé tel quel — voir CLAUDE.md)
    - Go to: https://github.com/Daft31/Carnet/settings/secrets/actions
    - Click "New repository secret"
    - Name: `CARNET_API_KEY`
@@ -22,13 +22,13 @@ Add the following secrets to your GitHub repository:
 Set these directly in your Vercel project settings (Settings → Environment Variables),
 as a plain value — not via the legacy `@secret` reference syntax:
 
-- **CARNET_API_KEY** - Your Anthropic API key, used server-side only by `api/parse-meal.js`
+- **CARNET_API_KEY** - Your Mammouth AI API key (NOT an Anthropic key — see CLAUDE.md rule 2), used server-side only by `api/parse-meal.js`
 
 ## Deployment Process
 
 1. Push your changes to the `main` branch
 2. GitHub Actions will automatically:
-   - Run tests using the Carnet API
+   - Run tests using the Mammouth AI API (via `CARNET_API_KEY`)
    - Deploy to Vercel using the deploy workflow
    - Deploy static files to GitHub Pages
 

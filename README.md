@@ -1,6 +1,8 @@
-# Carnet
+# Kalo
 
 Application web personnelle de suivi sportif et nutritionnel (calories, macros, poids, séances, historique). 100 % en français. Conçue au départ pour un usage strictement individuel (une seule personne, pas de comptes), mais utilisée en pratique par plusieurs personnes en parallèle (chacune avec ses propres données locales) — voir la section "Chantier en cours" plus bas pour l'évolution vers un vrai multi-utilisateur.
+
+> **Note de renommage** : l'appli s'appelait auparavant "Carnet" ; le nom visible (titre, header, logo) est désormais **Kalo**. Par prudence, l'infrastructure historique n'a **pas** été renommée en profondeur dans ce changement : le nom du repo GitHub, le domaine Vercel (`carnet-self.vercel.app`), le chemin GitHub Pages (`daft31.github.io/carnet`), le préfixe des clés `localStorage` (`ct_*`) et la variable d'environnement `CARNET_API_KEY` restent tels quels. Les renommer casserait des liens/domaines en prod ou (pour le préfixe `ct_*`) risquerait de faire perdre les données existantes des utilisateurs ; ce sont des changements distincts, plus risqués, à faire consciemment et séparément si un jour souhaité (voir aussi la règle correspondante dans `CLAUDE.md`).
 
 Ce document s'adresse autant à un humain qu'à un futur agent IA qui interviendrait sur ce repo : il explique l'architecture, les pièges connus, et où trouver quoi.
 
