@@ -36,10 +36,15 @@
 <div id="modal-root"></div>
 
 <!-- SCRIPTS -->
-<script src="js/core.js?v=a3b6ac5"></script>
-<script src="js/ui.js?v=2ad9c69"></script>
+<script src="js/core.js?v=36efeeb"></script>
+<script src="js/ui.js?v=9488331"></script>
+<!-- Auth Supabase (Phase 1 — voir supabase/MIGRATION_PLAN.md) : additif, ne bloque rien tant
+     que js/supabaseClient.js n'a pas de vrais credentials (getSupabaseClient() renvoie null). -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/supabaseClient.js?v=1"></script>
+<script src="js/auth.js?v=1"></script>
 <script src="js/scanner.js?v=8019db3"></script>
 <script src="js/mealparser.js?v=model2"></script>
-<script src="js/app.js?v=35248f8"></script>
+<script src="js/app.js?v=9eb63ad"></script>
 </body>
 </html>

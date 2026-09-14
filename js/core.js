@@ -1052,6 +1052,11 @@ function viewSettings(){
     }).join('') : '<div class="empty">Pas encore de préréglage de séance.</div>'}
   </section>
   <section class="card">
+    <h2>Compte</h2>
+    <div class="hint">${(typeof authSession!=='undefined' && authSession && authSession.user) ? `Connecté en tant que ${escapeHtml(authSession.user.email||'')}. La synchronisation des données arrive dans une prochaine mise à jour — pour l'instant, tout reste stocké sur cet appareil.` : `Optionnel : connecte-toi par lien magique (email, sans mot de passe) pour préparer la synchronisation multi-appareils à venir. Tes données restent pour l'instant uniquement sur cet appareil, que tu sois connecté ou non.`}</div>
+    <button class="btn secondary" id="authOpenBtn">${(typeof authSession!=='undefined' && authSession && authSession.user) ? 'Gérer ma connexion' : 'Se connecter pour synchroniser'}</button>
+  </section>
+  <section class="card">
     <h2>Tes données</h2>
     <div class="hint">Tout est stocké uniquement sur cet appareil, dans ce navigateur. Rien n'est envoyé nulle part. Exporte régulièrement pour avoir une sauvegarde.</div>
     <button class="btn secondary" id="exportBtn">Exporter mes données (.json)</button>

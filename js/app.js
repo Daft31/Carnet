@@ -23,3 +23,9 @@ applyTheme();
 normalizeTodos();
 applyTheme();
 render();
+
+// Phase 1 auth Supabase (voir supabase/MIGRATION_PLAN.md) : purement additif,
+// défensif si Supabase n'est pas configuré — voir js/auth.js.
+if(typeof initSupabaseAuth === 'function'){
+  try{ initSupabaseAuth(); }catch(err){ console.warn('[auth] initSupabaseAuth a échoué', err); }
+}

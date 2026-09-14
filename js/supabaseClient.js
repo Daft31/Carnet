@@ -1,27 +1,27 @@
 /**
  * js/supabaseClient.js
  * ---------------------------------------------------------------------------
- * SCAFFOLDING — pas encore branché sur le reste de l'appli.
+ * Phase 1 (voir supabase/MIGRATION_PLAN.md) : ce fichier est maintenant chargé
+ * par index.html (après le SDK Supabase UMD, avant js/auth.js) et utilisé par
+ * js/auth.js pour l'écran de connexion par lien magique. Il reste néanmoins
+ * défensif par construction : tant que SUPABASE_URL/SUPABASE_ANON_KEY ci-dessous
+ * sont des placeholders, getSupabaseClient() renvoie `null` et rien d'autre ne
+ * fait de requête réseau — voir js/auth.js pour comment ce `null` est géré.
  *
- * Ce fichier prépare la connexion à Supabase (auth par lien magique + Postgres
- * avec RLS, voir supabase/migrations/ et supabase/MIGRATION_PLAN.md) mais :
- *   - il n'est chargé par aucune balise <script> dans index.html pour l'instant,
- *   - rien dans js/core.js, js/ui.js ou js/app.js ne l'importe ou ne l'appelle,
- *   - LS.get/LS.set restent la seule source de vérité tant que la migration
- *     complète (réécriture async de la couche de stockage) n'est pas faite.
+ * Important : LS.get/LS.set (js/core.js) restent la seule source de vérité
+ * pour toutes les données de l'appli (repas, séances, poids, etc.) — aucune
+ * donnée n'est encore synchronisée vers Supabase à ce stade. Ça, c'est la
+ * Phase 2, pas ce fichier.
  *
  * À COMPLÉTER quand le projet Supabase existera réellement (voir MIGRATION_PLAN.md,
  * phase 0) :
  *   1. Remplacer SUPABASE_URL et SUPABASE_ANON_KEY ci-dessous par les vraies valeurs
  *      du projet (Supabase Dashboard -> Project Settings -> API).
- *   2. Charger le SDK Supabase JS (UMD) via une balise <script> dans index.html,
- *      AVANT ce fichier, par ex. (vérifier la dernière version stable) :
- *        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
- *      Ce CDN (jsdelivr) est autorisé pour les scripts sur GitHub Pages/Vercel ;
- *      vérifier qu'aucune restriction CSP locale ne bloque ce host avant de l'ajouter.
- *   3. Une fois les credentials renseignés, ce module peut être importé par un futur
- *      js/storage.js (ou équivalent) qui réécrira LS.get/LS.set en version async
- *      Supabase — voir MIGRATION_PLAN.md, phase 2.
+ *   2. (déjà fait) Le SDK Supabase JS (UMD) est chargé dans index.html, avant ce
+ *      fichier : <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+ *   3. Une fois les credentials renseignés, un futur js/storage.js (ou équivalent)
+ *      pourra réécrire LS.get/LS.set en version async adossée à Supabase —
+ *      voir MIGRATION_PLAN.md, phase 2.
  *
  * IMPORTANT — ne pas confondre avec CARNET_API_KEY (clé Mammouth AI, côté serveur,
  * voir CLAUDE.md racine) : la clé "anon" de Supabase est conçue pour vivre côté

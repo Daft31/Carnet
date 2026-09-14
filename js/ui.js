@@ -478,6 +478,8 @@ function bindTabEvents(){
   }
 
   if(activeTab==='settings'){
+    const authBtn = document.getElementById('authOpenBtn');
+    if(authBtn && typeof openAuthModal==='function') authBtn.onclick = openAuthModal;
     document.getElementById('saveGoals').onclick=()=>{
       settings.calorieGoal = parseFloat(document.getElementById('goalKcal').value)||settings.calorieGoal;
       settings.proteinGoal = parseFloat(document.getElementById('goalP').value)||0;
