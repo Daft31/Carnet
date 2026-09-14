@@ -198,20 +198,46 @@ const FASTFOOD_ITEMS = [
   // ("6 nuggets"), jamais sur "des nuggets" seul (éviterait de faire une hypothèse de quantité).
   { id: 'mcdo_nugget', brand: 'McDonald\'s', name: 'Chicken McNugget', aliases: ['nuggets', 'nugget', 'mcnuggets', 'mcnugget', 'chicken mcnuggets', 'chicken mcnugget'], calories: 43.5, protein: 2.5, carbs: 3.25, fat: 2.25, fiber: 0.15, qtyMultipliable: true, requireQty: true },
   { id: 'mcdo_mcflurry_oreo', brand: 'McDonald\'s', name: 'McFlurry Oreo', aliases: ['mcflurry oreo', 'mc flurry oreo'], calories: 251, protein: 6, carbs: 41, fat: 7 },
-  // Burger King — confiance haute
-  { id: 'bk_whopper', brand: 'Burger King', name: 'Whopper', aliases: ['whopper'], calories: 790, protein: 35.4, carbs: 52.8, fat: 48.4, fiber: 3.2 },
-  { id: 'bk_double_cheeseburger', brand: 'Burger King', name: 'Double Cheeseburger', aliases: ['double cheeseburger bk', 'bk double cheeseburger'], calories: 406, protein: 24, carbs: 28, fat: 22 },
-  { id: 'bk_cheeseburger', brand: 'Burger King', name: 'Cheeseburger', aliases: ['cheeseburger bk', 'bk cheeseburger'], calories: 302, protein: 16, carbs: 28, fat: 14 },
-  // Burger King — confiance moyenne
-  { id: 'bk_cheeseburger_bacon', brand: 'Burger King', name: 'Cheeseburger Bacon', aliases: ['cheeseburger bacon'], calories: 358, protein: 20, carbs: 29, fat: 18 },
-  { id: 'bk_frites_moyenne', brand: 'Burger King', name: 'Frites moyenne', aliases: ['frites bk', 'bk frites'], calories: 319, protein: 3.8, carbs: 42, fat: 14.8 },
-  // KFC — confiance haute
-  { id: 'kfc_zinger', brand: 'KFC', name: 'Zinger Burger', aliases: ['zinger burger', 'zinger'], calories: 560, protein: 30, carbs: 45, fat: 26 },
-  // KFC — confiance moyenne
-  { id: 'kfc_colonel', brand: 'KFC', name: 'Colonel Original', aliases: ['colonel original', 'colonel burger'], calories: 489, protein: 34, carbs: 51, fat: 16 },
-  { id: 'kfc_pilon', brand: 'KFC', name: 'Original Recipe - Pilon', aliases: ['pilon original recipe', 'pilon kfc'], calories: 190, protein: 14, carbs: 5, fat: 11 },
-  { id: 'kfc_tender', brand: 'KFC', name: 'Tender', aliases: ['tender kfc', 'kfc tender', 'chicken tender'], calories: 102, protein: 8, carbs: 6, fat: 5, qtyMultipliable: true },
-  { id: 'kfc_boxmaster', brand: 'KFC', name: 'Boxmaster Original', aliases: ['boxmaster original', 'boxmaster'], calories: 686, protein: 36, carbs: 60, fat: 30 },
+  // Burger King — source officielle burgerking.fr (fiche produit par produit, fournie par
+  // l'utilisateur, vérifiée le 2026-09-14). Remplace les anciennes valeurs WebSearch — le
+  // "Cheeseburger"/"Double Cheeseburger" générique testés avant n'apparaissent PAS au
+  // catalogue officiel actuel (retirés), remplacés par les vrais burgers du menu France.
+  { id: 'bk_whopper', brand: 'Burger King', name: 'Whopper', aliases: ['whopper'], calories: 629, protein: 28, carbs: 49, fat: 35 },
+  { id: 'bk_double_whopper_cheese', brand: 'Burger King', name: 'Double Whopper Cheese', aliases: ['double whopper cheese', 'double whopper'], calories: 934, protein: 52, carbs: 49, fat: 58 },
+  { id: 'bk_steakhouse', brand: 'Burger King', name: 'Steakhouse', aliases: ['steakhouse bk', 'bk steakhouse'], calories: 829, protein: 37, carbs: 54, fat: 51 },
+  { id: 'bk_big_king', brand: 'Burger King', name: 'Big King', aliases: ['big king'], calories: 482, protein: 27, carbs: 30, fat: 28 },
+  { id: 'bk_big_king_xxl', brand: 'Burger King', name: 'Big King XXL', aliases: ['big king xxl'], calories: 964, protein: 56, carbs: 49, fat: 59 },
+  { id: 'bk_king_fish', brand: 'Burger King', name: 'King Fish', aliases: ['king fish'], calories: 398, protein: 17, carbs: 38, fat: 19 },
+  { id: 'bk_petites_frites', brand: 'Burger King', name: 'Petites frites', aliases: ['petites frites bk', 'bk petites frites'], calories: 239, protein: 3.0, carbs: 36, fat: 10 },
+  { id: 'bk_moyennes_frites', brand: 'Burger King', name: 'Moyennes frites', aliases: ['moyennes frites bk', 'bk moyennes frites', 'frites bk', 'bk frites'], calories: 309, protein: 3.8, carbs: 46, fat: 13 },
+  { id: 'bk_grandes_frites', brand: 'Burger King', name: 'Grandes frites', aliases: ['grandes frites bk', 'bk grandes frites'], calories: 423, protein: 5.3, carbs: 63, fat: 18 },
+  { id: 'bk_king_nuggets4', brand: 'Burger King', name: 'King Nuggets (4)', aliases: ['king nuggets 4', 'king nuggets'], calories: 174, protein: 10, carbs: 17, fat: 7.2 },
+  // KFC — source officielle kfc.fr (fiche produit par produit, fournie par l'utilisateur,
+  // vérifiée le 2026-09-14). "Zinger Burger" (ancienne valeur WebSearch) n'apparaît PAS au
+  // catalogue officiel actuel — retiré, remplacé par les vrais burgers du menu France.
+  { id: 'kfc_colonel', brand: 'KFC', name: 'Colonel Original', aliases: ['colonel original', 'colonel burger'], calories: 607, protein: 29.5, carbs: 56.4, fat: 30, fiber: 3.8 },
+  { id: 'kfc_double_kentucky', brand: 'KFC', name: 'Double Kentucky Burger', aliases: ['double kentucky burger', 'double kentucky'], calories: 1012, protein: 65, carbs: 89.5, fat: 42.6, fiber: 5.1 },
+  { id: 'kfc_kentucky_bbq_bacon', brand: 'KFC', name: 'Kentucky BBQ & Bacon', aliases: ['kentucky bbq bacon', 'kentucky bbq et bacon'], calories: 806, protein: 42.6, carbs: 69.3, fat: 38.2, fiber: 7.4 },
+  { id: 'kfc_crispy_burger', brand: 'KFC', name: 'Crispy Burger', aliases: ['crispy burger'], calories: 385, protein: 19.2, carbs: 39.6, fat: 15.9, fiber: 2.6 },
+  { id: 'kfc_boxmaster', brand: 'KFC', name: 'Boxmaster Original', aliases: ['boxmaster original', 'boxmaster'], calories: 686, protein: 30.1, carbs: 59.2, fat: 35.7, fiber: 2.9 },
+  { id: 'kfc_tower_cheese_bacon', brand: 'KFC', name: 'Tower Cheese & Bacon', aliases: ['tower cheese bacon', 'tower cheese et bacon'], calories: 706, protein: 29.5, carbs: 78.5, fat: 29.3, fiber: 5.4 },
+  { id: 'kfc_krunchy', brand: 'KFC', name: 'Krunchy', aliases: ['krunchy kfc', 'kfc krunchy'], calories: 334, protein: 16.9, carbs: 34.3, fat: 13.9, fiber: 2.0 },
+  { id: 'kfc_2tenders', brand: 'KFC', name: '2 Tenders', aliases: ['2 tenders'], calories: 292, protein: 20.2, carbs: 14, fat: 17, fiber: 1.3 },
+  { id: 'kfc_5tenders', brand: 'KFC', name: '5 Tenders', aliases: ['5 tenders'], calories: 730, protein: 50.6, carbs: 35, fat: 42.4, fiber: 3.2 },
+  { id: 'kfc_moyennes_frites', brand: 'KFC', name: 'Moyennes Frites', aliases: ['moyennes frites kfc', 'kfc moyennes frites', 'frites kfc', 'kfc frites'], calories: 226, protein: 4.0, carbs: 33.7, fat: 9.2, fiber: 3.9 },
+  { id: 'kfc_grandes_frites', brand: 'KFC', name: 'Grandes Frites', aliases: ['grandes frites kfc', 'kfc grandes frites'], calories: 316, protein: 5.6, carbs: 47.2, fat: 12.9, fiber: 5.5 },
+  // Quick — source officielle quick.fr / déclaration nutritionnelle PDF (fournie par
+  // l'utilisateur, valable à partir du 28/04/2026), nouvelle enseigne ajoutée au catalogue.
+  { id: 'quick_mega_giant', brand: 'Quick', name: 'Méga Giant', aliases: ['mega giant', 'méga giant'], calories: 859, protein: 46, carbs: 38, fat: 58, fiber: 2.4 },
+  { id: 'quick_giant_original', brand: 'Quick', name: 'Giant Original', aliases: ['giant original'], calories: 545, protein: 27, carbs: 27, fat: 36, fiber: 2 },
+  { id: 'quick_giant_max', brand: 'Quick', name: 'Giant Max', aliases: ['giant max'], calories: 657, protein: 28, carbs: 38, fat: 43, fiber: 2.4 },
+  { id: 'quick_double_cheeseburger', brand: 'Quick', name: 'Double Cheeseburger Quick', aliases: ['double cheeseburger quick', 'quick double cheeseburger'], calories: 407, protein: 25, carbs: 29, fat: 21, fiber: 1.9 },
+  { id: 'quick_cheeseburger', brand: 'Quick', name: 'Cheeseburger Quick', aliases: ['cheeseburger quick', 'quick cheeseburger'], calories: 279, protein: 15, carbs: 28, fat: 11, fiber: 1.9 },
+  { id: 'quick_long_chicken', brand: 'Quick', name: 'Long Chicken', aliases: ['long chicken'], calories: 528, protein: 22, carbs: 50, fat: 26, fiber: 4.2 },
+  { id: 'quick_petite_frites', brand: 'Quick', name: 'Petite Frites Quick', aliases: ['petites frites quick', 'quick petites frites'], calories: 172, protein: 2, carbs: 23, fat: 8, fiber: 2.2 },
+  { id: 'quick_moyenne_frites', brand: 'Quick', name: 'Moyenne Frites Quick', aliases: ['moyennes frites quick', 'quick moyennes frites', 'frites quick', 'quick frites'], calories: 296, protein: 4, carbs: 39, fat: 13, fiber: 3.7 },
+  { id: 'quick_grande_frites', brand: 'Quick', name: 'Grande Frites Quick', aliases: ['grandes frites quick', 'quick grandes frites'], calories: 404, protein: 5, carbs: 53, fat: 18, fiber: 5.1 },
+  { id: 'quick_chicken_dips4', brand: 'Quick', name: 'Chicken dips (4)', aliases: ['chicken dips 4', 'chicken dips'], calories: 178, protein: 11, carbs: 15, fat: 8, fiber: 1.5 },
 ];
 
 function normalizeFoodText(s) {
