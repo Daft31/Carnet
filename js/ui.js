@@ -339,8 +339,19 @@ function bindTabEvents(){
 
     document.querySelectorAll('#wkTypeSeg button').forEach(b=>b.onclick=()=>{
       if(b.dataset.type==='ia'){ openWorkoutImportModal(); return; }
-      captureWorkoutForm(); wkType=b.dataset.type; render();
+      captureWorkoutForm();
+      wkType = b.dataset.type;
+      // Bloc favori : pré-remplit le sport/niveau associé, pour ne pas avoir à le
+      // rechercher à nouveau dans le select à chaque séance.
+      if(b.dataset.favKey){
+        const fav = favSports.find(f=>favSportKey(f)===b.dataset.favKey);
+        if(fav && fav.type==='sport') wkParams.sport = fav.sport;
+        else if(fav && fav.type==='club'){ wkParams.sport = fav.sport; wkParams.clubLevel = fav.level; }
+      }
+      render();
     });
+    const favToggleBtn = document.getElementById('wkFavToggle');
+    if(favToggleBtn) favToggleBtn.onclick = ()=>{ captureWorkoutForm(); const fav = currentWkFav(); if(fav) toggleFavSport(fav); render(); };
     document.querySelectorAll('#wkTapisModeSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkTapisMode=b.dataset.mode; render(); });
     document.querySelectorAll('#wkVeloSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.effort=b.dataset.effort; render(); });
     document.querySelectorAll('#wkSportIntSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.sportIntensity=b.dataset.int; render(); });
@@ -587,7 +598,7 @@ function bindTabEvents(){
       workoutPresets = workoutPresets.filter(p=>p.id!==b.dataset.delpreset); save(); render();
     });
     document.getElementById('exportBtn').onclick = ()=>{
-      const blob = new Blob([JSON.stringify({settings,customFoods,foodOverrides,favorites,weightEntries,profile,workoutPresets,logEntries,todos,shoppingList,recipes},null,2)], {type:'application/json'});
+      const blob = new Blob([JSON.stringify({settings,customFoods,foodOverrides,favorites,weightEntries,profile,workoutPresets,logEntries,todos,shoppingList,recipes,favSports},null,2)], {type:'application/json'});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href=url; a.download = `carnet-sauvegarde-${todayStr()}.json`; a.click();
       URL.revokeObjectURL(url);
@@ -609,6 +620,7 @@ function bindTabEvents(){
           if(data.todos) todos = data.todos;
           if(data.shoppingList) shoppingList = data.shoppingList;
           if(data.recipes) recipes = data.recipes;
+          if(data.favSports) favSports = data.favSports;
           save(); render(); toast('Import réussi ✓');
         }catch(err){ toast('Fichier invalide'); }
       };
@@ -620,7 +632,9 @@ function bindTabEvents(){
         customFoods = []; foodOverrides = {}; favorites = []; weightEntries = [];
         profile = {sex:'H', age:'', height:'', activity:'modere', goalWeight:'', rate:'-0.5'};
         workoutPresets = [];
-        logEntries = []; todos = []; shoppingList = []; recipes = []; save(); render(); toast('Données réinitialisées');
+        logEntries = []; todos = []; shoppingList = []; recipes = [];
+        favSports = [{type:'tapis'}, {type:'velo'}];
+        save(); render(); toast('Données réinitialisées');
       }
     };
   }

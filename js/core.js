@@ -58,6 +58,7 @@ function save(){
   LS.set('ct_todos',todos);
   LS.set('ct_shoppingList',shoppingList);
   LS.set('ct_recipes',recipes);
+  LS.set('ct_favSports',favSports);
 }
 function isFavorite(id){ return favorites.includes(id); }
 function toggleFavorite(id){
@@ -556,6 +557,11 @@ const MEAL_SLOTS = ['Petit-déj','Déjeuner','Dîner','Collation'];
 let mealSearchQ = '';
 let mealSlot = 'Déjeuner';
 let workoutPresets = LS.get('ct_wpresets', []);
+// Séances "favorites" : chacune obtient son propre bloc dans le sélecteur "Type de
+// séance" au lieu de repasser par le catalogue à chaque fois. Tapis/Vélo sont favoris
+// par défaut (comportement identique à avant), mais restent décochables comme n'importe
+// quel autre favori — ce n'est pas juste "un sport de plus", c'est le même mécanisme.
+let favSports = LS.get('ct_favSports', [{type:'tapis'}, {type:'velo'}]);
 let wkType = 'tapis';
 let wkTapisMode = 'duree';
 let wkParams = {vitesse:'', pente:'', effort:'modere', intensite:'moderee', sport:'football', sportIntensity:'modere', clubLevel:'loisir', clubMode:'entrainement'};
@@ -674,6 +680,36 @@ function metSportClub(sportId, level, mode){
   const sport = sportById(sportId);
   const mult = CLUB_CATEGORY_MULT[sport.cat] || CLUB_CATEGORY_MULT.collectif;
   return sport.casual.intense * (mult.level[level]||1) * (mult.mode[mode]||1);
+}
+
+/* ----- Favoris de séance (bloc dédié dans le sélecteur) -----
+   Un favori "club" est identifié par sport+niveau (pas le contexte entraînement/match,
+   ajustable librement une fois le bloc ouvert) pour éviter d'avoir 2 blocs distincts pour
+   "Foot national entraînement" et "Foot national match". */
+function favSportKey(fav){
+  if(fav.type==='tapis'||fav.type==='velo') return fav.type;
+  if(fav.type==='sport') return 'sport:'+fav.sport;
+  if(fav.type==='club') return 'club:'+fav.sport+':'+fav.level;
+  return JSON.stringify(fav);
+}
+function isFavSport(fav){ return favSports.some(f=>favSportKey(f)===favSportKey(fav)); }
+function toggleFavSport(fav){
+  favSports = isFavSport(fav) ? favSports.filter(f=>favSportKey(f)!==favSportKey(fav)) : [...favSports, fav];
+  save();
+}
+// Le favori "courant" d'après l'état du formulaire (null pour "ia", qui n'a pas de favori).
+function currentWkFav(){
+  if(wkType==='tapis') return {type:'tapis'};
+  if(wkType==='velo') return {type:'velo'};
+  if(wkType==='sport') return {type:'sport', sport:wkParams.sport};
+  if(wkType==='club') return {type:'club', sport:wkParams.sport, level:wkParams.clubLevel};
+  return null;
+}
+function wkMatchesFav(fav){
+  if(fav.type==='tapis'||fav.type==='velo') return wkType===fav.type;
+  if(fav.type==='sport') return wkType==='sport' && wkParams.sport===fav.sport;
+  if(fav.type==='club') return wkType==='club' && wkParams.sport===fav.sport && wkParams.clubLevel===fav.level;
+  return false;
 }
 function exerciseNumber(name){ const q=normalizeSearch(name); return EXERCISES.find(x=>normalizeSearch(x.name||'').includes(q)||normalizeSearch(x['Français']||'').includes(q)||normalizeSearch(x['English']||'').includes(q)); }
 function exerciseMatches(text){
@@ -878,14 +914,35 @@ function viewWorkouts(){
     ${!weight ? `<div class="hint">Ajoute une pesée dans l'onglet Poids pour activer le calcul auto des calories (tapis/vélo/sport/club). En attendant, utilise "Saisie manuelle (IA)".</div>` : ''}
     <label>Type de séance</label>
     <div class="wk-cards" id="wkTypeSeg">
-      ${[
-        {k:'tapis', lbl:'Tapis', hint:'Marche/course', svg:'<path d="M3 12h2M7 12h1M11 12h2M15 12h1M19 12h2M3 18h18M5 18v2M19 18v2M5 20h14"/>'},
-        {k:'velo',  lbl:'Vélo',  hint:'Cyclisme',     svg:'<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17l3-7h6l3 7M9 10l-2-4h3"/>'},
-        {k:'sport', lbl:'Choisis ton sport', hint:'Loisir/ponctuel', svg:'<circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M6 6l12 12M18 6L6 18"/>'},
-        {k:'club',  lbl:'Sport en club', hint:'Régulier/encadré', svg:'<path d="M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z"/>'},
-        {k:'ia',    lbl:'Saisie manuelle (IA)', hint:'Coller un programme', svg:'<path d="M5 4h11l4 4v12H5z"/><path d="M15 4v4h4M8 12h8M8 16h5"/>'}
-      ].map(o=>`<button class="wk-card ${wkType===o.k?'active':''}" data-type="${o.k}"><div class="ico"><svg viewBox="0 0 24 24">${o.svg}</svg></div><div><div class="lbl">${o.lbl}</div><div class="hint">${o.hint}</div></div></button>`).join('')}
+      ${(()=>{
+        const TAPIS_SVG = '<path d="M3 12h2M7 12h1M11 12h2M15 12h1M19 12h2M3 18h18M5 18v2M19 18v2M5 20h14"/>';
+        const VELO_SVG = '<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17l3-7h6l3 7M9 10l-2-4h3"/>';
+        const SPORT_SVG = '<circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M6 6l12 12M18 6L6 18"/>';
+        const CLUB_SVG = '<path d="M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z"/>';
+        const IA_SVG = '<path d="M5 4h11l4 4v12H5z"/><path d="M15 4v4h4M8 12h8M8 16h5"/>';
+        // Un bloc par favori (dans l'ordre où ils ont été ajoutés), puis les 3 entrées
+        // fixes non-favoritables (catalogue sport/club + saisie IA), qui restent le
+        // point d'accès à tout ce qui n'a pas (encore) son propre bloc.
+        const favCards = favSports.map(fav=>{
+          if(fav.type==='tapis') return {k:'tapis', lbl:'Tapis', hint:'Marche/course', svg:TAPIS_SVG, favKey:favSportKey(fav)};
+          if(fav.type==='velo') return {k:'velo', lbl:'Vélo', hint:'Cyclisme', svg:VELO_SVG, favKey:favSportKey(fav)};
+          if(fav.type==='sport') return {k:'sport', lbl:sportById(fav.sport).label, hint:'Favori', svg:SPORT_SVG, favKey:favSportKey(fav)};
+          if(fav.type==='club'){
+            const lvlLbl = {loisir:'Loisir',semi:'Semi-amateur',national:'National'}[fav.level]||fav.level;
+            return {k:'club', lbl:sportById(fav.sport).label, hint:`Club · ${lvlLbl}`, svg:CLUB_SVG, favKey:favSportKey(fav)};
+          }
+          return null;
+        }).filter(Boolean);
+        const staticCards = [
+          {k:'sport', lbl:'Choisis ton sport', hint:'Loisir/ponctuel', svg:SPORT_SVG},
+          {k:'club', lbl:'Sport en club', hint:'Régulier/encadré', svg:CLUB_SVG},
+          {k:'ia', lbl:'Saisie manuelle (IA)', hint:'Coller un programme', svg:IA_SVG},
+        ];
+        const isActive = c => c.favKey ? favSports.some(f=>favSportKey(f)===c.favKey && wkMatchesFav(f)) : (wkType===c.k && !favSports.some(f=>wkMatchesFav(f)));
+        return [...favCards, ...staticCards].map(o=>`<button class="wk-card ${isActive(o)?'active':''}" data-type="${o.k}"${o.favKey?` data-fav-key="${o.favKey}"`:''}><div class="ico"><svg viewBox="0 0 24 24">${o.svg}</svg></div><div><div class="lbl">${escapeHtml(o.lbl)}</div><div class="hint">${o.hint}</div></div></button>`).join('');
+      })()}
     </div>
+    ${wkType!=='ia' ? `<button class="btn ghost" id="wkFavToggle" type="button">${isFavSport(currentWkFav())?'★ Retirer des favoris':'☆ Ajouter en favori (bloc dédié)'}</button>` : ''}
 
     ${presetsForType.length ? `
       <label>Tes préréglages</label>
