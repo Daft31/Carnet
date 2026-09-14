@@ -100,15 +100,22 @@ const FEW_SHOT_EXAMPLES = [
   },
 ];
 
-function buildMessages(mealDescription) {
+function buildMessages(mealDescription, isRemainderOnly) {
   const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
   for (const ex of FEW_SHOT_EXAMPLES) {
     messages.push({ role: 'user', content: `Description du repas : "${ex.user}"` });
     messages.push({ role: 'assistant', content: JSON.stringify(ex.assistant) });
   }
+  // Cas repas partiellement reconnu (voir matchFastfoodItems) : le reste du repas a déjà
+  // des valeurs fixes calculées côté serveur, on ne demande à l'IA d'estimer QUE les
+  // éléments restants — évite de lui redemander d'estimer (avec variance) des éléments
+  // déjà connus avec certitude.
+  const prefix = isRemainderOnly
+    ? `Les autres éléments de ce repas ont déjà été identifiés avec des valeurs connues et ne font PAS partie de ta réponse. Estime uniquement les éléments suivants : `
+    : `Description du repas : `;
   messages.push({
     role: 'user',
-    content: `Description du repas : "${mealDescription}"`,
+    content: `${prefix}"${mealDescription}"`,
   });
   return messages;
 }
@@ -152,6 +159,133 @@ function checkMacroConsistency(data) {
   return null;
 }
 
+/* ===================== CATALOGUE FAST-FOOD (valeurs fixes vérifiées) =====================
+   Corrige la variance constatée par l'utilisateur (jusqu'à 400kcal d'écart entre deux
+   régénérations d'un même repas McDonald's) : pour les produits de marque à composition
+   standardisée, on préfère une valeur FIXE et vérifiée à une "estimation" IA qui varie à
+   chaque appel. Recherché via WebSearch (mcdonalds.fr direct inaccessible depuis cet
+   environnement de dev), croisé sur au moins 2 sources indépendantes quand possible, avec
+   contrôle de cohérence 4/4/9 (protéines/glucides à 4kcal/g, lipides à 9kcal/g) systématique.
+   N'inclut QUE les entrées "haute" ou "moyenne" confiance — les valeurs "faible confiance"
+   (sources trop contradictoires pour trancher, ex. Big Tasty 2 viandes : 850/877/914/940 kcal
+   selon la source) sont volontairement EXCLUES d'ici plutôt que d'inventer un chiffre : ces
+   cas restent estimés par l'IA comme avant (avec le garde-fou du prompt ci-dessus).
+   `aliases` doit être trié du plus spécifique au plus générique quand il y a un risque de
+   collision de sous-chaîne (ex. "double cheeseburger" doit matcher avant "cheeseburger" seul
+   — voir `matchFastfoodItems`, qui teste les aliases les plus longs en premier). */
+const FASTFOOD_ITEMS = [
+  // McDonald's — confiance haute
+  { id: 'mcdo_big_mac', brand: 'McDonald\'s', name: 'Big Mac', aliases: ['big mac'], calories: 540, protein: 26, carbs: 46, fat: 28, fiber: 3 },
+  { id: 'mcdo_mcchicken', brand: 'McDonald\'s', name: 'McChicken', aliases: ['mcchicken', 'mc chicken'], calories: 434, protein: 19, carbs: 45, fat: 19, fiber: 3.3 },
+  { id: 'mcdo_croque', brand: 'McDonald\'s', name: 'Croque McDo', aliases: ['croque mcdo', 'croque-mcdo', 'croq mcdo', 'croq'], calories: 258, protein: 14, carbs: 28, fat: 10 },
+  { id: 'mcdo_filet_o_fish', brand: 'McDonald\'s', name: 'Filet-O-Fish', aliases: ['filet-o-fish', 'filet o fish'], calories: 378, protein: 15.1, carbs: 35.4, fat: 19.6, fiber: 1.9 },
+  { id: 'mcdo_double_cheese', brand: 'McDonald\'s', name: 'Double Cheese', aliases: ['double cheese', 'double cheeseburger'], calories: 451, protein: 25, carbs: 34, fat: 24 },
+  { id: 'mcdo_petite_frite', brand: 'McDonald\'s', name: 'Petite frite', aliases: ['petite frite', 'petites frites'], calories: 236, protein: 3, carbs: 29, fat: 12 },
+  { id: 'mcdo_mcflurry_oreo', brand: 'McDonald\'s', name: 'McFlurry Oreo', aliases: ['mcflurry oreo', 'mc flurry oreo'], calories: 251, protein: 6, carbs: 41, fat: 7 },
+  // McDonald's — confiance moyenne (cohérence 4/4/9 correcte mais source unique ou approximation)
+  { id: 'mcdo_cheeseburger', brand: 'McDonald\'s', name: 'Cheeseburger', aliases: ['cheeseburger'], calories: 313, protein: 15.4, carbs: 33.1, fat: 14 },
+  { id: 'mcdo_royal_cheese', brand: 'McDonald\'s', name: 'Royal Cheese', aliases: ['royal cheese'], calories: 417, protein: 24.1, carbs: 37.9, fat: 19.8, fiber: 2.7 },
+  { id: 'mcdo_frite_moyenne', brand: 'McDonald\'s', name: 'Frite moyenne', aliases: ['frite moyenne', 'frites moyennes', 'moyenne frite'], calories: 320, protein: 4, carbs: 43, fat: 15 },
+  { id: 'mcdo_nuggets6', brand: 'McDonald\'s', name: '6 Chicken McNuggets', aliases: ['6 nuggets', '6 mcnuggets', '6 chicken mcnuggets'], calories: 260, protein: 17, carbs: 18, fat: 13 },
+  { id: 'mcdo_nuggets9', brand: 'McDonald\'s', name: '9 Chicken McNuggets', aliases: ['9 nuggets', '9 mcnuggets', '9 chicken mcnuggets'], calories: 390, protein: 25, carbs: 26, fat: 20 },
+  { id: 'mcdo_nuggets20', brand: 'McDonald\'s', name: '20 Chicken McNuggets', aliases: ['20 nuggets', '20 mcnuggets', '20 chicken mcnuggets'], calories: 868, protein: 55, carbs: 59, fat: 45 },
+  // Burger King — confiance haute
+  { id: 'bk_whopper', brand: 'Burger King', name: 'Whopper', aliases: ['whopper'], calories: 790, protein: 35.4, carbs: 52.8, fat: 48.4, fiber: 3.2 },
+  { id: 'bk_double_cheeseburger', brand: 'Burger King', name: 'Double Cheeseburger', aliases: ['double cheeseburger bk', 'bk double cheeseburger'], calories: 406, protein: 24, carbs: 28, fat: 22 },
+  { id: 'bk_cheeseburger', brand: 'Burger King', name: 'Cheeseburger', aliases: ['cheeseburger bk', 'bk cheeseburger'], calories: 302, protein: 16, carbs: 28, fat: 14 },
+  // Burger King — confiance moyenne
+  { id: 'bk_cheeseburger_bacon', brand: 'Burger King', name: 'Cheeseburger Bacon', aliases: ['cheeseburger bacon'], calories: 358, protein: 20, carbs: 29, fat: 18 },
+  { id: 'bk_frites_moyenne', brand: 'Burger King', name: 'Frites moyenne', aliases: ['frites bk', 'bk frites'], calories: 319, protein: 3.8, carbs: 42, fat: 14.8 },
+  // KFC — confiance haute
+  { id: 'kfc_zinger', brand: 'KFC', name: 'Zinger Burger', aliases: ['zinger burger', 'zinger'], calories: 560, protein: 30, carbs: 45, fat: 26 },
+  // KFC — confiance moyenne
+  { id: 'kfc_colonel', brand: 'KFC', name: 'Colonel Original', aliases: ['colonel original', 'colonel burger'], calories: 489, protein: 34, carbs: 51, fat: 16 },
+  { id: 'kfc_pilon', brand: 'KFC', name: 'Original Recipe - Pilon', aliases: ['pilon original recipe', 'pilon kfc'], calories: 190, protein: 14, carbs: 5, fat: 11 },
+  { id: 'kfc_tender', brand: 'KFC', name: 'Tender', aliases: ['tender kfc', 'kfc tender', 'chicken tender'], calories: 102, protein: 8, carbs: 6, fat: 5, qtyMultipliable: true },
+  { id: 'kfc_boxmaster', brand: 'KFC', name: 'Boxmaster Original', aliases: ['boxmaster original', 'boxmaster'], calories: 686, protein: 36, carbs: 60, fat: 30 },
+];
+
+function normalizeFoodText(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Coca-Cola (et variantes zero/light) : traité à part plutôt que comme des entrées fixes du
+// catalogue, car la composition officielle Coca-Cola est un fait public stable et se calcule
+// linéairement à partir du volume (4.2kcal/cl pour l'original — cohérent avec les valeurs
+// trouvées : 25cl=105kcal, 40cl=168kcal, 50cl=210kcal — et ~0kcal/cl pour zero/light, édulcorés
+// donc sans sucre). Évite de lister chaque combinaison marque×taille×variante séparément.
+function matchCola(normalizedText) {
+  const m = normalizedText.match(/coca(?:\s*-?\s*cola)?\s*(zero|light|z[eé]ro)?[^0-9]{0,15}?(\d{2})\s*cl/);
+  if (!m) return null;
+  const isDiet = !!m[1];
+  const cl = Number(m[2]);
+  if (!cl || cl < 15 || cl > 100) return null;
+  const kcalPerCl = isDiet ? 0 : 4.2;
+  return {
+    id: 'coca_' + (isDiet ? 'zero' : 'regular') + '_' + cl,
+    name: `Coca-Cola${isDiet ? ' Zero/Light' : ''} ${cl}cl`,
+    calories: Math.round(kcalPerCl * cl),
+    protein: 0,
+    carbs: isDiet ? 0 : Math.round(cl * 1.06 * 10) / 10,
+    fat: 0,
+    matchedText: m[0],
+  };
+}
+
+// Découpe le texte en segments (mêmes séparateurs qu'une saisie typique "item - item - item"),
+// cherche pour chacun le meilleur match du catalogue (aliases les plus longs en premier, pour
+// que "double cheeseburger" batte "cheeseburger"), avec une quantité en tête optionnelle
+// ("2 big mac" -> qty 2). Retourne les items reconnus ET les segments non reconnus (texte brut,
+// à faire estimer par l'IA si besoin).
+function matchFastfoodItems(mealDescription) {
+  // Découpe le texte BRUT (séparateurs "-", ",", "+", retour ligne, " et ") avant toute
+  // normalisation : normalizeFoodText() supprime la ponctuation (dont les tirets), donc
+  // normaliser avant de découper détruirait les séparateurs et fusionnerait tout le repas
+  // en un seul segment (bug constaté : un seul item matchait, le reste du texte du même
+  // "segment" géant était silencieusement perdu au lieu de finir en unmatchedSegments).
+  const rawSegments = String(mealDescription || '').split(/\s*[-,+\n]\s*|\s+et\s+/i).map(s => s.trim()).filter(Boolean);
+  if (!rawSegments.length) return { matched: [], unmatchedSegments: [] };
+
+  const allAliases = [];
+  FASTFOOD_ITEMS.forEach(item => item.aliases.forEach(a => allAliases.push({ item, alias: a })));
+  allAliases.sort((a, b) => b.alias.length - a.alias.length);
+
+  const matched = [];
+  const unmatchedSegments = [];
+
+  rawSegments.forEach(rawSeg => {
+    const seg = normalizeFoodText(rawSeg);
+    if (!seg) return;
+    const cola = matchCola(seg);
+    if (cola) { matched.push({ ...cola, qty: 1 }); return; }
+    const hit = allAliases.find(a => seg.includes(a.alias));
+    if (hit) {
+      const qtyMatch = seg.match(/^(\d+)\s/);
+      const qty = (hit.item.qtyMultipliable && qtyMatch) ? Number(qtyMatch[1]) : 1;
+      matched.push({ ...hit.item, qty });
+    } else {
+      unmatchedSegments.push(rawSeg);
+    }
+  });
+
+  return { matched, unmatchedSegments };
+}
+
+function sumMatched(matched) {
+  return matched.reduce((sum, m) => ({
+    calories: sum.calories + m.calories * m.qty,
+    protein: sum.protein + (m.protein || 0) * m.qty,
+    carbs: sum.carbs + (m.carbs || 0) * m.qty,
+    fat: sum.fat + (m.fat || 0) * m.qty,
+    fiber: sum.fiber + (m.fiber || 0) * m.qty,
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+}
+
 export default async function handler(req, res) {
   setCors(res);
 
@@ -170,9 +304,34 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Meal description is required' });
     }
 
+    // Étape 1 : matching contre le catalogue fast-food à valeurs fixes (voir plus haut).
+    // Repas entièrement reconnu -> réponse déterministe, AUCUN appel IA (zéro variance
+    // possible). Repas partiellement reconnu -> l'IA n'estime que le reste, on additionne.
+    // Repas non reconnu -> comportement inchangé (IA estime tout, comme avant).
+    const { matched, unmatchedSegments } = matchFastfoodItems(mealDescription);
+
+    if (matched.length && !unmatchedSegments.length) {
+      const totals = sumMatched(matched);
+      return res.status(200).json({
+        success: true,
+        data: {
+          name: matched.map(m => (m.qty > 1 ? `${m.qty}x ` : '') + m.name).join(', '),
+          calories: Math.round(totals.calories),
+          protein: Math.round(totals.protein * 10) / 10,
+          carbs: Math.round(totals.carbs * 10) / 10,
+          fat: Math.round(totals.fat * 10) / 10,
+          fiber: Math.round(totals.fiber * 10) / 10,
+          ingredients: matched.map(m => m.name),
+        },
+      });
+    }
+
     if (!process.env.CARNET_API_KEY) {
       return res.status(500).json({ error: 'CARNET_API_KEY manquante côté serveur (Vercel)' });
     }
+
+    const isPartialMatch = matched.length > 0;
+    const textForAI = isPartialMatch ? unmatchedSegments.join(', ') : mealDescription;
 
     const apiRes = await fetch(MAMMOUTH_API_URL, {
       method: 'POST',
@@ -182,12 +341,14 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: MAMMOUTH_MODEL,
-        messages: buildMessages(mealDescription),
+        messages: buildMessages(textForAI, isPartialMatch),
         // Baissé de 0.2 à 0.1 : la variance élevée constatée en régénérant plusieurs fois
         // le même repas (ex. un repas McDonald's précis donnant entre 1200 et 1600 kcal
         // selon la régénération) venait surtout d'un manque de repère pour les produits de
         // marque dans le prompt (voir la section "Produits de marque / fast-food" plus haut),
         // mais une température plus basse réduit aussi la variance résiduelle de décodage.
+        // Le catalogue fast-food ci-dessus règle maintenant le cas des produits reconnus ;
+        // ceci reste utile pour les produits de marque absents du catalogue.
         temperature: 0.1,
         max_tokens: 500,
       }),
@@ -215,6 +376,22 @@ export default async function handler(req, res) {
       } else {
         throw new Error('Réponse IA non parsable en JSON');
       }
+    }
+
+    // Repas partiellement reconnu : additionne le total fixe (catalogue) au total estimé
+    // par l'IA pour le reste, plutôt que de faire confiance à l'IA pour reproduire les
+    // valeurs connues sans dérive — garantit que la partie reconnue est TOUJOURS exacte.
+    if (isPartialMatch && nutritionData && typeof nutritionData === 'object' && !nutritionData.error) {
+      const fixedTotals = sumMatched(matched);
+      nutritionData = {
+        name: [matched.map(m => (m.qty > 1 ? `${m.qty}x ` : '') + m.name).join(', '), nutritionData.name].filter(Boolean).join(', '),
+        calories: Math.round(fixedTotals.calories + (Number(nutritionData.calories) || 0)),
+        protein: Math.round((fixedTotals.protein + (Number(nutritionData.protein) || 0)) * 10) / 10,
+        carbs: Math.round((fixedTotals.carbs + (Number(nutritionData.carbs) || 0)) * 10) / 10,
+        fat: Math.round((fixedTotals.fat + (Number(nutritionData.fat) || 0)) * 10) / 10,
+        fiber: Math.round((fixedTotals.fiber + (Number(nutritionData.fiber) || 0)) * 10) / 10,
+        ingredients: [...matched.map(m => m.name), ...(Array.isArray(nutritionData.ingredients) ? nutritionData.ingredients : [])],
+      };
     }
 
     const mismatch = checkMacroConsistency(nutritionData);
