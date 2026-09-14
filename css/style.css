@@ -45,10 +45,7 @@
   header.top .brand .brand-ico{flex:0 0 22px; width:22px; height:22px; stroke:var(--green); fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;}
   header.top .brand small{display:block; font-weight:500; font-size:11px; color:var(--ink-soft); letter-spacing:.02em; margin-top:1px;}
 
-  main{flex:1; padding:0 16px 90px; overflow-y:auto; overscroll-behavior-y:contain;}
-
-  @keyframes mainTabIn{ from{opacity:0;} to{opacity:1;} }
-  main.tab-enter{ animation: mainTabIn .22s ease; }
+  main{flex:1; padding:0 16px 90px; overflow-y:auto;}
 
   .daybar{
     display:flex; align-items:center; justify-content:space-between;

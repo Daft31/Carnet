@@ -7,14 +7,6 @@ document.getElementById('tabs').addEventListener('click', e=>{
   }
   const b = e.target.closest('button[data-tab]'); if(!b) return;
   activeTab = b.dataset.tab; render();
-  const main = document.getElementById('main');
-  main.classList.remove('tab-enter');
-  void main.offsetWidth; // force reflow pour rejouer l'animation à chaque changement d'onglet
-  main.classList.add('tab-enter');
-  // Détache la classe une fois l'animation finie : #main est le conteneur qui scroll
-  // (overflow-y:auto), on ne veut jamais qu'une règle d'animation/transform y reste
-  // accrochée indéfiniment (déjà vu casser le scroll tactile sur mobile).
-  setTimeout(()=>main.classList.remove('tab-enter'), 250);
   document.getElementById('moreMenu').classList.remove('open');
   b.blur();
 });
