@@ -639,6 +639,48 @@ const SPORTS = [
 ];
 function sportById(id){ return SPORTS.find(s=>s.id===id) || SPORTS[0]; }
 
+/* ----- "Sport en club" : libellés de niveau propres à chaque discipline -----
+   Les 3 clés (loisir/semi/national) restent celles utilisées par CLUB_CATEGORY_MULT
+   plus bas (même calcul de calories, déjà vérifié) : seul le TEXTE affiché change pour
+   parler le vocabulaire réel de chaque sport plutôt qu'un "Loisir/Semi-amateur/National"
+   générique répété partout (demande utilisateur). Volontairement pas de code de
+   classement fédéral précis (numéros FFT, ceintures exactes, etc.) qu'on ne peut pas
+   garantir à jour — juste une terminologie reconnaissable. */
+const CLUB_LEVELS = {
+  football: [{key:'loisir',label:'Loisir / foot en salle'},{key:'semi',label:'Régional (District/Ligue)'},{key:'national',label:'National / Fédéral'}],
+  basketball: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Régional (Pré-national/Régionale)'},{key:'national',label:'National / Élite'}],
+  handball: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Régional'},{key:'national',label:'National'}],
+  rugby: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Régional (Fédérale 2-3)'},{key:'national',label:'National (Fédérale 1 et +)'}],
+  volleyball: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Régional'},{key:'national',label:'National'}],
+  tennis: [{key:'loisir',label:'Non classé / loisir'},{key:'semi',label:'Classé, compétiteur régional'},{key:'national',label:'Classé national'}],
+  badminton: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Classé, compétiteur régional'},{key:'national',label:'Classé national'}],
+  squash: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Compétiteur régional'},{key:'national',label:'Compétiteur national'}],
+  ping_pong: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Classé, compétiteur régional'},{key:'national',label:'Classé national'}],
+  padel: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Compétiteur régional'},{key:'national',label:'Compétiteur national'}],
+  boxe: [{key:'loisir',label:'Loisir (cardio-boxe)'},{key:'semi',label:'Amateur en club, combats régionaux'},{key:'national',label:'Compétiteur national'}],
+  judo: [{key:'loisir',label:'Loisir, sans compétition'},{key:'semi',label:'Compétiteur régional'},{key:'national',label:'Compétiteur national, haut niveau'}],
+  karate: [{key:'loisir',label:'Loisir, sans compétition'},{key:'semi',label:'Compétiteur régional'},{key:'national',label:'Compétiteur national'}],
+  mma: [{key:'loisir',label:'Loisir (cours technique)'},{key:'semi',label:'Amateur, combats régionaux'},{key:'national',label:'Compétiteur national / pro'}],
+  lutte: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Compétiteur régional'},{key:'national',label:'Compétiteur national'}],
+  natation: [{key:'loisir',label:'Loisir / Masters'},{key:'semi',label:'Compétiteur régional'},{key:'national',label:'Compétiteur national'}],
+  surf: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Compétiteur régional'},{key:'national',label:'Compétiteur national'}],
+  paddle: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Compétiteur régional'},{key:'national',label:'Compétiteur national'}],
+  voile: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Régatier régional'},{key:'national',label:'Régatier national'}],
+  ski: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Compétiteur régional (club)'},{key:'national',label:'Compétiteur national (FFS)'}],
+  snowboard: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Compétiteur régional (club)'},{key:'national',label:'Compétiteur national (FFS)'}],
+  course: [{key:'loisir',label:'Loisir / joggeur'},{key:'semi',label:'Coureur régulier, courses régionales'},{key:'national',label:'Compétiteur national'}],
+  cyclisme: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Cyclosportif, compétiteur régional'},{key:'national',label:'Compétiteur national (FFC)'}],
+  randonnee: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Randonneur sportif régulier'},{key:'national',label:'Trail / rando compétitive'}],
+  aviron: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Compétiteur régional'},{key:'national',label:'Compétiteur national'}],
+  roller_skate: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Compétiteur régional'},{key:'national',label:'Compétiteur national'}],
+  golf: [{key:'loisir',label:'Loisir (index élevé)'},{key:'semi',label:'Compétiteur club (index intermédiaire)'},{key:'national',label:'Compétiteur national / pro-am'}],
+  yoga_pilates: [{key:'loisir',label:'Débutant / loisir'},{key:'semi',label:'Pratique régulière avancée'},{key:'national',label:'Professeur / pratique intensive'}],
+  danse: [{key:'loisir',label:'Loisir'},{key:'semi',label:'Compétiteur régional (danse sportive)'},{key:'national',label:'Compétiteur national'}],
+  musculation: [{key:'loisir',label:'Loisir en club'},{key:'semi',label:'Amateur (powerlifting/bodybuilding régional)'},{key:'national',label:'Compétiteur national'}],
+  escalade: [{key:'loisir',label:'Loisir en club'},{key:'semi',label:'Compétiteur régional'},{key:'national',label:'Compétiteur national'}],
+};
+function clubLevelsFor(sportId){ return CLUB_LEVELS[sportId] || [{key:'loisir',label:'Loisir'},{key:'semi',label:'Semi-amateur'},{key:'national',label:'National'}]; }
+
 /* ----- "Sport en club" : MET par niveau compétitif, différenciés PAR FAMILLE de sport -----
    Le Compendium ne documente pas de paliers "loisir/semi-amateur/national" — ces
    multiplicateurs sont un raisonnement physiologique explicite (pas une formule unique
@@ -822,7 +864,7 @@ function workoutSummary(e){
     return {title:sportById(e.params?.sport).label, sub:`Intensité ${lbl} · ${e.duration} min · ${e.time}`};
   }
   if(e.wtype==='club'){
-    const lvlLbl = {loisir:'Loisir',semi:'Semi-amateur',national:'National'}[e.params?.level]||e.params?.level;
+    const lvlLbl = (clubLevelsFor(e.params?.sport).find(l=>l.key===e.params?.level)||{}).label || e.params?.level;
     const modeLbl = {entrainement:'Entraînement',match:'Match/compétition'}[e.params?.mode]||e.params?.mode;
     return {title:sportById(e.params?.sport).label+' (club)', sub:`${lvlLbl} · ${modeLbl} · ${e.duration} min · ${e.time}`};
   }
@@ -936,7 +978,7 @@ function viewWorkouts(){
           if(fav.type==='velo') return {k:'velo', lbl:'Vélo', hint:'Cyclisme', svg:VELO_SVG, favKey:favSportKey(fav)};
           if(fav.type==='sport') return {k:'sport', lbl:sportById(fav.sport).label, hint:'Favori', svg:SPORT_SVG, favKey:favSportKey(fav)};
           if(fav.type==='club'){
-            const lvlLbl = {loisir:'Loisir',semi:'Semi-amateur',national:'National'}[fav.level]||fav.level;
+            const lvlLbl = (clubLevelsFor(fav.sport).find(l=>l.key===fav.level)||{}).label || fav.level;
             return {k:'club', lbl:sportById(fav.sport).label, hint:`Club · ${lvlLbl}`, svg:CLUB_SVG, favKey:favSportKey(fav)};
           }
           return null;
@@ -995,9 +1037,7 @@ function viewWorkouts(){
       <label>Sport</label>
       <select id="wkSport">${SPORTS.map(s=>`<option value="${s.id}" ${wkParams.sport===s.id?'selected':''}>${escapeHtml(s.label)}</option>`).join('')}</select>
       <label>Niveau</label>
-      <div class="seg" id="wkClubLevelSeg">
-        ${[['loisir','Loisir'],['semi','Semi-amateur'],['national','National']].map(([k,l])=>`<button data-level="${k}" class="${wkParams.clubLevel===k?'active':''}">${l}</button>`).join('')}
-      </div>
+      <select id="wkClubLevel">${clubLevelsFor(wkParams.sport).map(l=>`<option value="${l.key}" ${wkParams.clubLevel===l.key?'selected':''}>${escapeHtml(l.label)}</option>`).join('')}</select>
       <label>Contexte</label>
       <div class="seg" id="wkClubModeSeg">
         ${[['entrainement','Entraînement'],['match','Match / compétition']].map(([k,l])=>`<button data-clubmode="${k}" class="${wkParams.clubMode===k?'active':''}">${l}</button>`).join('')}
@@ -1390,7 +1430,7 @@ function viewSettings(){
       else if(p.type==='velo') paramSub = `effort ${p.params.effort}`;
       else if(p.type==='renfo') paramSub = `intensité ${p.params.intensite}`; // rétrocompat anciens préréglages
       else if(p.type==='sport') paramSub = `${sportById(p.params.sport).label} · ${p.params.sportIntensity}`;
-      else if(p.type==='club') paramSub = `${sportById(p.params.sport).label} · ${p.params.clubLevel}`;
+      else if(p.type==='club') paramSub = `${sportById(p.params.sport).label} · ${(clubLevelsFor(p.params.sport).find(l=>l.key===p.params.clubLevel)||{}).label || p.params.clubLevel}`;
       return `<div class="list-entry">
         <div class="main"><div class="title">${escapeHtml(p.name)}</div><div class="sub">${typeLbl} · ${paramSub}</div></div>
         <button class="del" data-delpreset="${p.id}">✕</button>

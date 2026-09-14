@@ -355,8 +355,16 @@ function bindTabEvents(){
     document.querySelectorAll('#wkTapisModeSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkTapisMode=b.dataset.mode; render(); });
     document.querySelectorAll('#wkVeloSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.effort=b.dataset.effort; render(); });
     document.querySelectorAll('#wkSportIntSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.sportIntensity=b.dataset.int; render(); });
-    document.querySelectorAll('#wkClubLevelSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.clubLevel=b.dataset.level; render(); });
+    const clubLevelSel = document.getElementById('wkClubLevel');
+    if(clubLevelSel) clubLevelSel.addEventListener('change', ()=>{ captureWorkoutForm(); wkParams.clubLevel=clubLevelSel.value; updateEstimate(); });
     document.querySelectorAll('#wkClubModeSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.clubMode=b.dataset.clubmode; render(); });
+    // En mode club, changer de sport doit re-render (pas juste recalculer) : les
+    // libellés de niveau (#wkClubLevel) sont spécifiques à chaque discipline
+    // (CLUB_LEVELS dans core.js) et doivent être regénérés pour le nouveau sport.
+    if(wkType==='club'){
+      const clubSportSel = document.getElementById('wkSport');
+      if(clubSportSel) clubSportSel.addEventListener('change', ()=>{ captureWorkoutForm(); wkParams.sport=clubSportSel.value; render(); });
+    }
     const updateEstimate = ()=>{
       try{
         captureWorkoutForm();
@@ -389,7 +397,9 @@ function bindTabEvents(){
         num.classList.toggle('over', kcal > settings.calorieGoal);
       }catch(e){}
     };
-    ['wkVitesse','wkPente','wkDuree','wkPas','wkSport'].forEach(id=>{
+    // wkSport en mode club est câblé séparément ci-dessus (doit re-render, pas juste
+    // recalculer, pour régénérer les libellés de niveau propres au sport choisi).
+    ['wkVitesse','wkPente','wkDuree','wkPas', ...(wkType==='club' ? [] : ['wkSport'])].forEach(id=>{
       const el = document.getElementById(id);
       if(el){ el.addEventListener('input', updateEstimate); el.addEventListener('change', updateEstimate); }
     });
