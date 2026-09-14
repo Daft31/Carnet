@@ -1,4 +1,10 @@
 document.getElementById('tabs').addEventListener('click', e=>{
+  const fabBtn = e.target.closest('#fabAdd');
+  if(fabBtn){
+    openFabMenu();
+    fabBtn.blur();
+    return;
+  }
   const moreBtn = e.target.closest('#moreToggle');
   if(moreBtn){
     document.getElementById('moreMenu').classList.toggle('open');
@@ -6,14 +12,9 @@ document.getElementById('tabs').addEventListener('click', e=>{
     return;
   }
   const b = e.target.closest('button[data-tab]'); if(!b) return;
-  activeTab = b.dataset.tab; render();
-  // La position de scroll ne se réinitialise pas toute seule au changement d'onglet
-  // (remplacer main.innerHTML ne touche pas au scroll de la fenêtre) : sans ce reset,
-  // on atterrit sur le nouvel onglet à la position laissée par le précédent, ce qui,
-  // sur un onglet plus court, donne l'impression d'être bloqué en bas de page.
-  window.scrollTo(0, 0);
-  document.getElementById('main').scrollTop = 0;
-  document.getElementById('moreMenu').classList.remove('open');
+  // switchTab() (js/core.js) fait le render() + reset de scroll — voir sa note pour
+  // pourquoi ce reset est nécessaire et pourquoi il ne doit pas vivre dans render().
+  switchTab(b.dataset.tab);
   b.blur();
 });
 document.addEventListener('click', e=>{

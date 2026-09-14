@@ -200,6 +200,20 @@ function render(){
   bindTabEvents();
 }
 
+// Change d'onglet par programme (clic direct sur un onglet, ou action rapide type
+// bouton + flottant) : centralise le reset de scroll et la fermeture du sous-menu
+// "Plus". Le scroll ici est celui de la PAGE (window/#main), pas un scroll interne
+// à #main — voir la note dédiée dans CLAUDE.md avant d'y toucher. Ne pas appeler
+// ceci depuis render() elle-même (rendus internes à un même onglet : ajout d'un
+// repas, coche d'une case… où on ne veut surtout pas sauter en haut de page).
+function switchTab(tab){
+  activeTab = tab; render();
+  window.scrollTo(0, 0);
+  document.getElementById('main').scrollTop = 0;
+  const moreMenu = document.getElementById('moreMenu');
+  if(moreMenu) moreMenu.classList.remove('open');
+}
+
 function dayBar(){
   return `<div class="daybar">
     <button data-act="prevday">‹</button>
@@ -397,13 +411,65 @@ function viewToday(){
   </section>
   <section class="card">
     <h2>Journal du jour</h2>
+    ${MEAL_SLOTS.map(s=>journalSlotCard(currentDate, s)).join('')}
     ${(()=>{
-      const n = entriesFor(currentDate).filter(e=>e.type!=='note').length;
-      if(!n) return '<div class="empty">Rien enregistré ce jour-là.</div>';
-      return `<button class="settings-toggle" data-toggle="todayLog" type="button">${openTodayLog?'Masquer ▲':'Voir le détail ▼'} (${n})</button>
-        ${openTodayLog ? dayLogList(currentDate) : ''}`;
+      // Séances et notes du jour restent dans un détail repliable : les séances ont
+      // déjà leur propre liste dans l'onglet Séances, donc pas besoin de les dupliquer
+      // ici en clair — juste un accès rapide sans quitter Aujourd'hui.
+      const n = entriesFor(currentDate).filter(e=>e.type==='workout'||e.type==='note').length;
+      if(!n) return '';
+      return `<button class="settings-toggle" data-toggle="todayLog" type="button">${openTodayLog?'Masquer ▲':'Séances & notes du jour ▼'} (${n})</button>
+        ${openTodayLog ? otherLogList(currentDate) : ''}`;
     })()}
   </section>`;
+}
+
+// Icône décorative par créneau, purement visuelle (aucune donnée n'en dépend).
+const MEAL_SLOT_ICON = {'Petit-déj':'🌅','Déjeuner':'🍽️','Dîner':'🌙','Collation':'🍎'};
+
+// Carte "Journal du jour" par créneau repas (inspirée de la vue Journal de MFP) :
+// affiche ce qui est déjà loggué pour ce créneau ce jour-là, ou un état vide avec
+// un bouton d'ajout rapide qui présélectionne le créneau (quickAddToSlot, js/ui.js)
+// et réutilise le flux de recherche d'aliment existant de l'onglet Repas.
+function journalSlotCard(date, slot){
+  const es = entriesFor(date).filter(e=>e.type==='meal' && e.mealSlot===slot).sort((a,b)=>a.time.localeCompare(b.time));
+  const kcal = Math.round(es.reduce((s,e)=>s+e.kcal,0));
+  const rows = es.map(e=>`
+    <div class="list-entry enter">
+      <div class="main"><div class="title">${escapeHtml(e.foodName)}</div><div class="sub">${e.grams!=null ? e.grams+' g' : 'estimé IA'} · ${e.time}</div></div>
+      <div class="amount blue">+${Math.round(e.kcal)}</div>
+      <button class="del" data-del="${e.id}">✕</button>
+    </div>`).join('');
+  return `<div class="journal-slot">
+    <div class="journal-slot-head">
+      <div class="journal-slot-title"><span class="jsico">${MEAL_SLOT_ICON[slot]||'🍽️'}</span>${slot}</div>
+      <div class="journal-slot-right">
+        ${es.length ? `<span class="journal-slot-kcal">${kcal} kcal</span>` : ''}
+        <button class="journal-slot-add" data-quickslot="${slot}" type="button" title="Ajouter à ${slot}" aria-label="Ajouter à ${slot}">+</button>
+      </div>
+    </div>
+    ${es.length ? rows : `<div class="empty">Rien pour l'instant.</div>`}
+  </div>`;
+}
+
+// Détail repliable des séances/notes du jour (les repas sont désormais affichés
+// via journalSlotCard ci-dessus, pas besoin de les répéter ici).
+function otherLogList(date){
+  const es = entriesFor(date).filter(e=>e.type==='workout'||e.type==='note').sort((a,b)=>a.time.localeCompare(b.time));
+  if(!es.length) return `<div class="empty">Rien enregistré ce jour-là.</div>`;
+  return es.map(e=>{
+    if(e.type==='note'){
+      return `<div class="list-entry enter"><div class="main"><div class="title">Note · ${e.time}</div><div class="sub">${escapeHtml(e.text||'')}</div></div>
+        <button class="del" data-del="${e.id}">✕</button>
+      </div>`;
+    }
+    const s = workoutSummary(e);
+    return `<div class="list-entry enter">
+      <div class="main"><div class="title">${s.title}</div><div class="sub">${s.sub}</div></div>
+      <div class="amount rust">−${Math.round(e.kcalBurned)}</div>
+      <button class="del" data-del="${e.id}">✕</button>
+    </div>`;
+  }).join('');
 }
 
 function dayLogList(date){
@@ -432,6 +498,7 @@ function dayLogList(date){
 
 function escapeHtml(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
+const MEAL_SLOTS = ['Petit-déj','Déjeuner','Dîner','Collation'];
 let mealSearchQ = '';
 let mealSlot = 'Déjeuner';
 let workoutPresets = LS.get('ct_wpresets', []);
@@ -585,7 +652,7 @@ function viewMeals(){
     </div>
     <label>Repas</label>
     <div class="seg" id="mealseg">
-      ${['Petit-déj','Déjeuner','Dîner','Collation'].map(s=>`<button data-slot="${s}" class="${mealSlot===s?'active':''}">${s}</button>`).join('')}
+      ${MEAL_SLOTS.map(s=>`<button data-slot="${s}" class="${mealSlot===s?'active':''}">${s}</button>`).join('')}
     </div>
     <label>Chercher un aliment</label>
     <input id="foodsearch" type="text" placeholder="riz, poulet, yaourt…" value="${escapeHtml(mealSearchQ)}" autocomplete="off">

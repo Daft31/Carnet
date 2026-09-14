@@ -16,6 +16,54 @@ function closeModal(){
   }, 180);
 }
 
+/* ===================== BOUTON + FLOTTANT (accès rapide, tous onglets) ===================== */
+// Sheet de raccourcis vers les flux d'ajout déjà existants (repas/IA/scan/séance/
+// pesée) : ne duplique aucune logique, se contente de fermer la sheet puis de
+// rouvrir la modale existante ou de basculer vers l'onglet concerné — même pattern
+// que le reste de l'appli (closeModal() avant de rouvrir/render, cf. scanner.js).
+function openFabMenu(){
+  openModal(`
+    <h3>Ajouter</h3>
+    <div class="fab-menu">
+      <button class="fab-menu-item" id="fabMeal" type="button">
+        <span class="fmi-ico">🍽️</span><span class="fmi-txt"><b>Repas</b><small>Chercher un aliment</small></span>
+      </button>
+      <button class="fab-menu-item" id="fabAi" type="button">
+        <span class="fmi-ico">🤖</span><span class="fmi-txt"><b>Décrire un repas</b><small>Estimation par IA</small></span>
+      </button>
+      <button class="fab-menu-item" id="fabScan" type="button">
+        <span class="fmi-ico">📷</span><span class="fmi-txt"><b>Scanner</b><small>Code-barres produit</small></span>
+      </button>
+      <button class="fab-menu-item" id="fabWorkout" type="button">
+        <span class="fmi-ico">🏃</span><span class="fmi-txt"><b>Séance</b><small>Tapis, vélo, renfo…</small></span>
+      </button>
+      <button class="fab-menu-item" id="fabWeight" type="button">
+        <span class="fmi-ico">⚖️</span><span class="fmi-txt"><b>Pesée</b><small>Poids du jour</small></span>
+      </button>
+    </div>
+  `);
+  document.getElementById('fabMeal').onclick = ()=>{
+    closeModal(); switchTab('meals');
+    setTimeout(()=>document.getElementById('foodsearch')?.focus(), 0);
+  };
+  document.getElementById('fabAi').onclick = ()=>{ closeModal(); openAIDescribeModal(); };
+  document.getElementById('fabScan').onclick = ()=>{ closeModal(); openScannerModal(); };
+  document.getElementById('fabWorkout').onclick = ()=>{ closeModal(); switchTab('workouts'); };
+  document.getElementById('fabWeight').onclick = ()=>{
+    closeModal(); switchTab('weight');
+    setTimeout(()=>document.getElementById('wWeight')?.focus(), 0);
+  };
+}
+
+// Raccourci depuis une carte de créneau du "Journal du jour" (onglet Aujourd'hui) :
+// présélectionne le créneau puis bascule vers Repas, comme un clic manuel sur le
+// segment de créneau suivi d'un clic dans la recherche — même flux, juste plus vite.
+function quickAddToSlot(slot){
+  mealSlot = slot;
+  switchTab('meals');
+  setTimeout(()=>document.getElementById('foodsearch')?.focus(), 0);
+}
+
 // Survol des graphiques (onglet Poids) : crosshair + tooltip listant chaque série au point le plus proche.
 function bindChartHover(wrapId, points, seriesDefs){
   const wrap = document.getElementById(wrapId);
@@ -224,6 +272,7 @@ function bindTabEvents(){
   document.querySelectorAll('[data-jumpdate]').forEach(b=>b.onclick=()=>{ currentDate=b.dataset.jumpdate; render(); });
   const todayLogToggle = document.querySelector('[data-toggle="todayLog"]');
   if(todayLogToggle) todayLogToggle.onclick = ()=>{ openTodayLog = !openTodayLog; render(); };
+  document.querySelectorAll('[data-quickslot]').forEach(b=>b.onclick=()=>{ quickAddToSlot(b.dataset.quickslot); });
 
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     logEntries = logEntries.filter(e=>e.id!==b.dataset.del); save(); render();
