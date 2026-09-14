@@ -558,11 +558,9 @@ let mealSlot = 'Déjeuner';
 let workoutPresets = LS.get('ct_wpresets', []);
 let wkType = 'tapis';
 let wkTapisMode = 'duree';
-let wkParams = {vitesse:'', pente:'', effort:'modere', intensite:'moderee'};
+let wkParams = {vitesse:'', pente:'', effort:'modere', intensite:'moderee', sport:'football', sportIntensity:'modere', clubLevel:'loisir', clubMode:'entrainement'};
 let wkDuration = '';
 let wkSteps = '';
-let wkText = '';
-let wkManualKcal = '';
 function getCurrentWeight(){
   const sorted = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date));
   return sorted.length ? sorted[0].weight : null;
@@ -574,7 +572,109 @@ function metTapis(vKmh, pentePct){
   return Math.max(1, vo2/3.5);
 }
 const VELO_MET = {leger:4.5, modere:6.8, soutenu:8, intense:10};
-const RENFO_MET = {faible:3.5, moderee:5, forte:8};
+const RENFO_MET = {faible:3.5, moderee:5, forte:8}; // conservé pour compat descendante des séances 'renfo' déjà enregistrées — plus utilisé par l'UI (types "Renfo"/"Manuel" retirés du sélecteur, remplacés par "Choisis ton sport" (dont l'entrée "Musculation") et "Sport en club")
+
+/* ===================== SPORTS (Choisis ton sport / Sport en club) =====================
+   Source des MET "casual" (mode "Choisis ton sport") : Compendium of Physical Activities
+   (Ainsworth et al., 2011), la référence scientifique standard utilisée par la plupart des
+   trackers fitness. Ce ne sont PAS des valeurs inventées : ce sont les MET usuels/arrondis
+   des codes Compendium les plus proches de chaque discipline (ex. football 15680/15690,
+   basketball 15530/15540/15550, natation 18310-18360, course à pied 12020-12090, cyclisme
+   01010-01040, tennis 15675, squash 15680, escrime non listée→approximée à partir d'escrime
+   compétitive ~6 MET, etc.), simplifiés à 3 paliers d'intensité génériques (léger/modéré/
+   intense) par sport pour rester utilisable dans un formulaire simple.
+   Le "Musculation" listée ici correspond à la musculation en salle générique (poids libres/
+   machines) — c'est un sport du catalogue comme un autre, pas un type de séance à part.
+   Arts martiaux : plutôt que de couvrir chaque discipline de combat séparément (boxe, judo,
+   karaté, MMA, lutte ont chacune leur propre progression loisir→national très différente,
+   cf. `metSportClub` plus bas), elles sont bien détaillées individuellement ci-dessous —
+   volume jugé raisonnable vu leurs physiologies très différentes (percussion vs préhension/
+   lutte vs MMA mixte). */
+const SPORTS = [
+  // Sports collectifs
+  {id:'football', label:'Football', cat:'collectif', casual:{leger:5.0, modere:7.0, intense:10.0}},
+  {id:'basketball', label:'Basketball', cat:'collectif', casual:{leger:4.5, modere:6.5, intense:8.0}},
+  {id:'handball', label:'Handball', cat:'collectif', casual:{leger:4.0, modere:8.0, intense:12.0}},
+  {id:'rugby', label:'Rugby', cat:'collectif', casual:{leger:6.0, modere:8.3, intense:10.0}},
+  {id:'volleyball', label:'Volleyball', cat:'collectif', casual:{leger:3.0, modere:4.0, intense:8.0}},
+  // Sports de raquette
+  {id:'tennis', label:'Tennis', cat:'raquette', casual:{leger:5.0, modere:7.3, intense:8.0}},
+  {id:'badminton', label:'Badminton', cat:'raquette', casual:{leger:4.5, modere:5.5, intense:7.0}},
+  {id:'squash', label:'Squash', cat:'raquette', casual:{leger:5.5, modere:7.3, intense:10.0}},
+  {id:'ping_pong', label:'Tennis de table (ping-pong)', cat:'raquette', casual:{leger:3.0, modere:4.0, intense:6.0}},
+  {id:'padel', label:'Padel', cat:'raquette', casual:{leger:4.0, modere:5.5, intense:7.0}},
+  // Sports de combat
+  {id:'boxe', label:'Boxe', cat:'combat', casual:{leger:5.5, modere:7.8, intense:12.8}},
+  {id:'judo', label:'Judo', cat:'combat', casual:{leger:6.0, modere:8.0, intense:10.3}},
+  {id:'karate', label:'Karaté', cat:'combat', casual:{leger:6.0, modere:8.0, intense:10.3}},
+  {id:'mma', label:'MMA', cat:'combat', casual:{leger:6.5, modere:9.0, intense:12.0}},
+  {id:'lutte', label:'Lutte', cat:'combat', casual:{leger:5.5, modere:7.5, intense:9.5}},
+  // Sports nautiques
+  {id:'natation', label:'Natation', cat:'nautique', casual:{leger:5.8, modere:8.3, intense:9.8}},
+  {id:'surf', label:'Surf', cat:'nautique', casual:{leger:3.0, modere:5.0, intense:6.0}},
+  {id:'paddle', label:'Paddle (SUP)', cat:'nautique', casual:{leger:3.5, modere:6.0, intense:8.3}},
+  {id:'voile', label:'Voile', cat:'nautique', casual:{leger:3.0, modere:4.5, intense:6.0}},
+  // Sports d'hiver
+  {id:'ski', label:'Ski alpin', cat:'hiver', casual:{leger:5.3, modere:6.8, intense:8.0}},
+  {id:'snowboard', label:'Snowboard', cat:'hiver', casual:{leger:5.3, modere:6.8, intense:8.0}},
+  // Sports individuels / endurance
+  {id:'course', label:'Course à pied', cat:'endurance', casual:{leger:7.0, modere:9.8, intense:12.8}},
+  {id:'cyclisme', label:'Cyclisme (loisir)', cat:'endurance', casual:{leger:4.0, modere:6.8, intense:8.0}},
+  {id:'randonnee', label:'Randonnée', cat:'endurance', casual:{leger:4.3, modere:6.0, intense:7.8}},
+  {id:'aviron', label:'Aviron (machine)', cat:'endurance', casual:{leger:3.5, modere:7.0, intense:8.5}},
+  {id:'roller_skate', label:'Roller / skateboard', cat:'endurance', casual:{leger:5.0, modere:7.0, intense:9.8}},
+  // Technique / faible intensité
+  {id:'golf', label:'Golf', cat:'technique', casual:{leger:3.5, modere:4.8, intense:6.0}},
+  {id:'yoga_pilates', label:'Yoga / Pilates', cat:'technique', casual:{leger:2.5, modere:3.3, intense:4.0}},
+  {id:'danse', label:'Danse', cat:'technique', casual:{leger:3.0, modere:4.8, intense:7.3}},
+  // Force
+  {id:'musculation', label:'Musculation', cat:'force', casual:{leger:3.0, modere:5.0, intense:6.0}},
+  {id:'escalade', label:'Escalade', cat:'force', casual:{leger:5.8, modere:7.5, intense:9.0}},
+];
+function sportById(id){ return SPORTS.find(s=>s.id===id) || SPORTS[0]; }
+
+/* ----- "Sport en club" : MET par niveau compétitif, différenciés PAR FAMILLE de sport -----
+   Le Compendium ne documente pas de paliers "loisir/semi-amateur/national" — ces
+   multiplicateurs sont un raisonnement physiologique explicite (pas une formule unique
+   plaquée partout), appliqué au MET "intense" (le palier casual le plus réaliste pour une
+   pratique sérieuse) de chaque discipline :
+   - `collectif` (foot/basket/hand/rugby/volley) : sports intermittents à sprints répétés —
+     l'écart loisir→national est marqué (VO2max et capacité à répéter les efforts très
+     supérieurs en national) et le match est nettement plus explosif que l'entraînement
+     technique (davantage d'accélérations/sprints en match réel qu'à l'entraînement).
+   - `combat` (boxe/judo/karaté/MMA/lutte) : au niveau national l'effort en compétition est
+     quasi maximal (rounds/combats à haute intensité soutenue) — écart le plus marqué de
+     toutes les catégories, et le combat/compétition est bien plus intense que l'entraînement
+     technique/randori.
+   - `raquette` (tennis/badminton/squash/ping-pong/padel) : sports techniques où le gain
+     principal du niveau est l'efficacité de déplacement plus que le métabolisme brut — écart
+     modéré loisir→national, match un peu plus intense qu'entraînement (rallyes plus longs).
+   - `endurance` (course/cyclisme/rando/aviron/roller) : à niveau national, un athlète
+     soutient un %VO2max bien plus élevé sur la même durée — écart important, et la
+     "compétition" (course) est nettement plus intense qu'une sortie d'entraînement.
+   - `nautique`/`hiver` : sports très techniques/dépendants des conditions — l'écart de
+     dépense énergétique entre niveaux reste modeste, la compétition un peu plus intense.
+   - `technique` (golf/yoga-pilates/danse) : l'intensité physique croît peu avec le niveau
+     (le geste devient plus précis, pas plus cardio) — écart faible entre niveaux.
+   - `force` (musculation/escalade) : le niveau national soulève/grimpe plus lourd/dur à
+     volume comparable — écart notable, la compétition (peu fréquente) un peu plus intense
+     que l'entraînement standard. */
+const CLUB_CATEGORY_MULT = {
+  collectif:  {level:{loisir:1.0, semi:1.25, national:1.55}, mode:{entrainement:1.0, match:1.25}},
+  combat:     {level:{loisir:1.0, semi:1.3,  national:1.65}, mode:{entrainement:1.0, match:1.3}},
+  raquette:   {level:{loisir:1.0, semi:1.2,  national:1.4},  mode:{entrainement:1.0, match:1.15}},
+  endurance:  {level:{loisir:1.0, semi:1.25, national:1.55}, mode:{entrainement:1.0, match:1.2}},
+  nautique:   {level:{loisir:1.0, semi:1.15, national:1.3},  mode:{entrainement:1.0, match:1.1}},
+  hiver:      {level:{loisir:1.0, semi:1.15, national:1.3},  mode:{entrainement:1.0, match:1.1}},
+  technique:  {level:{loisir:1.0, semi:1.1,  national:1.2},  mode:{entrainement:1.0, match:1.05}},
+  force:      {level:{loisir:1.0, semi:1.2,  national:1.4},  mode:{entrainement:1.0, match:1.15}},
+};
+function metSportCasual(sportId, intensity){ return (sportById(sportId).casual||{})[intensity] ?? sportById(sportId).casual.modere; }
+function metSportClub(sportId, level, mode){
+  const sport = sportById(sportId);
+  const mult = CLUB_CATEGORY_MULT[sport.cat] || CLUB_CATEGORY_MULT.collectif;
+  return sport.casual.intense * (mult.level[level]||1) * (mult.mode[mode]||1);
+}
 function exerciseNumber(name){ const q=normalizeSearch(name); return EXERCISES.find(x=>normalizeSearch(x.name||'').includes(q)||normalizeSearch(x['Français']||'').includes(q)||normalizeSearch(x['English']||'').includes(q)); }
 function exerciseMatches(text){
   const q=normalizeSearch(text); const aliases={tractions:'pull_up',traction:'pull_up',pompes:'push_up',pompe:'push_up',squats:'bodyweight_squat',squat:'bodyweight_squat',burpees:'burpee',burpee:'burpee',gainage:'plank',planche:'plank'};
@@ -632,7 +732,9 @@ function computeWorkoutKcal(type, params, durationMin, weight){
   let met = 1;
   if(type==='tapis') met = metTapis(params.vitesse, params.pente);
   else if(type==='velo') met = VELO_MET[params.effort]||6.8;
-  else if(type==='renfo') met = RENFO_MET[params.intensite]||5;
+  else if(type==='renfo') met = RENFO_MET[params.intensite]||5; // rétrocompat affichage/anciennes séances uniquement
+  else if(type==='sport') met = metSportCasual(params.sport, params.intensity);
+  else if(type==='club') met = metSportClub(params.sport, params.level, params.mode);
   return met * weight * h;
 }
 function stepsToDurationMin(steps, vitesseKmh, heightCm){
@@ -644,7 +746,7 @@ function stepsToDurationMin(steps, vitesseKmh, heightCm){
 function workoutSummary(e){
   // Séance importée via "Coller un programme (IA)" (js/workoutparser.js) :
   // structure blocks/exercices + durée estimée, indépendante des types
-  // tapis/vélo/renfo/manuel ci-dessous (rétrocompatibilité : les séances plus
+  // tapis/vélo/sport/club/renfo/manuel ci-dessous (rétrocompatibilité : les séances plus
   // anciennes n'ont jamais de champ `blocks`, donc cette branche ne les
   // concerne jamais).
   if(Array.isArray(e.blocks) && e.blocks.length){
@@ -670,6 +772,15 @@ function workoutSummary(e){
   if(e.wtype==='renfo'){
     const lbl = {faible:'faible',moderee:'modérée',forte:'forte'}[e.params.intensite]||e.params.intensite;
     return {title:'Renfo', sub:`Intensité ${lbl}${e.duration? ' · '+e.duration+' min':''} · ${e.time}${e.text? ' · '+escapeHtml(e.text).slice(0,60):''}`};
+  }
+  if(e.wtype==='sport'){
+    const lbl = {leger:'léger',modere:'modéré',intense:'intense'}[e.params?.intensity]||e.params?.intensity;
+    return {title:sportById(e.params?.sport).label, sub:`Intensité ${lbl} · ${e.duration} min · ${e.time}`};
+  }
+  if(e.wtype==='club'){
+    const lvlLbl = {loisir:'Loisir',semi:'Semi-amateur',national:'National'}[e.params?.level]||e.params?.level;
+    const modeLbl = {entrainement:'Entraînement',match:'Match/compétition'}[e.params?.mode]||e.params?.mode;
+    return {title:sportById(e.params?.sport).label+' (club)', sub:`${lvlLbl} · ${modeLbl} · ${e.duration} min · ${e.time}`};
   }
   const d=e.estimation; const detail=d ? ` · reconnus: ${d.recognized.map(x=>x.name).join(', ')||'aucun'}${d.unrecognized.length?' · non reconnus: '+d.unrecognized.join(', '):''} · kcal/min médiane: ${d.kcalPerMin==null?'valeur manquante':d.kcalPerMin}` : '';
   return {title:'Séance', sub:`${escapeHtml(e.text||'')}${e.duration? ' · '+e.duration+' min':''} · ${e.time}${detail}`};
@@ -764,15 +875,15 @@ function viewWorkouts(){
   ${dayBar()}
   <section class="card">
     <h2>Nouvelle séance</h2>
-    ${!weight ? `<div class="hint">Ajoute une pesée dans l'onglet Poids pour activer le calcul auto des calories (tapis/vélo/renfo). En attendant, utilise le mode "Manuel".</div>` : ''}
-    <button class="btn ghost" id="pasteWorkoutBtn" type="button">📋 Coller un programme (IA)</button>
+    ${!weight ? `<div class="hint">Ajoute une pesée dans l'onglet Poids pour activer le calcul auto des calories (tapis/vélo/sport/club). En attendant, utilise "Saisie manuelle (IA)".</div>` : ''}
     <label>Type de séance</label>
     <div class="wk-cards" id="wkTypeSeg">
       ${[
         {k:'tapis', lbl:'Tapis', hint:'Marche/course', svg:'<path d="M3 12h2M7 12h1M11 12h2M15 12h1M19 12h2M3 18h18M5 18v2M19 18v2M5 20h14"/>'},
         {k:'velo',  lbl:'Vélo',  hint:'Cyclisme',     svg:'<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17l3-7h6l3 7M9 10l-2-4h3"/>'},
-        {k:'renfo', lbl:'Renfo', hint:'Musculation',  svg:'<path d="M4 12h2M8 12v-2M8 12v2M12 12v-3M12 12v3M16 12v-2M16 12v2M20 12h-2"/>'},
-        {k:'manuel',lbl:'Manuel',hint:'Notes libres', svg:'<path d="M5 4h11l4 4v12H5z"/><path d="M15 4v4h4M8 12h8M8 16h5"/>'}
+        {k:'sport', lbl:'Choisis ton sport', hint:'Loisir/ponctuel', svg:'<circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M6 6l12 12M18 6L6 18"/>'},
+        {k:'club',  lbl:'Sport en club', hint:'Régulier/encadré', svg:'<path d="M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z"/>'},
+        {k:'ia',    lbl:'Saisie manuelle (IA)', hint:'Coller un programme', svg:'<path d="M5 4h11l4 4v12H5z"/><path d="M15 4v4h4M8 12h8M8 16h5"/>'}
       ].map(o=>`<button class="wk-card ${wkType===o.k?'active':''}" data-type="${o.k}"><div class="ico"><svg viewBox="0 0 24 24">${o.svg}</svg></div><div><div class="lbl">${o.lbl}</div><div class="hint">${o.hint}</div></div></button>`).join('')}
     </div>
 
@@ -805,27 +916,32 @@ function viewWorkouts(){
       <label>Durée (min)</label><input id="wkDuree" type="number" value="${wkDuration}">
     ` : ''}
 
-    ${wkType==='renfo' ? `
+    ${wkType==='sport' ? `
+      <label>Sport</label>
+      <select id="wkSport">${SPORTS.map(s=>`<option value="${s.id}" ${wkParams.sport===s.id?'selected':''}>${escapeHtml(s.label)}</option>`).join('')}</select>
       <label>Intensité</label>
-      <div class="seg" id="wkRenfoSeg">
-        ${[['faible','Faible'],['moderee','Modérée'],['forte','Forte']].map(([k,l])=>`<button data-int="${k}" class="${wkParams.intensite===k?'active':''}">${l}</button>`).join('')}
+      <div class="seg" id="wkSportIntSeg">
+        ${[['leger','Léger'],['modere','Modéré'],['intense','Intense']].map(([k,l])=>`<button data-int="${k}" class="${wkParams.sportIntensity===k?'active':''}">${l}</button>`).join('')}
       </div>
       <label>Durée (min)</label><input id="wkDuree" type="number" value="${wkDuration}">
-      <label>Notes (exercices, séries, reps…, optionnel)</label>
-      <textarea id="wkText" placeholder="Squat 4x8 80kg&#10;Presse 3x12 120kg…">${escapeHtml(wkText)}</textarea>
     ` : ''}
 
-    ${wkType==='manuel' ? `
-      <label>Notes (optionnel)</label>
-      <textarea id="wkText" placeholder="Description libre…">${escapeHtml(wkText)}</textarea>
-      <div class="row2">
-        <div><label>Calories brûlées (optionnel)</label><input id="wkKcal" type="number" value="${wkManualKcal}"><div class="hint">Si vide, calcul médian depuis la bibliothèque (EMOM, AMRAP, Tabata, circuits, tours/cycles/boucles). Les exercices non reconnus et valeurs manquantes seront signalés après enregistrement.</div></div>
-        <div><label>Durée (min, optionnel)</label><input id="wkDurManual" type="number" value="${wkDuration}"></div>
+    ${wkType==='club' ? `
+      <label>Sport</label>
+      <select id="wkSport">${SPORTS.map(s=>`<option value="${s.id}" ${wkParams.sport===s.id?'selected':''}>${escapeHtml(s.label)}</option>`).join('')}</select>
+      <label>Niveau</label>
+      <div class="seg" id="wkClubLevelSeg">
+        ${[['loisir','Loisir'],['semi','Semi-amateur'],['national','National']].map(([k,l])=>`<button data-level="${k}" class="${wkParams.clubLevel===k?'active':''}">${l}</button>`).join('')}
       </div>
+      <label>Contexte</label>
+      <div class="seg" id="wkClubModeSeg">
+        ${[['entrainement','Entraînement'],['match','Match / compétition']].map(([k,l])=>`<button data-clubmode="${k}" class="${wkParams.clubMode===k?'active':''}">${l}</button>`).join('')}
+      </div>
+      <label>Durée (min)</label><input id="wkDuree" type="number" value="${wkDuration}">
     ` : ''}
 
-    <button class="btn rust" id="saveWorkout">Enregistrer la séance</button>
-    ${wkType!=='manuel' ? `<button class="btn ghost" id="savePresetBtn">★ Enregistrer ces réglages comme préréglage</button>` : ''}
+    ${wkType!=='ia' ? `<button class="btn rust" id="saveWorkout">Enregistrer la séance</button>
+    <button class="btn ghost" id="savePresetBtn">★ Enregistrer ces réglages comme préréglage</button>` : ''}
     <div class="wk-estimate" id="wkEstimate">
       <div class="num" id="wkEstimateNum">—</div>
       <div class="lbl">kcal estimés en temps réel (d'après ton poids, ta durée, l'intensité)</div>
@@ -1203,11 +1319,13 @@ function viewSettings(){
   <section class="card">
     <h2>Préréglages de séances (${workoutPresets.length})</h2>
     ${workoutPresets.length? workoutPresets.map(p=>{
-      const typeLbl = {tapis:'Tapis incliné',velo:'Vélo',renfo:'Renfo'}[p.type]||p.type;
+      const typeLbl = {tapis:'Tapis incliné',velo:'Vélo',renfo:'Renfo',sport:'Choisis ton sport',club:'Sport en club'}[p.type]||p.type;
       let paramSub = '';
       if(p.type==='tapis') paramSub = `${p.params.vitesse}km/h · ${p.params.pente}%`;
       else if(p.type==='velo') paramSub = `effort ${p.params.effort}`;
-      else if(p.type==='renfo') paramSub = `intensité ${p.params.intensite}`;
+      else if(p.type==='renfo') paramSub = `intensité ${p.params.intensite}`; // rétrocompat anciens préréglages
+      else if(p.type==='sport') paramSub = `${sportById(p.params.sport).label} · ${p.params.sportIntensity}`;
+      else if(p.type==='club') paramSub = `${sportById(p.params.sport).label} · ${p.params.clubLevel}`;
       return `<div class="list-entry">
         <div class="main"><div class="title">${escapeHtml(p.name)}</div><div class="sub">${typeLbl} · ${paramSub}</div></div>
         <button class="del" data-delpreset="${p.id}">✕</button>

@@ -38,7 +38,7 @@ function openFabMenu(){
         <span class="fmi-ico">🎬</span><span class="fmi-txt"><b>Importer une recette</b><small>Depuis un lien TikTok</small></span>
       </button>
       <button class="fab-menu-item" id="fabWorkout" type="button">
-        <span class="fmi-ico">🏃</span><span class="fmi-txt"><b>Séance</b><small>Tapis, vélo, renfo…</small></span>
+        <span class="fmi-ico">🏃</span><span class="fmi-txt"><b>Séance</b><small>Tapis, vélo, sport…</small></span>
       </button>
       <button class="fab-menu-item" id="fabWeight" type="button">
         <span class="fmi-ico">⚖️</span><span class="fmi-txt"><b>Pesée</b><small>Poids du jour</small></span>
@@ -196,11 +196,12 @@ function openPresetNameModal(){
     let params = {};
     if(wkType==='tapis') params = {vitesse:wkParams.vitesse, pente:wkParams.pente};
     else if(wkType==='velo') params = {effort:wkParams.effort};
-    else if(wkType==='renfo') params = {intensite:wkParams.intensite};
+    else if(wkType==='sport') params = {sport:wkParams.sport, sportIntensity:wkParams.sportIntensity};
+    else if(wkType==='club') params = {sport:wkParams.sport, clubLevel:wkParams.clubLevel, clubMode:wkParams.clubMode};
     workoutPresets.unshift({
       id:'wp'+uid(), name, type:wkType, params,
       defaultDurationMin: wkDuration || null,
-      notes: wkType==='renfo' ? wkText : null
+      notes: null
     });
     save(); closeModal(); render(); toast('Préréglage enregistré ✓');
   };
@@ -319,9 +320,6 @@ function bindTabEvents(){
   }
 
   if(activeTab==='workouts'){
-    const pasteBtn = document.getElementById('pasteWorkoutBtn');
-    if(pasteBtn) pasteBtn.onclick = openWorkoutImportModal;
-
     const captureWorkoutForm = ()=>{
       if(wkType==='tapis'){
         wkParams.vitesse = document.getElementById('wkVitesse')?.value ?? wkParams.vitesse;
@@ -330,20 +328,24 @@ function bindTabEvents(){
         else wkSteps = document.getElementById('wkPas')?.value ?? wkSteps;
       } else if(wkType==='velo'){
         wkDuration = document.getElementById('wkDuree')?.value ?? wkDuration;
-      } else if(wkType==='renfo'){
+      } else if(wkType==='sport'){
+        wkParams.sport = document.getElementById('wkSport')?.value ?? wkParams.sport;
         wkDuration = document.getElementById('wkDuree')?.value ?? wkDuration;
-        wkText = document.getElementById('wkText')?.value ?? wkText;
-      } else if(wkType==='manuel'){
-        wkText = document.getElementById('wkText')?.value ?? wkText;
-        wkManualKcal = document.getElementById('wkKcal')?.value ?? wkManualKcal;
-        wkDuration = document.getElementById('wkDurManual')?.value ?? wkDuration;
+      } else if(wkType==='club'){
+        wkParams.sport = document.getElementById('wkSport')?.value ?? wkParams.sport;
+        wkDuration = document.getElementById('wkDuree')?.value ?? wkDuration;
       }
     };
 
-    document.querySelectorAll('#wkTypeSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkType=b.dataset.type; render(); });
+    document.querySelectorAll('#wkTypeSeg button').forEach(b=>b.onclick=()=>{
+      if(b.dataset.type==='ia'){ openWorkoutImportModal(); return; }
+      captureWorkoutForm(); wkType=b.dataset.type; render();
+    });
     document.querySelectorAll('#wkTapisModeSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkTapisMode=b.dataset.mode; render(); });
     document.querySelectorAll('#wkVeloSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.effort=b.dataset.effort; render(); });
-    document.querySelectorAll('#wkRenfoSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.intensite=b.dataset.int; render(); });
+    document.querySelectorAll('#wkSportIntSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.sportIntensity=b.dataset.int; render(); });
+    document.querySelectorAll('#wkClubLevelSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.clubLevel=b.dataset.level; render(); });
+    document.querySelectorAll('#wkClubModeSeg button').forEach(b=>b.onclick=()=>{ captureWorkoutForm(); wkParams.clubMode=b.dataset.clubmode; render(); });
     const updateEstimate = ()=>{
       try{
         captureWorkoutForm();
@@ -352,38 +354,31 @@ function bindTabEvents(){
         const wrap = document.getElementById('wkEstimate');
         if(!num||!wrap) return;
         let kcal = 0;
-        if(wkType==='manuel'){
-          const k = parseFloat(wkManualKcal)||0;
-          if(k>0){ kcal = k; }
-          else{
-            const est = estimateManualSession(wkText.trim(), parseFloat(wkDuration)||null, w);
-            kcal = est.kcal;
-          }
-        } else {
-          const dur = parseFloat(wkDuration)||0;
-          let params = {};
-          if(wkType==='tapis'){
-            params = {vitesse: parseFloat(wkParams.vitesse)||0, pente: parseFloat(wkParams.pente)||0};
-            if(wkTapisMode==='pas'){
-              const steps = parseFloat(wkSteps)||0;
-              if(steps>0 && params.vitesse>0 && profile.height){
-                params.steps = steps;
-              }
+        const dur = parseFloat(wkDuration)||0;
+        let params = {};
+        if(wkType==='tapis'){
+          params = {vitesse: parseFloat(wkParams.vitesse)||0, pente: parseFloat(wkParams.pente)||0};
+          if(wkTapisMode==='pas'){
+            const steps = parseFloat(wkSteps)||0;
+            if(steps>0 && params.vitesse>0 && profile.height){
+              params.steps = steps;
             }
-          } else if(wkType==='velo'){
-            params.effort = wkParams.effort;
-          } else if(wkType==='renfo'){
-            params.intensite = wkParams.intensite;
           }
-          if(dur>0 && w) kcal = computeWorkoutKcal(wkType, params, dur, w);
+        } else if(wkType==='velo'){
+          params.effort = wkParams.effort;
+        } else if(wkType==='sport'){
+          params.sport = wkParams.sport; params.intensity = wkParams.sportIntensity;
+        } else if(wkType==='club'){
+          params.sport = wkParams.sport; params.level = wkParams.clubLevel; params.mode = wkParams.clubMode;
         }
+        if(dur>0 && w) kcal = computeWorkoutKcal(wkType, params, dur, w);
         num.textContent = kcal>0 ? Math.round(kcal) + ' kcal' : '—';
         wrap.classList.toggle('pulse', false);
         void wrap.offsetWidth; wrap.classList.add('pulse');
         num.classList.toggle('over', kcal > settings.calorieGoal);
       }catch(e){}
     };
-    ['wkVitesse','wkPente','wkDuree','wkPas','wkText','wkKcal','wkDurManual'].forEach(id=>{
+    ['wkVitesse','wkPente','wkDuree','wkPas','wkSport'].forEach(id=>{
       const el = document.getElementById(id);
       if(el){ el.addEventListener('input', updateEstimate); el.addEventListener('change', updateEstimate); }
     });
@@ -391,13 +386,12 @@ function bindTabEvents(){
 
 
     document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{
-      const p = workoutPresets.find(x=>x.id===b.replace('-', '_').dataset.preset); if(!p) return;
+      const p = workoutPresets.find(x=>x.id===b.dataset.preset); if(!p) return;
       wkType = p.type;
       wkParams = {...wkParams, ...p.params};
       wkDuration = p.defaultDurationMin || '';
       wkTapisMode = 'duree';
       wkSteps = '';
-      wkText = p.notes || '';
       render();
       toast('Préréglage chargé — confirme la durée');
     });
@@ -409,41 +403,31 @@ function bindTabEvents(){
     if(btn) btn.onclick = ()=>{
       captureWorkoutForm();
       const weight = getCurrentWeight();
+      if(!weight){ toast("Renseigne ton poids dans l'onglet Poids d'abord"); return; }
       const entry = {id:uid(), date:currentDate, type:'workout', wtype:wkType, time:new Date().toTimeString().slice(0,5)};
-      if(wkType==='manuel'){
-        let kcal = parseFloat(wkManualKcal)||0;
-        entry.text = wkText.trim(); entry.duration = parseFloat(wkDuration)||null;
-        if(kcal<=0){ const estimate=estimateManualSession(entry.text, entry.duration, weight);
-          if(/circuit/i.test(entry.text) && !entry.duration){ toast("Pour un circuit sans durée, indique la durée plutôt que de l'inventer"); return; }
-          kcal=estimate.kcal; entry.estimation=estimate;
+      let duration = parseFloat(wkDuration)||0;
+      let params = {};
+      if(wkType==='tapis'){
+        params = {vitesse: parseFloat(wkParams.vitesse)||0, pente: parseFloat(wkParams.pente)||0};
+        if(!params.vitesse){ toast('Indique la vitesse'); return; }
+        if(wkTapisMode==='pas'){
+          const steps = parseFloat(wkSteps)||0;
+          if(steps<=0){ toast('Indique le nombre de pas'); return; }
+          if(!profile.height){ toast("Renseigne ta taille dans l'onglet Poids pour ce mode"); return; }
+          duration = stepsToDurationMin(steps, params.vitesse, profile.height);
+          entry.steps = steps;
         }
-        if(kcal<=0){ toast('Indique une description, une durée ou les calories brûlées'); return; }
-        entry.kcalBurned = kcal;
-      } else {
-        if(!weight){ toast("Renseigne ton poids dans l'onglet Poids d'abord"); return; }
-        let duration = parseFloat(wkDuration)||0;
-        let params = {};
-        if(wkType==='tapis'){
-          params = {vitesse: parseFloat(wkParams.vitesse)||0, pente: parseFloat(wkParams.pente)||0};
-          if(!params.vitesse){ toast('Indique la vitesse'); return; }
-          if(wkTapisMode==='pas'){
-            const steps = parseFloat(wkSteps)||0;
-            if(steps<=0){ toast('Indique le nombre de pas'); return; }
-            if(!profile.height){ toast("Renseigne ta taille dans l'onglet Poids pour ce mode"); return; }
-            duration = stepsToDurationMin(steps, params.vitesse, profile.height);
-            entry.steps = steps;
-          }
-        } else if(wkType==='velo'){
-          params = {effort: wkParams.effort};
-        } else if(wkType==='renfo'){
-          params = {intensite: wkParams.intensite};
-          entry.text = wkText.trim();
-        }
-        if(duration<=0){ toast('Indique la durée'); return; }
-        entry.params = params;
-        entry.duration = Math.round(duration);
-        entry.kcalBurned = computeWorkoutKcal(wkType, params, duration, weight);
+      } else if(wkType==='velo'){
+        params = {effort: wkParams.effort};
+      } else if(wkType==='sport'){
+        params = {sport: wkParams.sport, intensity: wkParams.sportIntensity};
+      } else if(wkType==='club'){
+        params = {sport: wkParams.sport, level: wkParams.clubLevel, mode: wkParams.clubMode};
       }
+      if(duration<=0){ toast('Indique la durée'); return; }
+      entry.params = params;
+      entry.duration = Math.round(duration);
+      entry.kcalBurned = computeWorkoutKcal(wkType, params, duration, weight);
       logEntries.push(entry);
       save(); render(); toast('Séance enregistrée ✓');
     };

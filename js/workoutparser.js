@@ -14,12 +14,13 @@ function workoutApiUrl() {
   return `${VERCEL_API_BASE}/api/parse-workout`;
 }
 
-// Ce mode d'ajout est ADDITIF : il ne touche pas au formulaire manuel existant
+// Ce mode d'ajout ("Saisie manuelle (IA)", une entrée à part entière du sélecteur
+// "Type de séance") est ADDITIF : il ne touche pas aux autres formulaires
 // (wkType/wkParams/... dans core.js) ni à la structure des séances saisies à
 // l'ancienne. Le résultat IA est stocké dans un logEntry type:'workout' comme
 // les autres, avec en plus les champs `blocks`/`estimatedDurationMin`/
 // `warnings` — workoutSummary() (core.js) sait afficher ce cas en plus des cas
-// existants (tapis/vélo/renfo/manuel).
+// existants (tapis/vélo/sport/club/renfo/manuel).
 function openWorkoutImportModal() {
   openModal(`
     <h3>Coller un programme (IA)</h3>
@@ -50,6 +51,22 @@ function openWorkoutImportModal() {
       btn.disabled = false;
     }
   };
+}
+
+// Synthétise les blocks/exercices structurés par l'IA en texte plat, pour les faire
+// passer par le même moteur canonique que la saisie manuelle libre (estimateManualSession,
+// catalogue EXERCISES kcal/rep + kcal/min réels) plutôt que par un MET fixe grossier —
+// garantit un calcul cohérent entre "saisie manuelle (IA)" et une éventuelle note tapée à
+// la main décrivant les mêmes exercices.
+function blocksToText(blocks) {
+  return (blocks || []).flatMap(b => (b.exercises || []).map(ex => {
+    const bits = [];
+    if (ex.sets != null && ex.reps != null) bits.push(`${ex.sets}x${ex.reps}`);
+    else if (ex.reps != null) bits.push(String(ex.reps));
+    else if (ex.sets != null) bits.push(`${ex.sets} séries`);
+    if (ex.restSec != null) bits.push(`repos ${ex.restSec}s`);
+    return `${ex.name}${bits.length ? ' ' + bits.join(', ') : ''}`;
+  })).join('\n');
 }
 
 function workoutBlockTypeLabel(type) {
@@ -107,55 +124,44 @@ function openWorkoutResultModal(data) {
     <div class="hint" style="margin-top:12px;">⚠️ Durée estimée automatiquement à partir des séries/reps/tempo/repos — ajuste-la si besoin, elle sert directement au calcul des calories ci-dessous.</div>
     <label>Durée totale (min)</label>
     <input id="wiDuration" type="number" min="1" value="${Number(data.estimatedDurationMin) || 0}">
-    <label>Intensité</label>
-    <div class="seg" id="wiIntensiteSeg">
-      ${[['faible', 'Faible'], ['moderee', 'Modérée'], ['forte', 'Forte']].map(([k, l]) => `<button type="button" data-int="${k}" class="${k === 'moderee' ? 'active' : ''}">${l}</button>`).join('')}
-    </div>
     <button class="btn rust" id="wiSaveBtn" type="button">Enregistrer la séance</button>
     <button class="btn ghost" id="wiRedoBtn" type="button">Recommencer</button>
     <div class="wk-estimate" id="wiEstimate">
       <div class="num" id="wiEstimateNum">—</div>
-      <div class="lbl">kcal estimés — même formule que la saisie manuelle "Renfo" (poids × intensité × durée)</div>
+      <div class="lbl">kcal estimés — même moteur que la saisie manuelle libre (catalogue d'exercices reconnus, kcal/rep et kcal/min réels)</div>
     </div>
   `);
-  let wiIntensite = 'moderee';
-  // Même formule que le mode Renfo manuel (computeWorkoutKcal), avec les
-  // mêmes réglages exposés (durée, intensité) : la différence de kcal
-  // observée entre les deux modes venait d'une durée différente (estimée ici
-  // par l'IA à partir du texte, tapée à la main là-bas), pas d'un calcul
-  // différent — cf. discussion utilisateur. En les rendant éditables ici, les
-  // deux chemins convergent vers le même résultat à durée/intensité égales,
-  // et l'utilisateur peut corriger une estimation de durée qu'il juge fausse
-  // avant d'enregistrer plutôt que de la découvrir après coup.
+  // Le programme structuré (blocks/exercices) est synthétisé en texte plat puis passé
+  // par estimateManualSession() — le même moteur canonique que n'importe quelle note
+  // manuelle décrivant les mêmes exercices — au lieu d'un MET fixe grossier. Ça garantit
+  // que les deux façons de loguer une séance de muscu (notes tapées à la main, ou
+  // programme collé et structuré par l'IA) convergent vers le même calcul plutôt que
+  // deux formules différentes.
   const weight = getCurrentWeight() || 70;
+  const synthText = blocksToText(blocks);
   const updateWiEstimate = () => {
     const duration = Number(document.getElementById('wiDuration').value) || 0;
     const num = document.getElementById('wiEstimateNum');
-    const kcal = duration > 0 ? computeWorkoutKcal('renfo', { intensite: wiIntensite }, duration, weight) : 0;
+    const kcal = duration > 0 ? estimateManualSession(synthText, duration, weight).kcal : 0;
     num.textContent = kcal > 0 ? Math.round(kcal) + ' kcal' : '—';
   };
   document.getElementById('wiDuration').addEventListener('input', updateWiEstimate);
-  document.querySelectorAll('#wiIntensiteSeg button').forEach(b => b.onclick = () => {
-    wiIntensite = b.dataset.int;
-    document.querySelectorAll('#wiIntensiteSeg button').forEach(x => x.classList.toggle('active', x === b));
-    updateWiEstimate();
-  });
   updateWiEstimate();
   document.getElementById('wiSaveBtn').onclick = () => {
     const name = document.getElementById('wiName').value.trim() || defaultName;
     const date = document.getElementById('wiDate').value || currentDate;
     const duration = Number(document.getElementById('wiDuration').value) || 0;
     if (duration <= 0) { toast('Indique la durée'); return; }
-    // Poids par défaut 70kg si aucune pesée enregistrée, pour ne jamais
-    // bloquer la sauvegarde faute de pesée (contrairement au mode manuel
-    // structuré tapis/vélo/renfo qui, lui, l'exige).
-    const kcalBurned = computeWorkoutKcal('renfo', { intensite: wiIntensite }, duration, weight);
+    // Poids par défaut 70kg si aucune pesée enregistrée, pour ne jamais bloquer la
+    // sauvegarde faute de pesée (contrairement aux séances tapis/vélo/sport/club qui,
+    // elles, l'exigent).
+    const estimation = estimateManualSession(synthText, duration, weight);
     logEntries.push({
       id: uid(), date, type: 'workout', wtype: 'ia',
       time: new Date().toTimeString().slice(0, 5),
       name, blocks, estimatedDurationMin: duration, warnings,
-      duration, intensite: wiIntensite,
-      kcalBurned,
+      duration, text: synthText, estimation,
+      kcalBurned: estimation.kcal,
     });
     save(); closeModal(); render(); toast('Séance enregistrée ✓');
   };
