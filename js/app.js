@@ -7,6 +7,12 @@ document.getElementById('tabs').addEventListener('click', e=>{
   }
   const b = e.target.closest('button[data-tab]'); if(!b) return;
   activeTab = b.dataset.tab; render();
+  // La position de scroll ne se réinitialise pas toute seule au changement d'onglet
+  // (remplacer main.innerHTML ne touche pas au scroll de la fenêtre) : sans ce reset,
+  // on atterrit sur le nouvel onglet à la position laissée par le précédent, ce qui,
+  // sur un onglet plus court, donne l'impression d'être bloqué en bas de page.
+  window.scrollTo(0, 0);
+  document.getElementById('main').scrollTop = 0;
   document.getElementById('moreMenu').classList.remove('open');
   b.blur();
 });
