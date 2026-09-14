@@ -34,6 +34,7 @@ Kalo (anciennement "Carnet" — voir note de renommage ci-dessous) : appli web p
 - Reste cohérent avec le thème existant (palette verte/papier, cards arrondies, `--font-mono` pour les chiffres) sauf demande contraire explicite.
 - La nav est un hybride : 5 onglets directs (`data-tab`) + un bouton `#moreToggle` qui déplie `#moreMenu` (Notes/To-do/Réglages). Ces IDs sont câblés en dur dans `js/app.js` (délégation de clic) et `css/style.css` (media query `hover`/`pointer` pour éviter le libellé qui reste collé au tap sur mobile) — ne pas les renommer sans mettre à jour les deux.
 - Le libellé de bouton d'onglet en `:hover`/`:focus-visible` doit rester restreint à `@media (hover:hover) and (pointer:fine)` : sur un vrai appareil tactile il n'existe aucun état de sortie du hover, donc sans cette restriction le libellé reste affiché après un tap (bug déjà rencontré et corrigé).
+- `closeModal()` (`js/ui.js`) ajoute la classe `.closing` puis attend 180ms (durée de l'animation CSS `modalSheetOut`/`modalBgOut`) avant de vider `#modal-root`, en revérifiant que `#modalBg` est toujours le même élément. Ce garde-fou est nécessaire à cause du scanner (`js/scanner.js`) qui enchaîne `closeModal(); openXxxModal();` sans attendre : sans la vérification, le minuteur de l'ancienne fermeture effacerait la nouvelle modale ouverte entre-temps. Ne pas revenir à un `closeModal()` synchrone sans revalider ce flux.
 
 ## Workflow git : quand pousser direct sur `main`, quand passer par une branche + PR
 

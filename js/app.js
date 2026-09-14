@@ -7,6 +7,10 @@ document.getElementById('tabs').addEventListener('click', e=>{
   }
   const b = e.target.closest('button[data-tab]'); if(!b) return;
   activeTab = b.dataset.tab; render();
+  const main = document.getElementById('main');
+  main.classList.remove('tab-enter');
+  void main.offsetWidth; // force reflow pour rejouer l'animation à chaque changement d'onglet
+  main.classList.add('tab-enter');
   document.getElementById('moreMenu').classList.remove('open');
   b.blur();
 });

@@ -4,7 +4,17 @@ function openModal(html){
   document.getElementById('modalBg').addEventListener('click', e=>{ if(e.target.id==='modalBg') closeModal(); });
   document.getElementById('modalClose').addEventListener('click', closeModal);
 }
-function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+function closeModal(){
+  const bg = document.getElementById('modalBg');
+  if(!bg){ document.getElementById('modal-root').innerHTML=''; return; }
+  bg.classList.add('closing');
+  // Laisse l'animation de fermeture jouer avant de vider le DOM. Si une nouvelle
+  // modale a entre-temps remplacé modalBg (ex. scanner : fermeture immédiatement
+  // suivie d'une réouverture), la référence ne correspond plus et on ne touche à rien.
+  setTimeout(()=>{
+    if(document.getElementById('modalBg') === bg) document.getElementById('modal-root').innerHTML='';
+  }, 180);
+}
 
 // Survol des graphiques (onglet Poids) : crosshair + tooltip listant chaque série au point le plus proche.
 function bindChartHover(wrapId, points, seriesDefs){
