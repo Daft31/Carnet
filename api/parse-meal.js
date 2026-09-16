@@ -405,6 +405,10 @@ export default async function handler(req, res) {
           fat: Math.round(totals.fat * 10) / 10,
           fiber: Math.round(totals.fiber * 10) / 10,
           ingredients: matched.map(m => m.name),
+          // Provenance de la donnée (voir js/mealparser.js) : 'catalog' = entièrement
+          // reconnu contre des valeurs fixes vérifiées, zéro appel IA — la confiance la
+          // plus haute que ce système puisse offrir.
+          confidence: 'catalog',
         },
       });
     }
@@ -498,6 +502,13 @@ export default async function handler(req, res) {
         '- calories calculées depuis les macros (4/4/9):', mismatch.computedCalories,
         `- écart relatif: ${(mismatch.relativeDiff * 100).toFixed(0)}%`
       );
+    }
+
+    // Provenance (voir js/mealparser.js) : 'mixed' = une partie du repas vient du
+    // catalogue fixe, le reste est estimé par l'IA ; 'ai' = entièrement estimé
+    // (aucun élément reconnu). Distinct de 'catalog' (voir plus haut, zéro IA).
+    if (nutritionData && typeof nutritionData === 'object' && !nutritionData.confidence) {
+      nutritionData.confidence = isPartialMatch ? 'mixed' : 'ai';
     }
 
     return res.status(200).json({

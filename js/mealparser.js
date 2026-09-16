@@ -47,6 +47,17 @@ function openAIDescribeModal() {
   };
 }
 
+// Provenance de la donnée renvoyée par /api/parse-meal (voir api/parse-meal.js) :
+// 'catalog' = reconnu à 100% contre des valeurs fixes vérifiées (zéro IA), 'mixed'
+// = une partie catalogue + une partie estimée, 'ai' = entièrement estimé. Un repas
+// résolu par le catalogue n'est PAS une estimation — le dire quand même serait
+// aussi malhonnête que l'inverse (afficher une estimation comme une certitude).
+function confidenceNotice(confidence) {
+  if (confidence === 'catalog') return '✓ Valeurs officielles (produit reconnu), pas une estimation.';
+  if (confidence === 'mixed') return '⚠️ Repas en partie reconnu (valeurs officielles) et en partie estimé par IA.';
+  return '⚠️ Estimation IA, vérifie si besoin avant de confirmer.';
+}
+
 function openAIResultModal(data) {
   const kcal = Math.round(parseFloat(data.calories) || 0);
   const protein = parseFloat(data.protein) || 0;
@@ -62,7 +73,7 @@ function openAIResultModal(data) {
       <div class="item"><div class="n">${carbs.toFixed(0)}</div><div class="l">gluc g</div></div>
       <div class="item"><div class="n">${fat.toFixed(0)}</div><div class="l">lip g</div></div>
     </div>
-    <div class="hint" style="margin-top:10px;">⚠️ Estimation IA, vérifie si besoin avant de confirmer.</div>
+    <div class="hint" style="margin-top:10px;">${confidenceNotice(data.confidence)}</div>
     <button class="btn" id="aiConfirmBtn" type="button">Ajouter à ${mealSlot}</button>
     <button class="btn ghost" id="aiRedoBtn" type="button">Reformuler</button>
   `);
@@ -71,7 +82,8 @@ function openAIResultModal(data) {
       id: uid(), date: currentDate, type: 'meal', mealSlot,
       foodName: data.name || 'Repas (IA)', grams: null,
       kcal, protein, carbs, fat,
-      time: new Date().toTimeString().slice(0, 5), source: 'ai'
+      time: new Date().toTimeString().slice(0, 5),
+      source: data.confidence === 'catalog' ? 'catalog' : 'ai'
     });
     save(); closeModal(); render(); toast('Ajouté ✓');
   };

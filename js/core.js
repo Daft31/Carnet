@@ -464,14 +464,36 @@ const RAW_UNSAFE_CATEGORIES = new Set(['grains','legumes','meat_fish','eggs_dair
 function isEdibleAsIs(f){
   return !(RAW_UNSAFE_CATEGORIES.has(f.category) && (f.state==='raw' || f.state==='dry'));
 }
+// Nb de fois où chaque aliment a été loggué en repas, tout historique confondu —
+// seule mesure de fréquence utilisée pour personnaliser topFoodsFor() ci-dessous
+// (pas de ML, pas d'IA : un simple comptage déterministe et lisible).
+function personalFoodFrequency(){
+  const freq = {};
+  logEntries.forEach(e=>{ if(e.type==='meal' && e.foodId) freq[e.foodId] = (freq[e.foodId]||0)+1; });
+  return freq;
+}
+// Suggestions "à privilégier/éviter" des conseils macro : toujours triées d'abord
+// par pertinence nutritionnelle réelle (valeur du macro visé, critère d'origine),
+// avec un bonus pour les aliments que l'utilisateur mange déjà (favoris + fréquence
+// personnelle) plutôt que de piocher uniquement dans le catalogue générique. Le
+// bonus de fréquence est plafonné à 5 occurrences pour qu'un aliment mangé une
+// seule fois ne devienne jamais la recommandation principale devant un aliment
+// bien plus adapté nutritionnellement — il ne fait que départager des aliments
+// déjà pertinents.
 function topFoodsFor(key, excludeIds){
+  const freq = personalFoodFrequency();
   const candidates = allFoods()
     .filter(f=>f[key]>3 && isEdibleAsIs(f) && !(excludeIds&&excludeIds.has(f.id)))
-    .sort((a,b)=>b[key]-a[key]);
+    .map(f=>{
+      const favBonus = isFavorite(f.id) ? f[key]*0.5 : 0;
+      const freqBonus = Math.min(freq[f.id]||0, 5) * (f[key]*0.15);
+      return {f, score: f[key] + favBonus + freqBonus};
+    })
+    .sort((a,b)=>b.score-a.score);
   // Diversifie : au plus un aliment par catégorie, pour ne pas proposer 3 variantes
   // du même produit (ex. whey nature/vanille/fraise, ou 3 huiles différentes).
   const picked = [], seenCategories = new Set();
-  for(const f of candidates){
+  for(const {f} of candidates){
     if(seenCategories.has(f.category)) continue;
     picked.push(f); seenCategories.add(f.category);
     if(picked.length>=3) break;
@@ -513,7 +535,16 @@ function macroTips(t){
     } else if(m.status==='eat'){
       const foods = topFoodsFor(m.key, avoidIds);
       let text = `seulement ${Math.round(m.consumed)}/${m.goal} g pour l'instant — pense à en ajouter dans ton prochain repas.`;
-      if(foods.length) text += ` Par exemple avec ${frenchList(foods.map(f=>f.name))}.`;
+      if(foods.length){
+        // "Parmi tes aliments" seulement si la suggestion vient vraiment de son
+        // historique (favori ou déjà mangé) — pas une formule générique plaquée sur
+        // n'importe quelle suggestion du catalogue.
+        const freq = personalFoodFrequency();
+        const isPersonal = isFavorite(foods[0].id) || (freq[foods[0].id]||0) > 0;
+        text += isPersonal
+          ? ` Parmi tes aliments habituels : ${frenchList(foods.map(f=>f.name))}.`
+          : ` Par exemple avec ${frenchList(foods.map(f=>f.name))}.`;
+      }
       tips.push({...m, text});
     }
   });
@@ -748,7 +779,7 @@ function dayLogList(date){
   if(!es.length) return `<div class="empty">Rien enregistré ce jour-là.</div>`;
   return es.map((e,i)=>{
     if(e.type==='meal'){
-      return `<div class="list-entry enter"><div class="main"><div class="title">${escapeHtml(e.foodName)}</div><div class="sub">${e.mealSlot} · ${e.grams} g · ${e.time}</div></div>
+      return `<div class="list-entry enter"><div class="main"><div class="title">${escapeHtml(e.foodName)}</div><div class="sub">${e.mealSlot} · ${mealProvenanceLabel(e)} · ${e.time}</div></div>
         <div class="amount blue">+${Math.round(e.kcal)}</div>
         <button class="del" data-del="${e.id}">✕</button>
       </div>`;
@@ -1201,10 +1232,26 @@ function viewMeals(){
   </section>`;
 }
 
+// Segment "provenance" affiché sur une ligne de repas du journal : discret (juste
+// le grammage) pour le cas de référence (saisie manuelle/base de données), et un
+// mot en plus seulement pour les cas qui sortent de cette référence — un repas
+// reconnu à 100% par le catalogue officiel (McDo/BK/...) n'est PAS une estimation
+// et ne doit pas être affiché comme tel (c'était un bug avant : l'absence de
+// grammage faisait toujours afficher "estimé IA", même pour un match catalogue
+// sans grammage explicite, ex. "1 Big Mac"). Voir la note provenance dans
+// api/parse-meal.js / js/mealparser.js pour l'origine du champ `source`.
+function mealProvenanceLabel(e){
+  const parts = [];
+  if(e.grams!=null) parts.push(e.grams+' g');
+  if(e.source==='catalog' || e.source==='scan') parts.push('officiel');
+  else if(e.source==='ai') parts.push('estimé IA');
+  else if(e.grams==null) parts.push('estimé');
+  return parts.join(' · ');
+}
 function mealsOnlyList(date){
   const es = entriesFor(date).filter(e=>e.type==='meal').sort((a,b)=>a.time.localeCompare(b.time));
   return es.map(e=>`<div class="list-entry enter">
-      <div class="main"><div class="title">${escapeHtml(e.foodName)}</div><div class="sub">${e.mealSlot} · ${e.grams!=null ? e.grams+' g' : 'estimé IA'} · ${e.time}</div></div>
+      <div class="main"><div class="title">${escapeHtml(e.foodName)}</div><div class="sub">${e.mealSlot} · ${mealProvenanceLabel(e)} · ${e.time}</div></div>
       <div class="amount blue">+${Math.round(e.kcal)}</div>
       <button class="del" data-del="${e.id}">✕</button>
     </div>`).join('');
