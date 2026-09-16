@@ -142,10 +142,20 @@
      fichier — même piège que celui déjà rencontré avec [hidden] sur la refonte
      dashboard-first. */
   section.card.insights-card{border-left:3px solid var(--green);}
+  /* Chaque insight (simple ou "Ce qui a changé") est maintenant un <div
+     data-insight-id> enfant direct de la carte — l'espacement ENTRE insights
+     vit ici, une seule fois, plutôt que dupliqué par variante de contenu. */
+  .insights-card > div{margin-bottom:14px;}
+  .insights-card > div:last-child{margin-bottom:0;}
   .insight-line{margin:0 0 6px; font-size:13.5px; line-height:1.45; color:var(--ink);}
-  .insight-line:last-child{margin-bottom:0;}
-  .quickadd-cta{margin-bottom:10px;}
-  .insights-card .quickadd-cta:last-child{margin-bottom:0;}
+  .insights-card > div > .insight-line:last-child{margin-bottom:0;}
+
+  /* Bloc "Ce qui a changé" (comparaison de périodes) : distinct d'un insight
+     simple par son sous-titre + ses lignes chiffrées, mais dans la même carte
+     "Kalo a remarqué" — pas de 2e carte séparée. */
+  .insight-subhead{margin:0 0 6px; font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft);}
+  .insight-figure-row{display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:13px; color:var(--ink-soft); margin:0 0 10px; padding-bottom:8px; border-bottom:1px solid var(--line);}
+  .insight-block > *:last-child{margin-bottom:0; border-bottom:none; padding-bottom:0;}
 
   /* Hauteur plafonnée + scroll interne : avec 6-8+ aliments, la liste ne doit
      jamais repousser le récapitulatif macros / CTA hors de portée (le modal

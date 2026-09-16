@@ -845,6 +845,8 @@ const PERIOD_METRICS = {
     // d'en inventer un nouveau pour le même type de comparaison.
     sigDelta(a,b){ return Math.abs(a.value-b.value) >= INSIGHT_WEIGHT_DELTA_KG; },
     format(m){ return m.value.toFixed(1)+' kg'; },
+    unit: 'kg',
+    numberFormat(v){ return v.toFixed(1); },
   },
   kcal: {
     label: 'Calories moyennes/jour',
@@ -860,6 +862,8 @@ const PERIOD_METRICS = {
       return rel >= INSIGHT_KCAL_RELATIVE_DELTA && abs >= INSIGHT_KCAL_ABSOLUTE_DELTA;
     },
     format(m){ return Math.round(m.value)+' kcal'; },
+    unit: 'kcal/j',
+    numberFormat(v){ return Math.round(v); },
   },
   protein: {
     label: 'Protéines moyennes/jour',
@@ -879,6 +883,8 @@ const PERIOD_METRICS = {
       return rel >= 0.15 && abs >= 15;
     },
     format(m){ return Math.round(m.value)+' g'; },
+    unit: 'g/j',
+    numberFormat(v){ return Math.round(v); },
   },
   loggedDays: {
     label: 'Jours loggués',
@@ -903,6 +909,8 @@ const PERIOD_METRICS = {
     },
     sigDelta(a,b){ return Math.abs(a.value-b.value) >= PERIOD_SESSIONS_DELTA_PER_WEEK; },
     format(m){ return m.value.toFixed(1)+'/sem'; },
+    unit: '/sem',
+    numberFormat(v){ return v.toFixed(1); },
   },
 };
 
@@ -948,6 +956,81 @@ function comparePeriods({current, previous, metrics}){
     };
   });
   return out;
+}
+
+// Formulations strictement descriptives (brique 7A) : jamais de qualificatif de
+// magnitude ("légèrement"/"nettement") dans le texte — l'ampleur est portée par
+// les chiffres affichés à côté, jamais par le choix des mots. Aucune causalité,
+// aucune recommandation : un fait mesuré, pas une explication.
+const WHAT_CHANGED_TEXT = {
+  weight: {
+    up: `Ton poids moyen est supérieur à celui de la semaine précédente.`,
+    down: `Ton poids moyen est inférieur à celui de la semaine précédente.`,
+  },
+  kcal: {
+    up: `Ton apport calorique moyen a augmenté par rapport à la semaine précédente.`,
+    down: `Ton apport calorique moyen a diminué par rapport à la semaine précédente.`,
+  },
+  protein: {
+    up: `Ton apport moyen en protéines a augmenté par rapport à la semaine précédente.`,
+    down: `Ton apport moyen en protéines a diminué par rapport à la semaine précédente.`,
+  },
+  sessionsPerWeek: {
+    up: `Tu as enregistré plus de séances cette semaine que la précédente.`,
+    down: `Tu as enregistré moins de séances cette semaine que la précédente.`,
+  },
+  loggedDays: {
+    up: `Tu as loggé plus de jours cette semaine que la semaine précédente.`,
+    down: `Tu as loggé moins de jours cette semaine que la semaine précédente.`,
+  },
+};
+// Libellés courts pour la ligne chiffrée (présentation) — distincts du `label`
+// du moteur (plus verbeux, ex. "Calories moyennes/jour") qui reste un détail
+// d'implémentation de comparePeriods(), pas un texte d'affichage.
+const WHAT_CHANGED_FIGURE_LABEL = {
+  weight: 'Poids', kcal: 'Calories', protein: 'Protéines',
+  sessionsPerWeek: 'Séances', loggedDays: 'Jours loggués',
+};
+// Ordre de priorité + familles "contenu" vs "méta" (brique 7A, voir README /
+// discussion produit) : contenu = signal sur le corps/l'alimentation/l'activité,
+// méta = signal sur le comportement de tracking lui-même (pas un signal
+// physiologique). `loggedDays` n'est jamais montré à côté d'une métrique de
+// contenu significative — uniquement quand c'est le SEUL signal de la semaine
+// (règle structurelle, pas une détection de corrélation réelle).
+const WHAT_CHANGED_CONTENT_IDS = ['weight', 'kcal', 'protein', 'sessionsPerWeek'];
+
+// Insight-layer (brique 7A) au-dessus de comparePeriods() : sélectionne au plus
+// 2 métriques significatives sur "7 derniers jours vs 7 précédents" et les
+// formule. Ne décide PAS de la subsomption avec weightTrendInsight() ni de la
+// place dans les 2 slots globaux — ce choix est centralisé dans kaloInsights()
+// (voir note à cet endroit), pour garder toute la logique de priorité à un seul
+// endroit plutôt que dispersée entre Insights.
+function whatChangedInsight(){
+  const current = recentPeriod(7);
+  const previous = precedingPeriod(current, 7);
+  const cmp = comparePeriods({ current, previous, metrics: [...WHAT_CHANGED_CONTENT_IDS, 'loggedDays'] });
+  const contentSignificant = WHAT_CHANGED_CONTENT_IDS.filter(id=>cmp[id].status==='significant_change');
+  let selectedIds;
+  if(contentSignificant.length){
+    selectedIds = contentSignificant;
+  } else if(cmp.loggedDays.status==='significant_change'){
+    selectedIds = ['loggedDays'];
+  } else {
+    return null;
+  }
+  const items = selectedIds.slice(0, INSIGHT_MAX_SHOWN).map(id=>{
+    const m = cmp[id];
+    const dir = m.delta>0 ? 'up' : 'down';
+    const def = PERIOD_METRICS[id];
+    // loggedDays reste sous forme de fraction (ex. "3/7 j") des deux côtés — pas
+    // de "nombre + unité une seule fois" comme les autres métriques, sa forme
+    // naturelle inclut déjà le dénominateur.
+    const figure = id==='loggedDays'
+      ? `${def.format(m.previous)} → ${def.format(m.current)}`
+      : `${def.numberFormat(m.previous.value)} → ${def.numberFormat(m.current.value)} ${def.unit}`;
+    return { id, text: WHAT_CHANGED_TEXT[id][dir], figureLabel: WHAT_CHANGED_FIGURE_LABEL[id], figure };
+  });
+  return { id:'what_changed', metrics: items.map(it=>it.id), items };
 }
 
 /* ===================== DÉTECTEUR GÉNÉRIQUE DE REPAS RÉCURRENTS =====================
@@ -1097,7 +1180,14 @@ function getInsightById(id){
 // plusieurs semaines) s'affiche à l'identique chaque jour. Volontairement basique
 // (délai fixe, pas de détection d'amplitude/nouveauté du signal) : une vraie
 // architecture "ne réafficher que si le signal a changé significativement" viendra
-// plus tard, une fois qu'on aura du recul sur l'usage réel.
+// plus tard, une fois qu'on aura du recul sur l'usage réel. Ça s'applique aussi à
+// whatChangedInsight() (id 'what_changed') : le cooldown est purement temporel,
+// PAS un dédoublonnage de contenu — si le poids+kcal déclenchent lundi puis que
+// le signal change complètement mardi (ex. séances), l'insight reste masqué
+// jusqu'à l'expiration du cooldown, même si le contenu qu'il montrerait a changé.
+// Assumé pour cette V1 ; un futur "cooldown + nouveauté du signal" comparerait
+// `insightsSeen[id]` à une signature du contenu (ex. hash des métriques+sens)
+// plutôt qu'à une date seule — pas construit maintenant.
 const INSIGHT_COOLDOWN_DAYS = 4;
 // Plafond dur, indépendant du nombre d'insights qui existeront un jour : jamais
 // plus de 2 affichés en même temps, pour ne pas transformer le dashboard en mur
@@ -1110,8 +1200,21 @@ function isInsightOnCooldown(id){
   return daysBetween(lastShown, todayStr()) < INSIGHT_COOLDOWN_DAYS;
 }
 
+// Toute la logique de priorité/subsomption entre Insights vit ICI, pas dispersée
+// dans chaque fonction Insight (brique 7A) : whatChangedInsight() passe en
+// premier (signal le plus riche), et s'il sélectionne 'weight' parmi ses
+// métriques, weightTrendInsight() est subsumé (même calcul 7v7/0.15kg au fond)
+// et retiré du pool pour ce rendu — pour ne jamais afficher deux fois la même
+// observation de poids sous deux formulations différentes.
 function kaloInsights(){
-  const candidates = [weightTrendInsight(), weekendVsWeekdayInsight(), commonBreakfastInsight()].filter(Boolean);
+  const whatChanged = whatChangedInsight();
+  const weightSubsumed = whatChanged && whatChanged.metrics.includes('weight');
+  const candidates = [
+    whatChanged,
+    weightSubsumed ? null : weightTrendInsight(),
+    weekendVsWeekdayInsight(),
+    commonBreakfastInsight(),
+  ].filter(Boolean);
   // Le filtrage cooldown se fait AVANT le plafond : un insight en cooldown libère
   // sa place pour un autre candidat éligible, plutôt que de bloquer un slot pour
   // rien.
@@ -1129,12 +1232,26 @@ function kaloInsights(){
 // seuils (jamais de carte vide ni de placeholder générique). Liseré --green (pas
 // --rust : un insight n'est pas un avertissement) réutilisant le même mécanisme
 // visuel déjà établi pour dash-block-attn, plutôt qu'une nouvelle couleur/pattern.
+// Bloc "Ce qui a changé" (brique 7A) : distinct visuellement d'un insight simple
+// (sous-titre + une ligne texte/chiffres par métrique sélectionnée) mais dans la
+// MÊME carte "Kalo a remarqué" — pas de 2e carte. `items` reste une structure de
+// données (id/text/figureLabel/figure) plutôt que du HTML pré-assemblé,
+// volontairement, pour pouvoir brancher plus tard un "Voir le détail" sans
+// reconstruire le composant ni recalculer quoi que ce soit.
+function whatChangedBlock(i){
+  return `<div class="insight-block" data-insight-id="${i.id}">
+    <p class="insight-subhead">Ce qui a changé</p>
+    ${i.items.map(it=>`<p class="insight-line">${escapeHtml(it.text)}</p><div class="insight-figure-row"><span>${escapeHtml(it.figureLabel)}</span><span>${escapeHtml(it.figure)}</span></div>`).join('')}
+  </div>`;
+}
 function kaloInsightsCard(){
   const insights = kaloInsights();
   if(!insights.length) return '';
   return `<section class="card insights-card">
     <h2>Kalo a remarqué</h2>
-    ${insights.map(i=>`<p class="insight-line">${escapeHtml(i.text)}</p>${i.foodIds && i.foodIds.length ? `<button class="btn small ghost quickadd-cta" data-quickadd="${i.id}" type="button">Ajouter ce repas</button>` : ''}`).join('')}
+    ${insights.map(i=> i.id==='what_changed' ? whatChangedBlock(i) :
+      `<div data-insight-id="${i.id}"><p class="insight-line">${escapeHtml(i.text)}</p>${i.foodIds && i.foodIds.length ? `<button class="btn small ghost quickadd-cta" data-quickadd="${i.id}" type="button">Ajouter ce repas</button>` : ''}</div>`
+    ).join('')}
   </section>`;
 }
 
