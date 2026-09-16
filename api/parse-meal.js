@@ -254,6 +254,23 @@ const FASTFOOD_ITEMS = [
   { id: 'fiveguys_frites_grande', brand: 'Five Guys', name: 'Frites Grande', aliases: ['frites grande five guys', 'five guys frites grande', 'grandes frites five guys'], calories: 1509, protein: 23, carbs: 162, fat: 89, fiber: 14 },
 ];
 
+// Ingrédients maison génériques (pas des produits de marque à portion fixe comme
+// FASTFOOD_ITEMS) : valeurs pour 100g, mis à l'échelle sur le grammage écrit dans le
+// texte ("160g fromage blanc 3,2%" -> qty = 160/100). Ajoutés au fil des écarts
+// constatés entre l'estimation IA et un calcul manuel pour des recettes maison
+// courantes (protéiné, petit-déj...) — mêmes valeurs que la base d'aliments
+// intégrée de l'appli (js/core.js), dupliquées ici car cette fonction serverless
+// n'a pas accès au bundle client. Alias volontairement qualifiés (ex. "fromage
+// blanc 3 2", pas juste "fromage blanc") pour ne pas matcher une variante
+// différente (0%, 20%...) avec des valeurs erronées.
+const GENERIC_ITEMS = [
+  { id: 'fromage_blanc_3_2', name: 'Fromage blanc 3,2%', aliases: ['fromage blanc 3 2'], per100g: true, calories: 76, protein: 7.9, carbs: 3.6, fat: 3.2, fiber: 0 },
+  { id: 'honey', name: 'Miel', aliases: ['miel'], per100g: true, calories: 304, protein: 0.3, carbs: 82.4, fat: 0, fiber: 0.2 },
+  { id: 'dark_chocolate_chips', name: 'Pépites de chocolat noir', aliases: ['pepites de chocolat noir', 'pepite de chocolat noir', 'pepites chocolat noir', 'pepite chocolat noir', 'pepites de chocolat', 'pepite de chocolat', 'pepites chocolat', 'pepite chocolat'], per100g: true, calories: 530, protein: 6, carbs: 52, fat: 31, fiber: 0 },
+  { id: 'oats_rolled_dry', name: "Flocons d'avoine secs", aliases: ['farine flocon d avoine', 'farine flocons d avoine', 'flocons d avoine', 'flocon d avoine', 'flocons avoine', 'flocon avoine'], per100g: true, calories: 389, protein: 17, carbs: 66, fat: 7, fiber: 10 },
+  { id: 'nutripure_whey_native', name: 'Whey Isolate Native Nutripure', aliases: ['whey native isolate nutripure', 'whey isolate native nutripure', 'whey native isolate', 'whey isolate native', 'whey nature isolate', 'whey native'], per100g: true, calories: 380, protein: 94, carbs: 3, fat: 1.9, fiber: 0 },
+];
+
 function normalizeFoodText(s) {
   return String(s || '')
     .toLowerCase()
@@ -287,10 +304,11 @@ function matchCola(normalizedText) {
 }
 
 // Découpe le texte en segments (mêmes séparateurs qu'une saisie typique "item - item - item"),
-// cherche pour chacun le meilleur match du catalogue (aliases les plus longs en premier, pour
-// que "double cheeseburger" batte "cheeseburger"), avec une quantité en tête optionnelle
-// ("2 big mac" -> qty 2). Retourne les items reconnus ET les segments non reconnus (texte brut,
-// à faire estimer par l'IA si besoin).
+// cherche pour chacun le meilleur match du catalogue — FASTFOOD_ITEMS (portion fixe, ex. "2 big
+// mac" -> qty 2) et GENERIC_ITEMS (valeurs /100g, ex. "160g fromage blanc" -> qty 1.6) — avec
+// les aliases les plus longs en premier (pour que "double cheeseburger" batte "cheeseburger").
+// Retourne les items reconnus ET les segments non reconnus (texte brut, à faire estimer par
+// l'IA si besoin).
 function matchFastfoodItems(mealDescription) {
   // Découpe le texte BRUT (séparateurs "-", ",", "+", retour ligne, " et ") avant toute
   // normalisation : normalizeFoodText() supprime la ponctuation (dont les tirets), donc
@@ -302,6 +320,7 @@ function matchFastfoodItems(mealDescription) {
 
   const allAliases = [];
   FASTFOOD_ITEMS.forEach(item => item.aliases.forEach(a => allAliases.push({ item, alias: a })));
+  GENERIC_ITEMS.forEach(item => item.aliases.forEach(a => allAliases.push({ item, alias: a })));
   allAliases.sort((a, b) => b.alias.length - a.alias.length);
 
   const matched = [];
@@ -313,6 +332,16 @@ function matchFastfoodItems(mealDescription) {
     const cola = matchCola(seg);
     if (cola) { matched.push({ ...cola, qty: 1 }); return; }
     const hit = allAliases.find(a => seg.includes(a.alias));
+    if (hit && hit.item.per100g) {
+      // Ingrédient générique /100g : exige un grammage explicite en tête du segment
+      // ("160g fromage blanc"), jamais une quantité devinée (même logique que requireQty
+      // ci-dessous) — sans grammage, on laisse l'IA estimer plutôt que de supposer 100g.
+      const gramMatch = seg.match(/^(\d+)\s*g\b/);
+      if (!gramMatch) { unmatchedSegments.push(rawSeg); return; }
+      const grams = Number(gramMatch[1]);
+      matched.push({ ...hit.item, qty: grams / 100, grams });
+      return;
+    }
     const qtyMatch = seg.match(/^(\d+)\s/);
     if (hit && hit.item.requireQty && !qtyMatch) {
       // Ex. "nuggets" (catalogue générique par pièce) sans nombre devant : pas de quantité
@@ -357,7 +386,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Meal description is required' });
     }
 
-    // Étape 1 : matching contre le catalogue fast-food à valeurs fixes (voir plus haut).
+    // Étape 1 : matching contre le catalogue fast-food (FASTFOOD_ITEMS, portion fixe) et les
+    // ingrédients maison génériques (GENERIC_ITEMS, valeurs /100g) — voir plus haut.
     // Repas entièrement reconnu -> réponse déterministe, AUCUN appel IA (zéro variance
     // possible). Repas partiellement reconnu -> l'IA n'estime que le reste, on additionne.
     // Repas non reconnu -> comportement inchangé (IA estime tout, comme avant).
@@ -368,7 +398,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         success: true,
         data: {
-          name: matched.map(m => (m.qty > 1 ? `${m.qty}x ` : '') + m.name).join(', '),
+          name: matched.map(m => (m.grams != null ? `${m.grams}g ` : (m.qty > 1 ? `${m.qty}x ` : '')) + m.name).join(', '),
           calories: Math.round(totals.calories),
           protein: Math.round(totals.protein * 10) / 10,
           carbs: Math.round(totals.carbs * 10) / 10,
@@ -449,7 +479,7 @@ export default async function handler(req, res) {
     if (isPartialMatch && nutritionData && typeof nutritionData === 'object' && !nutritionData.error) {
       const fixedTotals = sumMatched(matched);
       nutritionData = {
-        name: [matched.map(m => (m.qty > 1 ? `${m.qty}x ` : '') + m.name).join(', '), nutritionData.name].filter(Boolean).join(', '),
+        name: [matched.map(m => (m.grams != null ? `${m.grams}g ` : (m.qty > 1 ? `${m.qty}x ` : '')) + m.name).join(', '), nutritionData.name].filter(Boolean).join(', '),
         calories: Math.round(fixedTotals.calories + (Number(nutritionData.calories) || 0)),
         protein: Math.round((fixedTotals.protein + (Number(nutritionData.protein) || 0)) * 10) / 10,
         carbs: Math.round((fixedTotals.carbs + (Number(nutritionData.carbs) || 0)) * 10) / 10,
