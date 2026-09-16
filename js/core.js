@@ -763,6 +763,193 @@ function weekendVsWeekdayInsight(){
   return { id:'weekend_vs_weekday', text:`Sur les 14 derniers jours, tes apports journaliers moyens sont ${dir} le week-end (${Math.round(avgWeekend)} kcal) que les jours de semaine (${Math.round(avgWeekday)} kcal).` };
 }
 
+/* ===================== MOTEUR DE COMPARAISON DE PÉRIODES =====================
+   Couche de CONTEXTE générique (brique 7), pas un Insight : ne décide jamais de
+   ce qui s'affiche, ne formule aucune phrase, ne déduit aucune causalité.
+   Fondation pour un futur Insight "Ce qui a changé" (brique 7A), puis le
+   contexte croisé (brique 8) — même séparation détecteur/Insight que
+   recurringMealPatterns() ci-dessous : comparePeriods() remonte des faits
+   mesurés et leur fiabilité, jamais une interprétation.
+
+   "Période calendaire" (jours du range) != "période de suivi" (jours où
+   l'utilisateur a réellement loggué). Deux familles de métriques :
+   - déclaratives (poids, kcal, protéines) : l'absence d'entrée un jour donné
+     ne dit rien sur la réalité de ce jour-là (a-t-il mangé sans logguer, ou pas
+     mangé du tout ?) -> une moyenne sur trop peu de jours loggués est
+     trompeuse, gatée par une couverture minimale avant d'être exposée.
+   - constatées (jours loggués, séances/semaine) : l'absence d'entrée EST
+     l'information (pas de séance ce jour-là = 0, un fait, pas une donnée
+     manquante) -> pas de seuil de couverture, la période calendaire est déjà
+     l'échantillon complet et totalement connu. */
+
+// Couverture minimale pour qu'une moyenne déclarative (poids/kcal/protéines)
+// soit jugée représentative : sous ce seuil, silence plutôt qu'une moyenne
+// trompeuse sur des données trouées — même philosophie que les seuils Insights
+// existants ("peu de comparaisons mais solides").
+const PERIOD_MIN_COVERAGE_RATIO = 0.5;
+// Plancher absolu en plus du ratio : sur une période de 7j, 50% ne représente
+// que 3-4 jours — aligné sur les minimums déjà utilisés par les Insights
+// existants (ex. INSIGHT_MIN_DISTINCT_WEIGHIN_DAYS = 4 plus haut).
+const PERIOD_MIN_COVERAGE_DAYS = 3;
+// Écart de couverture (jours loggués / longueur de période) jugé significatif,
+// en points de ratio plutôt qu'en nombre brut de jours : comparable entre
+// périodes de longueurs différentes (7 vs 14 vs 30j), contrairement à un delta
+// de jours fixe. Nouveau seuil (pas de convention existante à reprendre pour
+// cette métrique), arbitraire mais documenté, à ajuster avec l'usage réel.
+const PERIOD_LOGGED_DAYS_COVERAGE_DELTA = 0.20;
+// Écart de fréquence d'entraînement jugé significatif : une séance/semaine de
+// plus ou de moins est la plus petite unité qui a un sens pour l'utilisateur
+// ("une séance en plus/en moins par semaine"). Nouveau seuil, documenté, à
+// ajuster avec l'usage.
+const PERIOD_SESSIONS_DELTA_PER_WEEK = 1;
+
+function periodDayList(start, end){
+  const days = [];
+  for(let d=start; d<=end; d=shiftDate(d,1)) days.push(d);
+  return days;
+}
+
+// Résultat commun à toute métrique : { value, sampleSize, coverage, periodLength, enough }.
+// `enough` = false => value est toujours null, jamais une moyenne calculée sur
+// une couverture insuffisante puis cachée seulement côté affichage.
+function declarativeMetric(calendarDays, loggedDates, dailyValue){
+  const logged = calendarDays.filter(d=>loggedDates.has(d));
+  const coverage = calendarDays.length ? logged.length/calendarDays.length : 0;
+  const enoughCoverage = logged.length >= PERIOD_MIN_COVERAGE_DAYS && coverage >= PERIOD_MIN_COVERAGE_RATIO;
+  const vals = enoughCoverage ? logged.map(dailyValue).filter(v=>v!=null) : [];
+  const value = vals.length ? vals.reduce((s,v)=>s+v,0)/vals.length : null;
+  return { value, sampleSize:logged.length, coverage, periodLength:calendarDays.length, enough: enoughCoverage && value!=null };
+}
+
+// Métrique constatée : pas de seuil de couverture (voir note d'en-tête), donc
+// toujours `enough:true` dès que la période elle-même est valide.
+function observedMetric(value, sampleSize, periodLength){
+  return { value, sampleSize, coverage:1, periodLength, enough:true };
+}
+
+// Registre des métriques comparables. Chaque entrée : compute(start,end) pour
+// mesurer une période, sigDelta(metricA,metricB) pour juger si l'écart entre
+// deux mesures DÉJÀ jugées `enough` est assez important pour être exposé (le
+// seuil et sa justification sont documentés à côté de chaque sigDelta), et
+// format() pour un futur affichage (non utilisé par le moteur lui-même).
+const PERIOD_METRICS = {
+  weight: {
+    label: 'Poids moyen',
+    compute(start,end){
+      const days = periodDayList(start,end);
+      const inRange = weightEntries.filter(e=>e.date>=start && e.date<=end);
+      const loggedDates = new Set(inRange.map(e=>e.date));
+      return declarativeMetric(days, loggedDates, d=>avgOnePerDay(inRange.filter(e=>e.date===d), 'weight'));
+    },
+    // Reprend le seuil déjà établi par weightTrendInsight() (0.15kg) plutôt que
+    // d'en inventer un nouveau pour le même type de comparaison.
+    sigDelta(a,b){ return Math.abs(a.value-b.value) >= INSIGHT_WEIGHT_DELTA_KG; },
+    format(m){ return m.value.toFixed(1)+' kg'; },
+  },
+  kcal: {
+    label: 'Calories moyennes/jour',
+    compute(start,end){
+      const days = periodDayList(start,end);
+      const loggedDates = new Set(days.filter(d=>entriesFor(d).some(e=>e.type==='meal')));
+      return declarativeMetric(days, loggedDates, d=>dayTotals(d).kcalIn);
+    },
+    // Reprend le double seuil (relatif ET absolu) déjà établi par
+    // weekendVsWeekdayInsight() pour ce même type de donnée.
+    sigDelta(a,b){
+      const abs = Math.abs(a.value-b.value), rel = abs/Math.max(a.value,1);
+      return rel >= INSIGHT_KCAL_RELATIVE_DELTA && abs >= INSIGHT_KCAL_ABSOLUTE_DELTA;
+    },
+    format(m){ return Math.round(m.value)+' kcal'; },
+  },
+  protein: {
+    label: 'Protéines moyennes/jour',
+    compute(start,end){
+      const days = periodDayList(start,end);
+      const loggedDates = new Set(days.filter(d=>entriesFor(d).some(e=>e.type==='meal')));
+      return declarativeMetric(days, loggedDates, d=>dayTotals(d).protein);
+    },
+    // Pas de convention existante pour les protéines : nouveau seuil, sur le
+    // même schéma (relatif + absolu) que kcal. 15% relatif (un peu plus
+    // permissif que les 10% kcal, les protéines variant naturellement plus
+    // d'un jour à l'autre) ET 15g absolus (~une portion de viande/whey), pour
+    // éviter qu'un écart relatif important sur une base faible ne déclenche à
+    // tort. Arbitraire mais documenté, à ajuster avec l'usage réel.
+    sigDelta(a,b){
+      const abs = Math.abs(a.value-b.value), rel = abs/Math.max(a.value,1);
+      return rel >= 0.15 && abs >= 15;
+    },
+    format(m){ return Math.round(m.value)+' g'; },
+  },
+  loggedDays: {
+    label: 'Jours loggués',
+    compute(start,end){
+      const days = periodDayList(start,end);
+      const logged = days.filter(d=>entriesFor(d).some(e=>e.type==='meal'));
+      return observedMetric(logged.length, logged.length, days.length);
+    },
+    sigDelta(a,b){
+      const covA = a.value/Math.max(a.periodLength,1), covB = b.value/Math.max(b.periodLength,1);
+      return Math.abs(covA-covB) >= PERIOD_LOGGED_DAYS_COVERAGE_DELTA;
+    },
+    format(m){ return `${m.value}/${m.periodLength} j`; },
+  },
+  sessionsPerWeek: {
+    label: 'Séances / semaine',
+    compute(start,end){
+      const days = periodDayList(start,end);
+      const count = logEntries.filter(e=>e.type==='workout' && e.date>=start && e.date<=end).length;
+      const rate = count / (days.length/7);
+      return observedMetric(rate, count, days.length);
+    },
+    sigDelta(a,b){ return Math.abs(a.value-b.value) >= PERIOD_SESSIONS_DELTA_PER_WEEK; },
+    format(m){ return m.value.toFixed(1)+'/sem'; },
+  },
+};
+
+// Périodes glissantes pratiques ("7 derniers jours", "les 7 précédents"...) —
+// simples générateurs de {start,end}, aucune logique métier.
+function recentPeriod(days, endOffsetDays=0){
+  const end = shiftDate(todayStr(), -endOffsetDays);
+  const start = shiftDate(end, -(days-1));
+  return {start, end};
+}
+function precedingPeriod(period, days){
+  const end = shiftDate(period.start, -1);
+  const start = shiftDate(end, -(days-1));
+  return {start, end};
+}
+
+// Moteur : compare deux périodes sur un jeu de métriques. Ne retourne QUE des
+// faits + leur statut de fiabilité — trois états possibles par métrique
+// (jamais de 4e état "texte pas assez de données", jamais de moyenne fournie
+// avec `enough:false`) :
+//  - 'insufficient_data'  : au moins une des deux périodes n'a pas assez de
+//                           couverture -> aucune comparaison exploitable.
+//  - 'stable'              : les deux mesures sont fiables mais l'écart ne
+//                           franchit pas le seuil de significativité -> rien à
+//                           signaler (pas une absence de calcul, une absence
+//                           de signal).
+//  - 'significant_change'  : écart fiable ET assez important pour être montré.
+function comparePeriods({current, previous, metrics}){
+  const ids = metrics && metrics.length ? metrics : Object.keys(PERIOD_METRICS);
+  const out = {};
+  ids.forEach(id=>{
+    const def = PERIOD_METRICS[id];
+    if(!def) return;
+    const a = def.compute(current.start, current.end);
+    const b = def.compute(previous.start, previous.end);
+    let status;
+    if(!a.enough || !b.enough) status = 'insufficient_data';
+    else status = def.sigDelta(a,b) ? 'significant_change' : 'stable';
+    out[id] = {
+      id, label: def.label, status,
+      current: a, previous: b,
+      delta: (a.enough && b.enough) ? a.value-b.value : null,
+    };
+  });
+  return out;
+}
+
 /* ===================== DÉTECTEUR GÉNÉRIQUE DE REPAS RÉCURRENTS =====================
    Brique de CONNAISSANCE réutilisable (Insights, recherche, suggestions, future
    section "Repas habituels", quick-add...) — volontairement séparée de la couche
