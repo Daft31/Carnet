@@ -626,13 +626,14 @@ function dashboardGrid(t){
   const histSub = streak>0 ? "d'affilée dans l'objectif" : 'Commence aujourd\'hui';
   const historyCard = dashCard('history', 'Historique', histValue, histSub);
 
-  // Aperçu de la dernière note plutôt qu'un simple compteur (un chiffre seul
-  // n'est pas une "info utile" - on ne sait rien du contenu sans cliquer).
-  const notesSorted = logEntries.filter(e=>e.type==='note').sort((a,b)=> b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
-  const latestNote = notesSorted[0];
-  const notesCard = dashCard('notes', 'Notes',
-    latestNote ? truncateText(latestNote.text, 42) : '—',
-    latestNote ? dateLabel(latestNote.date) : 'Aucune note');
+  // Aperçu de la note du jour si il y en a une (vraiment récente, donc pertinente) —
+  // sinon retombe sur un simple compteur plutôt que d'afficher une note ancienne
+  // (ex. vieille de 10 jours) qui n'aurait plus rien à voir avec "aujourd'hui".
+  const notesTodaySorted = entriesFor(currentDate).filter(e=>e.type==='note').sort((a,b)=>b.time.localeCompare(a.time));
+  const notesTotal = logEntries.filter(e=>e.type==='note').length;
+  const notesCard = notesTodaySorted[0]
+    ? dashCard('notes', 'Notes', truncateText(notesTodaySorted[0].text, 42), "Aujourd'hui")
+    : dashCard('notes', 'Notes', notesTotal ? `${notesTotal} note${notesTotal>1?'s':''}` : '—', 'Aucune aujourd\'hui');
 
   const pendingTodos = todos.filter(x=>!x.done).length;
   const todosCard = dashCard('todos', 'To-do', pendingTodos ? `${pendingTodos} à faire` : 'Tout fait ✓', `${todos.length} au total`);
