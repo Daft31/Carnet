@@ -141,10 +141,10 @@ function openQuickAddModal(draft){
     </div>`).join('');
   openModal(`
     <h3>Ajouter ce repas</h3>
-    <div class="hint">Quantités reprises de tes habitudes récentes — modifiable avant d'ajouter.</div>
+    <div class="hint">Un repas que tu manges souvent (${escapeHtml(draft.mealSlot)}). Quantités modifiables avant ajout.</div>
     <div class="quickadd-list">${rows}</div>
     <div class="qty-preview" id="qaPreview"></div>
-    <button class="btn" id="qaConfirm">Ajouter à ${draft.mealSlot}</button>
+    <button class="btn" id="qaConfirm">Ajouter le repas</button>
   `);
   const updatePreview = ()=>{
     let kcal=0, protein=0, carbs=0, fat=0;

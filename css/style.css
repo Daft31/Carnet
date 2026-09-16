@@ -147,7 +147,11 @@
   .quickadd-cta{margin-bottom:10px;}
   .insights-card .quickadd-cta:last-child{margin-bottom:0;}
 
-  .quickadd-list{margin-top:10px;}
+  /* Hauteur plafonnée + scroll interne : avec 6-8+ aliments, la liste ne doit
+     jamais repousser le récapitulatif macros / CTA hors de portée (le modal
+     entier scrolle déjà à 85vh, mais sans ce plafond le CTA finirait hors-écran
+     sur un repas long). */
+  .quickadd-list{margin-top:10px; max-height:38vh; overflow-y:auto;}
   .quickadd-item{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid var(--line);}
   .quickadd-item:last-child{border-bottom:none;}
   .qa-name{font-size:14px; font-weight:600; flex:1;}
