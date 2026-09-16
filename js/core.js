@@ -417,13 +417,48 @@ const TAB_LABELS = {
   notes:'Notes', todos:'To-do', shopping:'Courses', settings:'Réglages'
 };
 
+// Tronque un texte pour un aperçu de carte, sur un mot entier (pas de coupure en
+// plein milieu d'un mot) suivi de "…".
+function truncateText(text, maxLen){
+  const s = String(text||'').trim();
+  if(s.length<=maxLen) return s;
+  const cut = s.slice(0, maxLen);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace>10 ? cut.slice(0,lastSpace) : cut) + '…';
+}
+
+// Nombre de jours consécutifs (en remontant depuis aujourd'hui) où au moins un
+// repas a été loggué ET où le total calorique du jour est resté sous l'objectif.
+// S'arrête au premier jour sans repas loggué OU en dépassement — un jour sans
+// saisie n'est ni compté ni pénalisé plus que ça, il stoppe juste le décompte
+// (pas de notion de "série cassée" affichée : voir dashboardGrid()).
+function calorieStreak(){
+  let streak = 0;
+  let d = todayStr();
+  while(true){
+    const dayEntries = entriesFor(d);
+    if(!dayEntries.some(e=>e.type==='meal')) break;
+    const t = dayTotals(d);
+    if(t.kcalIn > settings.calorieGoal) break;
+    streak++;
+    d = shiftDate(d, -1);
+  }
+  return streak;
+}
+
 // Une carte cliquable du dashboard : résumé d'une section + navigation vers sa
 // page complète via switchTab() (liée dans bindTabEvents(), js/ui.js — même
 // mécanisme que l'ancienne nav). Volontairement un <button> sans contrôle
 // interactif imbriqué (pas de bouton dans un bouton) : juste un résumé, jamais
 // d'action modifiant les données directement depuis le dashboard.
-function dashCard(tab, label, value, sub){
-  return `<button class="dash-block" data-tab="${tab}" type="button">
+// `attention` : accent visuel discret (liseré --rust, déjà utilisé ailleurs dans
+// l'appli pour un dépassement calorique) pour faire ressortir une carte qui mérite
+// un coup d'œil — jamais un badge/pastille "en retard" façon outil de travail. Sur
+// demande explicite de l'utilisateur : on veut responsabiliser sans stresser, donc
+// réservé au seul fait déjà communiqué ailleurs dans l'appli de façon neutre (le
+// dépassement de l'objectif calorique du jour), pas à des rappels de tâches.
+function dashCard(tab, label, value, sub, attention){
+  return `<button class="dash-block${attention?' dash-block-attn':''}" data-tab="${tab}" type="button">
     <div class="dash-block-top"><span class="dash-ico">${DASH_ICONS[tab]}</span><span class="dash-label">${label}</span></div>
     <div class="dash-value">${escapeHtml(value)}</div>
     <div class="dash-sub">${escapeHtml(sub)}</div>
@@ -438,7 +473,7 @@ function dashboardGrid(t){
   const remaining = settings.calorieGoal - t.kcalIn;
   const over = t.kcalIn > settings.calorieGoal;
   const mealsSub = over ? `Dépassé de ${Math.round(-remaining)} kcal` : `${Math.round(remaining)} kcal restants`;
-  const mealsCard = dashCard('meals', 'Repas', `${Math.round(t.kcalIn)} kcal`, mealsSub);
+  const mealsCard = dashCard('meals', 'Repas', `${Math.round(t.kcalIn)} kcal`, mealsSub, over);
 
   const todaysWorkouts = entriesFor(currentDate).filter(e=>e.type==='workout');
   const wkKcal = Math.round(todaysWorkouts.reduce((s,e)=>s+e.kcalBurned,0));
@@ -458,18 +493,23 @@ function dashboardGrid(t){
   }
   const weightCard = dashCard('weight', 'Poids', weightValue, weightSub);
 
-  const curWeek = weeklyDeficit(weekStart(todayStr()));
-  let histValue = '—', histSub = 'Rien cette semaine';
-  if(curWeek.days.length){
-    const surplus = curWeek.total < 0;
-    histValue = `${Math.abs(Math.round(curWeek.total))} kcal`;
-    histSub = `${surplus?'Surplus':'Déficit'} cette semaine`;
-  }
+  // Série de jours dans l'objectif plutôt que le déficit hebdomadaire (qui fait
+  // doublon avec le graphique 7 jours juste en dessous) — cadré positivement
+  // (aucune mention d'un jour manqué/"cassé") pour rester dans l'esprit
+  // "responsabiliser sans stresser" demandé par l'utilisateur, plutôt qu'un
+  // indicateur de retard façon outil de suivi de tâches professionnel.
+  const streak = calorieStreak();
+  const histValue = streak>0 ? `${streak} jour${streak>1?'s':''}` : '—';
+  const histSub = streak>0 ? "d'affilée dans l'objectif" : 'Commence aujourd\'hui';
   const historyCard = dashCard('history', 'Historique', histValue, histSub);
 
-  const notesToday = entriesFor(currentDate).filter(e=>e.type==='note').length;
-  const notesTotal = logEntries.filter(e=>e.type==='note').length;
-  const notesCard = dashCard('notes', 'Notes', notesTotal ? `${notesTotal} note${notesTotal>1?'s':''}` : '—', notesToday ? `${notesToday} aujourd'hui` : "Aucune aujourd'hui");
+  // Aperçu de la dernière note plutôt qu'un simple compteur (un chiffre seul
+  // n'est pas une "info utile" - on ne sait rien du contenu sans cliquer).
+  const notesSorted = logEntries.filter(e=>e.type==='note').sort((a,b)=> b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+  const latestNote = notesSorted[0];
+  const notesCard = dashCard('notes', 'Notes',
+    latestNote ? truncateText(latestNote.text, 42) : '—',
+    latestNote ? dateLabel(latestNote.date) : 'Aucune note');
 
   const pendingTodos = todos.filter(x=>!x.done).length;
   const todosCard = dashCard('todos', 'To-do', pendingTodos ? `${pendingTodos} à faire` : 'Tout fait ✓', `${todos.length} au total`);
