@@ -189,6 +189,15 @@ export default async function handler(req, res) {
     if (!apiRes.ok) {
       const errText = await apiRes.text();
       console.error('Mammouth API error:', apiRes.status, errText);
+      // Voir api/parse-meal.js : blocage compte amont (Mammouth/OpenRouter), pas une erreur
+      // liée à ce programme précis.
+      const isAccountBlocked = /policy violation|has been blocked/i.test(errText);
+      if (isAccountBlocked) {
+        return res.status(502).json({
+          error: 'Compte Mammouth bloqué',
+          details: "L'API Mammouth a bloqué ce compte suite à une violation de politique détectée sur une requête précédente (probablement un faux positif). Ce n'est pas lié à ce programme précis : va vérifier ton compte sur mammouth.ai ou contacte leur support.",
+        });
+      }
       return res.status(502).json({
         error: 'Erreur API Mammouth',
         details: `${apiRes.status}: ${errText.slice(0, 300)}`,

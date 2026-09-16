@@ -407,6 +407,18 @@ export default async function handler(req, res) {
     if (!apiRes.ok) {
       const errText = await apiRes.text();
       console.error('Mammouth API error:', apiRes.status, errText);
+      // Blocage compte amont (Mammouth/OpenRouter) plutôt qu'une erreur liée à CE repas —
+      // le message brut ("Policy Violation... this user has been blocked") est technique et
+      // ne dit pas à l'utilisateur qu'il doit vérifier son compte Mammouth, pas reformuler sa
+      // saisie. Détecté par mot-clé plutôt que par code HTTP précis (l'upstream peut varier),
+      // sans jamais masquer les vraies erreurs (mauvaise description, quota, etc.).
+      const isAccountBlocked = /policy violation|has been blocked/i.test(errText);
+      if (isAccountBlocked) {
+        return res.status(502).json({
+          error: 'Compte Mammouth bloqué',
+          details: "L'API Mammouth a bloqué ce compte suite à une violation de politique détectée sur une requête précédente (probablement un faux positif). Ce n'est pas lié à ce repas précis : va vérifier ton compte sur mammouth.ai ou contacte leur support.",
+        });
+      }
       return res.status(502).json({
         error: 'Erreur API Mammouth',
         details: `${apiRes.status}: ${errText.slice(0, 300)}`,
