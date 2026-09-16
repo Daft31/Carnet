@@ -1197,7 +1197,15 @@ const INSIGHT_MAX_SHOWN = 2;
 function isInsightOnCooldown(id){
   const lastShown = insightsSeen[id];
   if(!lastShown) return false;
-  return daysBetween(lastShown, todayStr()) < INSIGHT_COOLDOWN_DAYS;
+  const today = todayStr();
+  // "Vu aujourd'hui" n'est pas un cooldown : c'est l'insight ACTUELLEMENT
+  // affiché. Sans ce cas à part, un 2e render() le même jour (ex. changer
+  // d'onglet puis revenir) le faisait disparaître pour le reste de la journée
+  // (daysBetween(today,today)=0 < 4), donnant l'impression que Kalo retire une
+  // info sans raison. Le cooldown de N jours ne s'applique qu'à PARTIR du
+  // lendemain de la dernière apparition.
+  if(lastShown === today) return false;
+  return daysBetween(lastShown, today) < INSIGHT_COOLDOWN_DAYS;
 }
 
 // Toute la logique de priorité/subsomption entre Insights vit ICI, pas dispersée
