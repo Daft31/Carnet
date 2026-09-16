@@ -682,6 +682,96 @@ function dashboardGrid(t){
   </section>`;
 }
 
+/* ===================== KALO COMPREND (insights niveau 1/2, factuels et sourcés) =====================
+   Règles volontaires, discutées avec l'utilisateur :
+   - Uniquement des observations descriptives et vérifiables (jamais d'interprétation
+     causale type "tu perds du gras" ou "ça ralentit ta perte") — le texte reste au
+     niveau du simple constat chiffré.
+   - Rien n'est affiché si les données sont insuffisantes ou si l'écart est trivial :
+     pas de "Kalo a remarqué" vide ni de faux positif sur du bruit normal.
+   - Seuils choisis pour rester cohérents avec l'existant plutôt qu'inventés au hasard
+     (0.15kg = déjà le seuil "stable" utilisé dans dashboardGrid()/weighInSummary()). */
+const INSIGHT_WEIGHT_DELTA_KG = 0.15;
+const INSIGHT_MIN_DISTINCT_WEIGHIN_DAYS = 4;
+const INSIGHT_MIN_WEEKDAY_LOGGED_DAYS = 5;
+const INSIGHT_MIN_WEEKEND_LOGGED_DAYS = 3;
+const INSIGHT_KCAL_RELATIVE_DELTA = 0.10; // 10%
+// Plancher absolu en plus du seuil relatif : sans lui, un écart relatif important
+// sur une base très faible (ex. 500 -> 560 kcal, +12% mais seulement 60 kcal réels)
+// déclenchait l'insight pour une différence négligeable en pratique — repéré en
+// testant volontairement ce cas limite.
+const INSIGHT_KCAL_ABSOLUTE_DELTA = 150;
+
+// Moyenne "un point par jour" : si plusieurs pesées existent le même jour, ce
+// jour-là ne compte qu'une fois (sa propre moyenne) dans la moyenne de fenêtre —
+// sinon un jour avec 3 pesées pèserait 3x plus qu'un jour avec 1 pesée, biaisant
+// le résultat vers les jours les plus mesurés plutôt que de refléter la période.
+function avgOnePerDay(entries, field){
+  const byDate = {};
+  entries.forEach(e=>{ (byDate[e.date] = byDate[e.date]||[]).push(e[field]); });
+  const dailyAvgs = Object.values(byDate).map(vals=>vals.reduce((s,v)=>s+v,0)/vals.length);
+  return dailyAvgs.length ? dailyAvgs.reduce((s,v)=>s+v,0)/dailyAvgs.length : null;
+}
+
+// Compare la moyenne (un point/jour) des 7 derniers jours à celle des 7 jours
+// précédents. Ne réutilise PAS weighInTrend() (delta premier/dernier point du
+// tableau) : ce calcul-là est sensible à une pesée isolée en bord de fenêtre,
+// exactement le biais que cet insight doit éviter.
+function weightTrendInsight(){
+  const today = todayStr();
+  const inRange = (d, start, end) => d>=start && d<=end;
+  const windowA = weightEntries.filter(e=>inRange(e.date, shiftDate(today,-6), today));
+  const windowB = weightEntries.filter(e=>inRange(e.date, shiftDate(today,-13), shiftDate(today,-7)));
+  const daysA = new Set(windowA.map(e=>e.date)).size;
+  const daysB = new Set(windowB.map(e=>e.date)).size;
+  if(daysA < INSIGHT_MIN_DISTINCT_WEIGHIN_DAYS || daysB < INSIGHT_MIN_DISTINCT_WEIGHIN_DAYS) return null;
+  const avgA = avgOnePerDay(windowA, 'weight');
+  const avgB = avgOnePerDay(windowB, 'weight');
+  const delta = avgA - avgB;
+  if(Math.abs(delta) < INSIGHT_WEIGHT_DELTA_KG) return null;
+  const dir = delta<0 ? 'inférieur' : 'supérieur';
+  return { id:'weight_trend', text:`Ton poids moyen des 7 derniers jours (${avgA.toFixed(1)} kg) est ${dir} à celui des 7 jours précédents (${avgB.toFixed(1)} kg).` };
+}
+
+// Compare la moyenne des apports caloriques journaliers entre jours de semaine et
+// jours de week-end, sur les 14 derniers jours — uniquement sur les jours
+// réellement loggués (au moins un repas ce jour-là), pas sur le nombre brut de
+// repas, pour ne pas comparer 1 samedi à 5 jours de semaine complets.
+function weekendVsWeekdayInsight(){
+  const today = todayStr();
+  const weekdayTotals = [], weekendTotals = [];
+  for(let i=0;i<14;i++){
+    const d = shiftDate(today, -i);
+    if(!entriesFor(d).some(e=>e.type==='meal')) continue;
+    const dow = new Date(d+'T12:00:00').getDay(); // 0=dimanche, 6=samedi
+    const kcal = dayTotals(d).kcalIn;
+    (dow===0 || dow===6 ? weekendTotals : weekdayTotals).push(kcal);
+  }
+  if(weekdayTotals.length < INSIGHT_MIN_WEEKDAY_LOGGED_DAYS || weekendTotals.length < INSIGHT_MIN_WEEKEND_LOGGED_DAYS) return null;
+  const avgWeekday = weekdayTotals.reduce((s,v)=>s+v,0)/weekdayTotals.length;
+  const avgWeekend = weekendTotals.reduce((s,v)=>s+v,0)/weekendTotals.length;
+  const absDelta = Math.abs(avgWeekend-avgWeekday);
+  const relDelta = absDelta/avgWeekday;
+  if(relDelta < INSIGHT_KCAL_RELATIVE_DELTA || absDelta < INSIGHT_KCAL_ABSOLUTE_DELTA) return null;
+  const dir = avgWeekend>avgWeekday ? 'plus élevés' : 'moins élevés';
+  return { id:'weekend_vs_weekday', text:`Sur les 14 derniers jours, tes apports journaliers moyens sont ${dir} le week-end (${Math.round(avgWeekend)} kcal) que les jours de semaine (${Math.round(avgWeekday)} kcal).` };
+}
+
+function kaloInsights(){
+  return [weightTrendInsight(), weekendVsWeekdayInsight()].filter(Boolean);
+}
+
+// Carte "Kalo a remarqué" : n'apparaît PAS du tout si aucun insight ne passe ses
+// seuils (jamais de carte vide ni de placeholder générique).
+function kaloInsightsCard(){
+  const insights = kaloInsights();
+  if(!insights.length) return '';
+  return `<section class="card insights-card">
+    <h2>Kalo a remarqué</h2>
+    ${insights.map(i=>`<p class="insight-line">${escapeHtml(i.text)}</p>`).join('')}
+  </section>`;
+}
+
 function viewToday(){
   const t = dayTotals(currentDate);
   // Le budget restant ignore volontairement les séances de sport : brûler des
@@ -746,6 +836,7 @@ function viewToday(){
       <div class="cell green"><div class="k">Objectif</div><div class="v">${settings.calorieGoal}</div></div>
     </div>
   </section>
+  ${kaloInsightsCard()}
   ${dashboardGrid(t)}
   <section class="card">
     <h2>Calories — 7 derniers jours</h2>
