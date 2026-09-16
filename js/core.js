@@ -999,38 +999,90 @@ const WHAT_CHANGED_FIGURE_LABEL = {
 // (règle structurelle, pas une détection de corrélation réelle).
 const WHAT_CHANGED_CONTENT_IDS = ['weight', 'kcal', 'protein', 'sessionsPerWeek'];
 
-// Insight-layer (brique 7A) au-dessus de comparePeriods() : sélectionne au plus
-// 2 métriques significatives sur "7 derniers jours vs 7 précédents" et les
-// formule. Ne décide PAS de la subsomption avec weightTrendInsight() ni de la
-// place dans les 2 slots globaux — ce choix est centralisé dans kaloInsights()
-// (voir note à cet endroit), pour garder toute la logique de priorité à un seul
-// endroit plutôt que dispersée entre Insights.
-function whatChangedInsight(){
+// Un seul calcul par rendu : whatChangedInsight() et weightIntakeAlignment()
+// partagent le même objet `cmp` (comparePeriods() reste l'unique source de
+// vérité, brique 8A) — pas de recalcul, pas d'état divergent entre les deux.
+function weeklyMetricsComparison(){
   const current = recentPeriod(7);
   const previous = precedingPeriod(current, 7);
-  const cmp = comparePeriods({ current, previous, metrics: [...WHAT_CHANGED_CONTENT_IDS, 'loggedDays'] });
-  const contentSignificant = WHAT_CHANGED_CONTENT_IDS.filter(id=>cmp[id].status==='significant_change');
-  let selectedIds;
-  if(contentSignificant.length){
-    selectedIds = contentSignificant;
-  } else if(cmp.loggedDays.status==='significant_change'){
-    selectedIds = ['loggedDays'];
-  } else {
-    return null;
+  return comparePeriods({ current, previous, metrics: [...WHAT_CHANGED_CONTENT_IDS, 'loggedDays'] });
+}
+
+// Construit une "figure" (ligne chiffrée préc. → actuel) pour une métrique déjà
+// jugée `enough` — factorisé pour être identique entre affichage simple et
+// affichage combiné (brique 8A).
+function whatChangedFigure(id, m){
+  const def = PERIOD_METRICS[id];
+  // loggedDays reste sous forme de fraction (ex. "3/7 j") des deux côtés — pas
+  // de "nombre + unité une seule fois" comme les autres métriques, sa forme
+  // naturelle inclut déjà le dénominateur.
+  const value = id==='loggedDays'
+    ? `${def.format(m.previous)} → ${def.format(m.current)}`
+    : `${def.numberFormat(m.previous.value)} → ${def.numberFormat(m.current.value)} ${def.unit}`;
+  return { label: WHAT_CHANGED_FIGURE_LABEL[id], value };
+}
+
+// Contexte croisé A1 (brique 8A) : poids + calories évoluent significativement
+// dans le MÊME sens sur la même fenêtre 7v7. Ne recalcule rien — lit
+// uniquement les `status`/`delta` déjà produits par comparePeriods(). Directions
+// opposées -> silence volontaire (pas "candidat mais non affiché" : null pur),
+// parce qu'une divergence affichée sans pouvoir l'expliquer crée une question
+// sans réponse plutôt qu'une observation utile. Aucune formulation causale
+// ("parce que", "ce qui explique", "grâce à") : uniquement un constat de
+// co-mouvement, jamais un mécanisme.
+function weightIntakeAlignment(cmp){
+  const w = cmp.weight, k = cmp.kcal;
+  // `status` vaut déjà 'insufficient_data' dès que l'une des deux périodes n'est
+  // pas `enough` (voir comparePeriods()) : exiger 'significant_change' des deux
+  // côtés couvre à la fois le seuil ET la règle "limité par le signal le moins
+  // fiable des deux" en une seule condition, sans relire `enough` séparément.
+  if(w.status!=='significant_change' || k.status!=='significant_change') return null;
+  if(Math.sign(w.delta) !== Math.sign(k.delta)) return null;
+  const text = w.delta<0
+    ? `Ton apport calorique moyen et ton poids moyen ont tous les deux diminué par rapport à la semaine précédente.`
+    : `Ton apport calorique moyen et ton poids moyen ont tous les deux augmenté par rapport à la semaine précédente.`;
+  // Ordre calories puis poids : suit l'ordre de la phrase ("apport calorique...
+  // et... poids..."), pas l'ordre de priorité général weight>kcal (qui régit la
+  // SÉLECTION, pas la présentation d'un groupe déjà sélectionné).
+  return { metrics:['weight','kcal'], text, figures:[whatChangedFigure('kcal',k), whatChangedFigure('weight',w)] };
+}
+
+// Insight-layer (brique 7A, étendu 8A) au-dessus de comparePeriods() : compose
+// jusqu'à 2 "groupes" affichés dans "Ce qui a changé". Un groupe est soit le
+// contexte croisé A1 (2 métriques, 1 phrase, 2 figures — compte pour UNE place
+// sur les 2), soit une métrique simple (1 phrase, 1 figure). Ne décide PAS de
+// la subsomption avec weightTrendInsight() ni de la place dans les 2 slots
+// globaux — ce choix reste centralisé dans kaloInsights().
+function whatChangedInsight(){
+  const cmp = weeklyMetricsComparison();
+  const groups = [];
+  let consumedIds = [];
+
+  const alignment = weightIntakeAlignment(cmp);
+  if(alignment){
+    groups.push({ kind:'weight_intake_alignment', ...alignment });
+    consumedIds = alignment.metrics;
   }
-  const items = selectedIds.slice(0, INSIGHT_MAX_SHOWN).map(id=>{
-    const m = cmp[id];
-    const dir = m.delta>0 ? 'up' : 'down';
-    const def = PERIOD_METRICS[id];
-    // loggedDays reste sous forme de fraction (ex. "3/7 j") des deux côtés — pas
-    // de "nombre + unité une seule fois" comme les autres métriques, sa forme
-    // naturelle inclut déjà le dénominateur.
-    const figure = id==='loggedDays'
-      ? `${def.format(m.previous)} → ${def.format(m.current)}`
-      : `${def.numberFormat(m.previous.value)} → ${def.numberFormat(m.current.value)} ${def.unit}`;
-    return { id, text: WHAT_CHANGED_TEXT[id][dir], figureLabel: WHAT_CHANGED_FIGURE_LABEL[id], figure };
-  });
-  return { id:'what_changed', metrics: items.map(it=>it.id), items };
+
+  WHAT_CHANGED_CONTENT_IDS
+    .filter(id => !consumedIds.includes(id) && cmp[id].status==='significant_change')
+    .forEach(id=>{
+      if(groups.length >= INSIGHT_MAX_SHOWN) return;
+      const m = cmp[id];
+      const dir = m.delta>0 ? 'up' : 'down';
+      groups.push({ kind:id, metrics:[id], text: WHAT_CHANGED_TEXT[id][dir], figures:[whatChangedFigure(id,m)] });
+    });
+
+  // Repli méta loggedDays : uniquement si AUCUN signal de contenu (via A1 ou
+  // seul) n'a produit de groupe — jamais en complément d'un groupe de contenu
+  // (règle brique 7A inchangée).
+  if(!groups.length && cmp.loggedDays.status==='significant_change'){
+    const m = cmp.loggedDays, dir = m.delta>0 ? 'up' : 'down';
+    groups.push({ kind:'loggedDays', metrics:['loggedDays'], text: WHAT_CHANGED_TEXT.loggedDays[dir], figures:[whatChangedFigure('loggedDays',m)] });
+  }
+
+  if(!groups.length) return null;
+  return { id:'what_changed', metrics:[...new Set(groups.flatMap(g=>g.metrics))], items: groups };
 }
 
 /* ===================== DÉTECTEUR GÉNÉRIQUE DE REPAS RÉCURRENTS =====================
@@ -1249,7 +1301,7 @@ function kaloInsights(){
 function whatChangedBlock(i){
   return `<div class="insight-block" data-insight-id="${i.id}">
     <p class="insight-subhead">Ce qui a changé</p>
-    ${i.items.map(it=>`<p class="insight-line">${escapeHtml(it.text)}</p><div class="insight-figure-row"><span>${escapeHtml(it.figureLabel)}</span><span>${escapeHtml(it.figure)}</span></div>`).join('')}
+    ${i.items.map(g=>`<p class="insight-line">${escapeHtml(g.text)}</p>${g.figures.map(f=>`<div class="insight-figure-row"><span>${escapeHtml(f.label)}</span><span>${escapeHtml(f.value)}</span></div>`).join('')}`).join('')}
   </div>`;
 }
 function kaloInsightsCard(){
