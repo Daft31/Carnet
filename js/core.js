@@ -309,8 +309,16 @@ function dateStrip(){
       <span class="ds-dot${hasEntries?' filled':''}"></span>
     </button>`;
   }).join('');
+  // Le libellé ("Aujourd'hui", "Hier"...) est un vrai bouton qui ouvre le
+  // sélecteur de date natif (input[type=date] cliqué par programme via
+  // showPicker(), voir bindTabEvents() dans ui.js) — pour choisir directement une
+  // date lointaine sans faire défiler le ruban jour par jour.
   return `<div class="date-strip">
-    <div class="date-strip-label">${dateLabel(currentDate)}<small>${new Date(currentDate+'T12:00:00').toLocaleDateString('fr-FR')}</small></div>
+    <button class="date-strip-label" id="dateStripLabel" type="button">
+      <span>${dateLabel(currentDate)}<small>${new Date(currentDate+'T12:00:00').toLocaleDateString('fr-FR')}</small></span>
+      <svg class="ds-cal-ico" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    </button>
+    <input type="date" id="dateStripPicker" class="date-strip-picker" value="${currentDate}" tabindex="-1" aria-hidden="true">
     <div class="date-strip-scroll" id="dateStripScroll">${items}</div>
   </div>`;
 }
@@ -515,7 +523,6 @@ function viewToday(){
 
   return `
   ${dateStrip()}
-  ${dashboardGrid(t)}
   <section class="card">
     <div class="kcal-ring-wrap">
       <svg class="kcal-ring ${over?'over':''}" viewBox="0 0 120 120">
@@ -539,6 +546,7 @@ function viewToday(){
       <div class="cell green"><div class="k">Objectif</div><div class="v">${settings.calorieGoal}</div></div>
     </div>
   </section>
+  ${dashboardGrid(t)}
   <section class="card">
     <h2>Calories — 7 derniers jours</h2>
     <div class="mini-bars">
@@ -563,68 +571,7 @@ function viewToday(){
       if(!tips.length) return '<div class="empty">Ton alimentation est bien répartie par rapport à l\'avancée de la journée 👍</div>';
       return tips.map(tip=>`<p class="macro-tip"><b style="color:${tip.color}">${tip.label}</b> : ${tip.text}</p>`).join('');
     })()}
-  </section>
-  <section class="card">
-    <h2>Journal du jour</h2>
-    ${MEAL_SLOTS.map(s=>journalSlotCard(currentDate, s)).join('')}
-    ${(()=>{
-      // Séances et notes du jour restent dans un détail repliable : les séances ont
-      // déjà leur propre liste dans l'onglet Séances, donc pas besoin de les dupliquer
-      // ici en clair — juste un accès rapide sans quitter Aujourd'hui.
-      const n = entriesFor(currentDate).filter(e=>e.type==='workout'||e.type==='note').length;
-      if(!n) return '';
-      return `<button class="settings-toggle" data-toggle="todayLog" type="button">${openTodayLog?'Masquer ▲':'Séances & notes du jour ▼'} (${n})</button>
-        ${openTodayLog ? otherLogList(currentDate) : ''}`;
-    })()}
   </section>`;
-}
-
-// Icône décorative par créneau, purement visuelle (aucune donnée n'en dépend).
-const MEAL_SLOT_ICON = {'Petit-déj':'🌅','Déjeuner':'🍽️','Dîner':'🌙','Collation':'🍎'};
-
-// Carte "Journal du jour" par créneau repas (inspirée de la vue Journal de MFP) :
-// affiche ce qui est déjà loggué pour ce créneau ce jour-là, ou un état vide avec
-// un bouton d'ajout rapide qui présélectionne le créneau (quickAddToSlot, js/ui.js)
-// et réutilise le flux de recherche d'aliment existant de l'onglet Repas.
-function journalSlotCard(date, slot){
-  const es = entriesFor(date).filter(e=>e.type==='meal' && e.mealSlot===slot).sort((a,b)=>a.time.localeCompare(b.time));
-  const kcal = Math.round(es.reduce((s,e)=>s+e.kcal,0));
-  const rows = es.map(e=>`
-    <div class="list-entry enter">
-      <div class="main"><div class="title">${escapeHtml(e.foodName)}</div><div class="sub">${e.grams!=null ? e.grams+' g' : 'estimé IA'} · ${e.time}</div></div>
-      <div class="amount blue">+${Math.round(e.kcal)}</div>
-      <button class="del" data-del="${e.id}">✕</button>
-    </div>`).join('');
-  return `<div class="journal-slot">
-    <div class="journal-slot-head">
-      <div class="journal-slot-title"><span class="jsico">${MEAL_SLOT_ICON[slot]||'🍽️'}</span>${slot}</div>
-      <div class="journal-slot-right">
-        ${es.length ? `<span class="journal-slot-kcal">${kcal} kcal</span>` : ''}
-        <button class="journal-slot-add" data-quickslot="${slot}" type="button" title="Ajouter à ${slot}" aria-label="Ajouter à ${slot}">+</button>
-      </div>
-    </div>
-    ${es.length ? rows : `<div class="empty">Rien pour l'instant.</div>`}
-  </div>`;
-}
-
-// Détail repliable des séances/notes du jour (les repas sont désormais affichés
-// via journalSlotCard ci-dessus, pas besoin de les répéter ici).
-function otherLogList(date){
-  const es = entriesFor(date).filter(e=>e.type==='workout'||e.type==='note').sort((a,b)=>a.time.localeCompare(b.time));
-  if(!es.length) return `<div class="empty">Rien enregistré ce jour-là.</div>`;
-  return es.map(e=>{
-    if(e.type==='note'){
-      return `<div class="list-entry enter"><div class="main"><div class="title">Note · ${e.time}</div><div class="sub">${escapeHtml(e.text||'')}</div></div>
-        <button class="del" data-del="${e.id}">✕</button>
-      </div>`;
-    }
-    const s = workoutSummary(e);
-    return `<div class="list-entry enter">
-      <div class="main"><div class="title">${s.title}</div><div class="sub">${s.sub}</div></div>
-      <div class="amount rust">−${Math.round(e.kcalBurned)}</div>
-      <button class="del" data-del="${e.id}">✕</button>
-    </div>`;
-  }).join('');
 }
 
 function dayLogList(date){
@@ -1214,7 +1161,6 @@ let openHistDay = null;
 let openHistWeek = null;
 let openCustomFoods = false;
 let openFavorites = false;
-let openTodayLog = false;
 let openRecipeId = null;
 // Géométrie SVG partagée par les graphiques de l'onglet Poids.
 const CHART_W=320, CHART_H=150, CHART_PADL=36, CHART_PADR=14, CHART_PADT=16, CHART_PADB=24;

@@ -59,15 +59,6 @@ function openFabMenu(){
   };
 }
 
-// Raccourci depuis une carte de créneau du "Journal du jour" (onglet Aujourd'hui) :
-// présélectionne le créneau puis bascule vers Repas, comme un clic manuel sur le
-// segment de créneau suivi d'un clic dans la recherche — même flux, juste plus vite.
-function quickAddToSlot(slot){
-  mealSlot = slot;
-  switchTab('meals');
-  setTimeout(()=>document.getElementById('foodsearch')?.focus(), 0);
-}
-
 // Survol des graphiques (onglet Poids) : crosshair + tooltip listant chaque série au point le plus proche.
 function bindChartHover(wrapId, points, seriesDefs){
   const wrap = document.getElementById(wrapId);
@@ -291,9 +282,17 @@ function bindTabEvents(){
   document.querySelectorAll('[data-act="nextday"]').forEach(b=>b.onclick=()=>{ currentDate=shiftDate(currentDate,1); render(); });
   document.querySelectorAll('[data-jumpdate]').forEach(b=>b.onclick=()=>{ currentDate=b.dataset.jumpdate; render(); });
   centerDateStrip();
-  const todayLogToggle = document.querySelector('[data-toggle="todayLog"]');
-  if(todayLogToggle) todayLogToggle.onclick = ()=>{ openTodayLog = !openTodayLog; render(); };
-  document.querySelectorAll('[data-quickslot]').forEach(b=>b.onclick=()=>{ quickAddToSlot(b.dataset.quickslot); });
+  // Libellé du bandeau de dates (ex. "Aujourd'hui") : ouvre le calendrier natif
+  // pour sauter directement à une date lointaine, sans faire défiler le ruban.
+  const dsLabel = document.getElementById('dateStripLabel');
+  const dsPicker = document.getElementById('dateStripPicker');
+  if(dsLabel && dsPicker){
+    dsLabel.onclick = ()=>{
+      try{ dsPicker.showPicker ? dsPicker.showPicker() : dsPicker.focus(); }
+      catch{ dsPicker.focus(); }
+    };
+    dsPicker.onchange = ()=>{ if(dsPicker.value){ currentDate = dsPicker.value; render(); } };
+  }
 
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     logEntries = logEntries.filter(e=>e.id!==b.dataset.del); save(); render();

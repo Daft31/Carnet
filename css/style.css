@@ -61,12 +61,23 @@
 
   /* ---- Bandeau de dates unique (dateStrip(), js/core.js) ---- */
   .date-strip{
+    position:relative;
     background:var(--surface); border:none; border-radius:20px;
     padding:12px 0 10px; margin-bottom:16px;
     box-shadow:0 1px 3px rgba(28,43,34,.06), 0 8px 24px rgba(28,43,34,.04);
   }
-  .date-strip-label{font-weight:700; font-size:14px; text-transform:capitalize; padding:0 14px 10px;}
+  .date-strip-label{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;
+    background:none; border:none; cursor:pointer; text-align:left; font-family:var(--font-sans);
+    font-weight:700; font-size:14px; text-transform:capitalize; padding:0 14px 10px; color:var(--ink);
+  }
+  .date-strip-label:active{opacity:.7;}
   .date-strip-label small{display:block; font-weight:500; color:var(--ink-faint); font-size:11px; text-transform:none; margin-top:1px;}
+  .ds-cal-ico{width:16px; height:16px; flex-shrink:0; stroke:var(--ink-faint); fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;}
+  /* Input natif utilisé uniquement pour son sélecteur de date (showPicker(), voir
+     ui.js) : invisible mais pas display:none (sinon showPicker() ne fonctionne
+     plus dans certains navigateurs), sans impact sur la mise en page du bandeau. */
+  .date-strip-picker{position:absolute; width:1px; height:1px; opacity:0; border:none; padding:0; pointer-events:none;}
   .date-strip-scroll{
     display:flex; overflow-x:auto; padding:0 14px 2px; scroll-behavior:auto;
     -webkit-overflow-scrolling:touch; scrollbar-width:none;
@@ -241,22 +252,6 @@
   .fmi-txt{display:flex; flex-direction:column; gap:1px; min-width:0;}
   .fmi-txt b{font-size:14px; font-weight:650; color:var(--ink);}
   .fmi-txt small{font-size:11.5px; color:var(--ink-faint);}
-
-  /* ---- Journal du jour : une carte par créneau repas (onglet Aujourd'hui) ---- */
-  .journal-slot{border-radius:14px; background:var(--surface-2); margin-bottom:10px; padding:2px 14px;}
-  .journal-slot:last-child{margin-bottom:0;}
-  .journal-slot-head{display:flex; align-items:center; justify-content:space-between; padding:9px 0; gap:8px;}
-  .journal-slot-title{display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:700; min-width:0;}
-  .journal-slot-title .jsico{font-size:15px;}
-  .journal-slot-right{display:flex; align-items:center; gap:8px; flex-shrink:0;}
-  .journal-slot-kcal{font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--ink-soft);}
-  .journal-slot-add{
-    width:30px; height:30px; border-radius:50%; border:none; background:var(--green-soft); color:var(--green);
-    font-size:16px; font-weight:700; line-height:1; display:grid; place-content:center; cursor:pointer; padding:0;
-  }
-  .journal-slot-add:active{background:var(--green); color:#fff;}
-  .journal-slot .list-entry{padding:9px 0;}
-  .journal-slot .empty{padding:0 0 10px;}
 
   @keyframes modalBgIn{ from{opacity:0;} to{opacity:1;} }
   @keyframes modalBgOut{ from{opacity:1;} to{opacity:0;} }
