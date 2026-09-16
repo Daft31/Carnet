@@ -15,7 +15,10 @@
 // modèle sur ce point précis.
 
 const MAMMOUTH_API_URL = 'https://api.mammouth.ai/v1/chat/completions';
-const MAMMOUTH_MODEL = 'gpt-5.4-mini';
+// Les modèles GPT sont temporairement indisponibles côté Mammouth (confirmé par
+// leur support le 16/09/2026) — bascule sur claude-haiku-4-5 (non-GPT) en
+// attendant. Revenir à gpt-5.4-mini une fois l'incident résolu si souhaité.
+const MAMMOUTH_MODEL = 'claude-haiku-4-5';
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
