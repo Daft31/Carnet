@@ -763,57 +763,96 @@ function weekendVsWeekdayInsight(){
   return { id:'weekend_vs_weekday', text:`Sur les 14 derniers jours, tes apports journaliers moyens sont ${dir} le week-end (${Math.round(avgWeekend)} kcal) que les jours de semaine (${Math.round(avgWeekday)} kcal).` };
 }
 
+/* ===================== DÉTECTEUR GÉNÉRIQUE DE REPAS RÉCURRENTS =====================
+   Brique de CONNAISSANCE réutilisable (Insights, recherche, suggestions, future
+   section "Repas habituels", quick-add...) — volontairement séparée de la couche
+   Insight : cette fonction ne décide jamais de ce qui s'affiche à l'utilisateur,
+   elle se contente de remonter les patterns détectés. C'est à l'appelant (ex.
+   commonBreakfastInsight() ci-dessous) de choisir s'il expose tel pattern —
+   remonter automatiquement TOUS les patterns détectés dans "Kalo a remarqué"
+   transformerait vite le dashboard en inventaire de repas sans valeur (4 lignes
+   "ton petit-déj/déjeuner/dîner/collation est récurrent").
+
+   Signature : ensemble des foodId présents (ordre et grammage ignorés — une
+   variation de portion ne doit pas fragmenter le pattern), zéro fuzzy matching,
+   zéro embedding, zéro IA. Un ingrédient ajouté/retiré = signature différente,
+   assumé (pas de tolérance floue). Les entrées sans foodId (repas IA en texte
+   libre, sans identité stable) comptent dans l'échantillon du créneau mais ne
+   peuvent jamais faire gagner une combinaison — dilue honnêtement la confiance
+   plutôt que de les ignorer silencieusement.
+
+   `mealSlots` attend directement les valeurs de MEAL_SLOTS (déjà l'identifiant
+   ET le libellé dans ce modèle de données — pas de mapping anglais/français à
+   maintenir en plus). Chaque créneau est détecté indépendamment : deux créneaux
+   ne se mélangent jamais, et une même combinaison sur deux créneaux produit deux
+   patterns distincts (ex. "café + tartines" au petit-déj ET en collation). */
+function recurringMealPatterns({days, mealSlots, minSamples, minShare, minLeadPts}){
+  const today = todayStr();
+  const patterns = [];
+  mealSlots.forEach(slot=>{
+    const comboCounts = {}; // signature -> {count, foodIds, entries:[], lastSeen}
+    let totalSlotDays = 0;
+    for(let i=0;i<days;i++){
+      const d = shiftDate(today, -i);
+      const dayMeals = entriesFor(d).filter(e=>e.type==='meal' && e.mealSlot===slot);
+      if(!dayMeals.length) continue;
+      totalSlotDays++;
+      const withFoodId = dayMeals.filter(e=>e.foodId);
+      if(!withFoodId.length) continue; // jour compté, mais aucune combinaison possible
+      const ids = [...new Set(withFoodId.map(e=>e.foodId))].sort();
+      const sig = ids.join('|');
+      if(!comboCounts[sig]) comboCounts[sig] = {count:0, foodIds:ids, entries:[], lastSeen:null};
+      const bucket = comboCounts[sig];
+      bucket.count++;
+      bucket.entries.push(...withFoodId);
+      if(!bucket.lastSeen || d>bucket.lastSeen) bucket.lastSeen = d;
+    }
+    if(totalSlotDays < minSamples) return;
+    const combos = Object.values(comboCounts).sort((a,b)=>b.count-a.count);
+    const top = combos[0];
+    if(!top) return;
+    const topShare = top.count/totalSlotDays;
+    if(topShare <= minShare) return;
+    const second = combos[1];
+    if(second && (second.count/totalSlotDays) >= topShare - (minLeadPts/100)) return;
+    patterns.push({
+      mealSlot: slot,
+      foodIds: top.foodIds,
+      matchingEntries: top.entries,
+      count: top.count,
+      share: topShare,
+      lastSeen: top.lastSeen,
+    });
+  });
+  return patterns;
+}
+
 const INSIGHT_BREAKFAST_WINDOW_DAYS = 30;
 const INSIGHT_MIN_BREAKFAST_DAYS = 8;
 const INSIGHT_BREAKFAST_DOMINANT_RATIO = 0.5; // strictement >, un 50/50 pile ne compte pas
-const INSIGHT_BREAKFAST_CLOSE_MARGIN = 0.10; // 2e option à moins de 10 points -> trop ambigu
+const INSIGHT_BREAKFAST_CLOSE_MARGIN_PTS = 10; // 2e option à moins de 10 points -> trop ambigu
 
-// Repas habituel sur un créneau (ici Petit-déj) : regroupe les petits-déj des 30
-// derniers jours par "signature" = l'ensemble des foodId présents ce jour-là (le
-// grammage n'entre PAS dans la signature — une variation de quantité ne doit pas
-// faire apparaître deux repas identiques comme différents, cf. discussion avec
-// l'utilisateur). Volontairement strict à l'inverse : un ingrédient en plus/en
-// moins change la signature, donc deux repas réellement différents ne sont jamais
-// fusionnés — pas de tolérance floue, pas de système de similarité. Les entrées
-// sans foodId (repas décrits en texte libre par l'IA, sans identité stable) ne
-// participent à aucune signature : un jour où le petit-déj n'est identifiable que
-// via l'IA compte quand même dans le dénominateur (jour avec petit-déj) mais ne
-// peut jamais faire gagner une combinaison, ce qui dilue honnêtement la confiance
-// plutôt que de l'ignorer.
+// Couche Insight : choisit d'exposer UNIQUEMENT le pattern petit-déjeuner (pas les
+// 3 autres créneaux, volontairement — voir note sur recurringMealPatterns() ci-
+// dessus). Un simple wrapper fin autour du détecteur générique, aucune logique de
+// regroupement ici.
 function commonBreakfastInsight(){
-  const today = todayStr();
-  const comboCounts = {}; // signature -> {count, foodIds, entries:[]}
-  let totalBreakfastDays = 0;
-  for(let i=0;i<INSIGHT_BREAKFAST_WINDOW_DAYS;i++){
-    const d = shiftDate(today, -i);
-    const dayMeals = entriesFor(d).filter(e=>e.type==='meal' && e.mealSlot==='Petit-déj');
-    if(!dayMeals.length) continue;
-    totalBreakfastDays++;
-    const withFoodId = dayMeals.filter(e=>e.foodId);
-    if(!withFoodId.length) continue; // jour compté, mais aucune combinaison possible
-    const ids = [...new Set(withFoodId.map(e=>e.foodId))].sort();
-    const sig = ids.join('|');
-    if(!comboCounts[sig]) comboCounts[sig] = {count:0, foodIds:ids, entries:[]};
-    comboCounts[sig].count++;
-    comboCounts[sig].entries.push(...withFoodId);
-  }
-  if(totalBreakfastDays < INSIGHT_MIN_BREAKFAST_DAYS) return null;
-  const combos = Object.values(comboCounts).sort((a,b)=>b.count-a.count);
-  const top = combos[0];
+  const patterns = recurringMealPatterns({
+    days: INSIGHT_BREAKFAST_WINDOW_DAYS,
+    mealSlots: ['Petit-déj'],
+    minSamples: INSIGHT_MIN_BREAKFAST_DAYS,
+    minShare: INSIGHT_BREAKFAST_DOMINANT_RATIO,
+    minLeadPts: INSIGHT_BREAKFAST_CLOSE_MARGIN_PTS,
+  });
+  const top = patterns[0];
   if(!top) return null;
-  const topRatio = top.count/totalBreakfastDays;
-  if(topRatio <= INSIGHT_BREAKFAST_DOMINANT_RATIO) return null;
-  const second = combos[1];
-  if(second && (second.count/totalBreakfastDays) >= topRatio - INSIGHT_BREAKFAST_CLOSE_MARGIN) return null;
   const names = top.foodIds.map(id=>allFoods().find(f=>f.id===id)?.name).filter(Boolean);
   if(!names.length) return null;
-  // matchingEntries : gardé disponible pour une future réutilisation (proposer ce
-  // repas en un clic, cf. Brique 6) — pas exploité côté affichage pour l'instant.
   return {
     id:'breakfast_combo',
     text:`Ton petit-déjeuner le plus fréquent est : ${frenchList(names)}.`,
     foodIds: top.foodIds,
-    matchingEntries: top.entries,
+    matchingEntries: top.matchingEntries,
   };
 }
 
