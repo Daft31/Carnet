@@ -132,7 +132,16 @@
   }
   .card h2{margin:0 0 12px; font-size:12.5px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em;}
   /* "Kalo a remarqué" (kaloInsightsCard, core.js) : discret, jamais plus de 2-3
-     lignes, aucune icône d'alerte — reste au niveau du simple constat chiffré. */
+     lignes, aucune icône d'alerte — reste au niveau du simple constat chiffré.
+     Liseré --green (même mécanisme que .dash-block-attn, qui utilise --rust pour
+     un tout autre sens : "attention/dépassement") pour distinguer visuellement
+     cette carte d'une carte d'info neutre sans inventer un nouveau pattern. */
+  /* Sélecteur "section.card.insights-card" (pas juste ".insights-card") : la règle
+     section.card{border:none} ci-dessus a une spécificité plus forte (élément +
+     classe) et gagnerait sinon sur ce liseré, quel que soit l'ordre dans le
+     fichier — même piège que celui déjà rencontré avec [hidden] sur la refonte
+     dashboard-first. */
+  section.card.insights-card{border-left:3px solid var(--green);}
   .insight-line{margin:0 0 6px; font-size:13.5px; line-height:1.45; color:var(--ink);}
   .insight-line:last-child{margin-bottom:0;}
 

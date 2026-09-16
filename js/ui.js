@@ -712,6 +712,7 @@ function bindTabEvents(){
         workoutPresets = [];
         logEntries = []; todos = []; shoppingList = []; recipes = []; recipeBooks = [];
         favSports = [{type:'tapis'}, {type:'velo'}];
+        insightsSeen = {};
         save(); render(); toast('Données réinitialisées');
       }
     };

@@ -31,6 +31,7 @@ let todos = LS.get('ct_todos', []); // {id,text,daily,done,completedDate}
 let shoppingList = LS.get('ct_shoppingList', []); // {id,name,checked,qty,source}
 let recipes = LS.get('ct_recipes', []); // {id,name,ingredients:[{name,qty}],steps,servings,sourceUrl,savedAt,bookId} — recettes importées, rangées par livre (voir recipeBooks)
 let recipeBooks = LS.get('ct_recipeBooks', []); // {id,name} — "livres de cuisine" créés librement par l'utilisateur, chaque recette appartient à un seul livre
+let insightsSeen = LS.get('ct_insightsSeen', {}); // {insightId: dernière date d'affichage} — cooldown des Kalo Insights (voir kaloInsights(), architecture minimale volontaire : à terme, doit devenir cooldown + détection de nouveauté/amplitude du signal, pas juste un délai fixe)
 let currentDate = todayStr();
 let activeTab = 'today';
 
@@ -60,6 +61,7 @@ function save(){
   LS.set('ct_shoppingList',shoppingList);
   LS.set('ct_recipes',recipes);
   LS.set('ct_recipeBooks',recipeBooks);
+  LS.set('ct_insightsSeen',insightsSeen);
   LS.set('ct_favSports',favSports);
 }
 function isFavorite(id){ return favorites.includes(id); }
@@ -694,7 +696,11 @@ function dashboardGrid(t){
 const INSIGHT_WEIGHT_DELTA_KG = 0.15;
 const INSIGHT_MIN_DISTINCT_WEIGHIN_DAYS = 4;
 const INSIGHT_MIN_WEEKDAY_LOGGED_DAYS = 5;
-const INSIGHT_MIN_WEEKEND_LOGGED_DAYS = 3;
+const INSIGHT_MIN_WEEKEND_LOGGED_DAYS = 4; // remonté de 3 à 4 : avec 3, un seul jour
+// atypique (anniversaire, resto) représentait déjà un tiers de l'échantillon et
+// pouvait à lui seul déclencher l'insight. Pas de suppression d'outlier pour
+// autant (nouvelle hypothèse méthodologique à part entière, pas encore justifiée) —
+// on préfère demander plus de données plutôt qu'un insight séduisant mais fragile.
 const INSIGHT_KCAL_RELATIVE_DELTA = 0.10; // 10%
 // Plancher absolu en plus du seuil relatif : sans lui, un écart relatif important
 // sur une base très faible (ex. 500 -> 560 kcal, +12% mais seulement 60 kcal réels)
@@ -757,12 +763,43 @@ function weekendVsWeekdayInsight(){
   return { id:'weekend_vs_weekday', text:`Sur les 14 derniers jours, tes apports journaliers moyens sont ${dir} le week-end (${Math.round(avgWeekend)} kcal) que les jours de semaine (${Math.round(avgWeekday)} kcal).` };
 }
 
+// Cooldown minimal : un insight déjà montré ne réapparaît pas avant N jours, même
+// s'il reste vrai — évite qu'un même constat (ex. tendance de poids stable sur
+// plusieurs semaines) s'affiche à l'identique chaque jour. Volontairement basique
+// (délai fixe, pas de détection d'amplitude/nouveauté du signal) : une vraie
+// architecture "ne réafficher que si le signal a changé significativement" viendra
+// plus tard, une fois qu'on aura du recul sur l'usage réel.
+const INSIGHT_COOLDOWN_DAYS = 4;
+// Plafond dur, indépendant du nombre d'insights qui existeront un jour : jamais
+// plus de 2 affichés en même temps, pour ne pas transformer le dashboard en mur
+// de cartes au fil de l'ajout de nouvelles briques.
+const INSIGHT_MAX_SHOWN = 2;
+
+function isInsightOnCooldown(id){
+  const lastShown = insightsSeen[id];
+  if(!lastShown) return false;
+  return daysBetween(lastShown, todayStr()) < INSIGHT_COOLDOWN_DAYS;
+}
+
 function kaloInsights(){
-  return [weightTrendInsight(), weekendVsWeekdayInsight()].filter(Boolean);
+  const candidates = [weightTrendInsight(), weekendVsWeekdayInsight()].filter(Boolean);
+  // Le filtrage cooldown se fait AVANT le plafond : un insight en cooldown libère
+  // sa place pour un autre candidat éligible, plutôt que de bloquer un slot pour
+  // rien.
+  const eligible = candidates.filter(i=>!isInsightOnCooldown(i.id));
+  const shown = eligible.slice(0, INSIGHT_MAX_SHOWN);
+  let changed = false;
+  shown.forEach(i=>{
+    if(insightsSeen[i.id] !== todayStr()){ insightsSeen[i.id] = todayStr(); changed = true; }
+  });
+  if(changed) save();
+  return shown;
 }
 
 // Carte "Kalo a remarqué" : n'apparaît PAS du tout si aucun insight ne passe ses
-// seuils (jamais de carte vide ni de placeholder générique).
+// seuils (jamais de carte vide ni de placeholder générique). Liseré --green (pas
+// --rust : un insight n'est pas un avertissement) réutilisant le même mécanisme
+// visuel déjà établi pour dash-block-attn, plutôt qu'une nouvelle couleur/pattern.
 function kaloInsightsCard(){
   const insights = kaloInsights();
   if(!insights.length) return '';
