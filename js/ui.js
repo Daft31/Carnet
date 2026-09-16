@@ -126,6 +126,62 @@ function openQtyModal(food){
   });
 }
 
+// Quick-add : reprend un repas détecté comme récurrent (js/core.js:
+// buildQuickAddDraft()) et propose de le reloguer en un geste. Volontairement
+// une confirmation, pas un ajout automatique en un tap ("quick-add = rapide,
+// pas automatique et opaque") : quantités éditables, totaux visibles avant
+// validation. Chaque confirmation crée des entrées `logEntries` neuves et
+// indépendantes (source:'recurring') — ne touche jamais aux entrées passées
+// qui ont servi à détecter le pattern.
+function openQuickAddModal(draft){
+  const rows = draft.items.map((it,idx)=>`
+    <div class="quickadd-item">
+      <div class="qa-name">${escapeHtml(it.food.name)}</div>
+      <div class="qa-qty"><input type="number" inputmode="numeric" class="qaGrams" data-qaidx="${idx}" value="${it.grams}"><span class="qa-unit">g</span></div>
+    </div>`).join('');
+  openModal(`
+    <h3>Ajouter ce repas</h3>
+    <div class="hint">Quantités reprises de tes habitudes récentes — modifiable avant d'ajouter.</div>
+    <div class="quickadd-list">${rows}</div>
+    <div class="qty-preview" id="qaPreview"></div>
+    <button class="btn" id="qaConfirm">Ajouter à ${draft.mealSlot}</button>
+  `);
+  const updatePreview = ()=>{
+    let kcal=0, protein=0, carbs=0, fat=0;
+    document.querySelectorAll('.qaGrams').forEach(inp=>{
+      const it = draft.items[+inp.dataset.qaidx];
+      const g = Math.max(0, parseFloat(inp.value)||0);
+      const f = g/100;
+      kcal += it.food.kcal*f; protein += it.food.protein*f; carbs += it.food.carbs*f; fat += it.food.fat*f;
+    });
+    document.getElementById('qaPreview').innerHTML = `
+      <div class="item"><div class="n">${Math.round(kcal)}</div><div class="l">kcal</div></div>
+      <div class="item"><div class="n">${Math.round(protein)}</div><div class="l">prot g</div></div>
+      <div class="item"><div class="n">${Math.round(carbs)}</div><div class="l">gluc g</div></div>
+      <div class="item"><div class="n">${Math.round(fat)}</div><div class="l">lip g</div></div>`;
+  };
+  document.querySelectorAll('.qaGrams').forEach(inp=>inp.addEventListener('input', updatePreview));
+  updatePreview();
+  document.getElementById('qaConfirm').addEventListener('click', ()=>{
+    const time = new Date().toTimeString().slice(0,5);
+    let added = 0;
+    document.querySelectorAll('.qaGrams').forEach(inp=>{
+      const it = draft.items[+inp.dataset.qaidx];
+      const g = parseFloat(inp.value)||0;
+      if(g<=0) return;
+      const f = g/100;
+      logEntries.push({
+        id:uid(), date:currentDate, type:'meal', mealSlot:draft.mealSlot, foodId:it.food.id, foodName:it.food.name, grams:g,
+        kcal:it.food.kcal*f, protein:it.food.protein*f, carbs:it.food.carbs*f, fat:it.food.fat*f,
+        time, source:'recurring'
+      });
+      added++;
+    });
+    if(!added){ toast('Entre au moins une quantité valide'); return; }
+    save(); closeModal(); render(); toast('Repas ajouté ✓');
+  });
+}
+
 function openCustomFoodModal(){
   let mode = '100';
   openModal(`
@@ -298,6 +354,12 @@ function bindTabEvents(){
 
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     logEntries = logEntries.filter(e=>e.id!==b.dataset.del); save(); render();
+  });
+  document.querySelectorAll('[data-quickadd]').forEach(b=>b.onclick=()=>{
+    const insight = getInsightById(b.dataset.quickadd);
+    const draft = insight ? buildQuickAddDraft(insight) : null;
+    if(!draft){ toast('Plus assez de données pour ce repas'); return; }
+    openQuickAddModal(draft);
   });
 
   if(activeTab==='meals'){

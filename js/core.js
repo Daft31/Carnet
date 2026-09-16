@@ -851,9 +851,58 @@ function commonBreakfastInsight(){
   return {
     id:'breakfast_combo',
     text:`Ton petit-déjeuner le plus fréquent est : ${frenchList(names)}.`,
+    mealSlot: top.mealSlot,
     foodIds: top.foodIds,
     matchingEntries: top.matchingEntries,
   };
+}
+
+// Médiane (pas moyenne) : résiste à l'outlier (ex. 100/100/110/105/300 -> ~105,
+// pas ~143) sans logique de nettoyage ad hoc — voir spec Quick-add.
+function medianGrams(values){
+  const sorted = [...values].sort((a,b)=>a-b);
+  const n = sorted.length;
+  if(!n) return null;
+  const mid = Math.floor(n/2);
+  return n%2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2;
+}
+
+// Construit le brouillon Quick-add à partir d'un pattern détecté : pour chaque
+// foodId, grammage = médiane des occurrences dans matchingEntries qui ont un
+// grammage connu, sinon dernier grammage connu (toutes entrées confondues, pas
+// seulement matchingEntries), sinon l'aliment est exclu du brouillon — jamais de
+// grammage inventé.
+function buildQuickAddDraft(insight){
+  if(!insight || !insight.foodIds || !insight.foodIds.length) return null;
+  const items = [];
+  insight.foodIds.forEach(foodId=>{
+    const food = allFoods().find(f=>f.id===foodId);
+    if(!food) return;
+    const gramsInPattern = (insight.matchingEntries||[])
+      .filter(e=>e.foodId===foodId && e.grams!=null)
+      .map(e=>e.grams);
+    let grams = medianGrams(gramsInPattern);
+    if(grams==null){
+      const lastKnown = logEntries
+        .filter(e=>e.type==='meal' && e.foodId===foodId && e.grams!=null)
+        .sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))
+        .pop();
+      grams = lastKnown ? lastKnown.grams : null;
+    }
+    if(grams==null) return; // pas de quantité connue -> on n'invente rien, on exclut
+    items.push({ foodId, food, grams: Math.round(grams) });
+  });
+  if(!items.length) return null;
+  return { mealSlot: insight.mealSlot, items };
+}
+
+// Recalcule l'insight courant à partir de son id (aucun cache : appelé au clic sur
+// le CTA Quick-add, sur des données potentiellement changées depuis le rendu).
+function getInsightById(id){
+  if(id==='weight_trend') return weightTrendInsight();
+  if(id==='weekend_vs_weekday') return weekendVsWeekdayInsight();
+  if(id==='breakfast_combo') return commonBreakfastInsight();
+  return null;
 }
 
 // Cooldown minimal : un insight déjà montré ne réapparaît pas avant N jours, même
@@ -898,7 +947,7 @@ function kaloInsightsCard(){
   if(!insights.length) return '';
   return `<section class="card insights-card">
     <h2>Kalo a remarqué</h2>
-    ${insights.map(i=>`<p class="insight-line">${escapeHtml(i.text)}</p>`).join('')}
+    ${insights.map(i=>`<p class="insight-line">${escapeHtml(i.text)}</p>${i.foodIds && i.foodIds.length ? `<button class="btn small ghost quickadd-cta" data-quickadd="${i.id}" type="button">Ajouter ce repas</button>` : ''}`).join('')}
   </section>`;
 }
 
@@ -1466,6 +1515,7 @@ function mealProvenanceLabel(e){
   if(e.grams!=null) parts.push(e.grams+' g');
   if(e.source==='catalog' || e.source==='scan') parts.push('officiel');
   else if(e.source==='ai') parts.push('estimé IA');
+  else if(e.source==='recurring') parts.push('repas habituel');
   else if(e.grams==null) parts.push('estimé');
   return parts.join(' · ');
 }
