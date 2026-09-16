@@ -24,6 +24,11 @@
     --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  /* L'attribut [hidden] doit rester fiable même sur des éléments dont une règle
+     d'auteur (ex. header.top .brand{display:flex}) a une spécificité plus forte
+     que la règle UA par défaut [hidden]{display:none} — sinon toggle .hidden=true
+     en JS (render(), js/core.js) n'a visuellement aucun effet. */
+  [hidden]{display:none !important;}
   html,body{height:100%;}
   body{
     margin:0;
@@ -36,47 +41,69 @@
 
   header.top{
     padding:20px 18px 12px;
-    display:flex; align-items:baseline; justify-content:space-between;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
   }
+  header.top .top-left{display:flex; align-items:center; gap:6px; min-width:0;}
+  header.top .top-actions{display:flex; align-items:center; gap:10px; flex-shrink:0;}
   header.top .brand{
     display:flex; align-items:center; gap:8px;
     font-family:var(--font-sans); font-weight:800; font-size:20px; letter-spacing:-0.02em; color:var(--green);
   }
   header.top .brand .brand-ico{flex:0 0 22px; width:22px; height:22px; stroke:var(--green); fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;}
   header.top .brand small{display:block; font-weight:500; font-size:11px; color:var(--ink-soft); letter-spacing:.02em; margin-top:1px;}
+  /* En-tête allégé sur toutes les pages sauf le dashboard ("today") : le logo
+     Kalo cède la place à [retour + titre de page], pour regagner de la hauteur
+     d'écran — voir render() dans js/core.js qui bascule brandBlock/pageHead. */
+  .page-head{display:flex; align-items:center; gap:10px; min-width:0;}
+  .page-heading{margin:0; font-size:18px; font-weight:800; letter-spacing:-0.01em; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 
   main{flex:1; padding:0 16px 90px; overflow-y:auto;}
 
-  .daybar{
-    display:flex; align-items:center; justify-content:space-between;
+  /* ---- Bandeau de dates unique (dateStrip(), js/core.js) ---- */
+  .date-strip{
     background:var(--surface); border:none; border-radius:20px;
-    padding:10px 12px; margin-bottom:16px;
+    padding:12px 0 10px; margin-bottom:16px;
     box-shadow:0 1px 3px rgba(28,43,34,.06), 0 8px 24px rgba(28,43,34,.04);
   }
-  .daybar button{
-    background:var(--green-soft); border:none; font-size:17px; color:var(--green); width:32px; height:32px; line-height:32px; text-align:center; padding:0; cursor:pointer; border-radius:10px;
+  .date-strip-label{font-weight:700; font-size:14px; text-transform:capitalize; padding:0 14px 10px;}
+  .date-strip-label small{display:block; font-weight:500; color:var(--ink-faint); font-size:11px; text-transform:none; margin-top:1px;}
+  .date-strip-scroll{
+    display:flex; overflow-x:auto; padding:0 14px 2px; scroll-behavior:auto;
+    -webkit-overflow-scrolling:touch; scrollbar-width:none;
   }
-  .daybar button:active{background:var(--green); color:#fff;}
-  .daybar .label{font-weight:700; font-size:14px; text-transform:capitalize;}
-  .daybar .label small{display:block; font-weight:500; color:var(--ink-faint); font-size:11px; text-transform:none;}
-
-  .week-strip{display:flex; justify-content:space-between; margin:0 0 16px; padding:2px 0;}
-  .wstrip-day{
-    flex:1; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  .date-strip-scroll::-webkit-scrollbar{display:none;}
+  .ds-day{
+    flex:0 0 40px; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
     background:none; border:none; padding:4px 2px; cursor:pointer; font-family:var(--font-sans);
   }
-  .wstrip-letter{font-size:11px; font-weight:600; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.02em;}
-  .wstrip-dot{
-    width:26px; height:26px; border-radius:50%; border:1.5px solid var(--line); background:var(--surface);
-    position:relative; transition:background .15s ease, border-color .15s ease;
+  .ds-letter{font-size:10.5px; font-weight:600; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.02em;}
+  .ds-num{font-size:13px; font-weight:700; color:var(--ink); font-family:var(--font-mono);}
+  .ds-dot{
+    width:6px; height:6px; border-radius:50%; background:transparent; border:1.5px solid transparent;
+    transition:background .15s ease, border-color .15s ease;
   }
-  .wstrip-dot.filled{border-color:var(--green-soft); background:var(--green-soft);}
-  .wstrip-dot.filled::after{content:""; position:absolute; inset:0; margin:auto; width:7px; height:7px; border-radius:50%; background:var(--green); top:0; bottom:0; left:0; right:0;}
-  .wstrip-day.today .wstrip-dot{border-style:dashed; border-color:var(--ink-faint);}
-  .wstrip-day.active .wstrip-letter{color:var(--green); font-weight:700;}
-  .wstrip-day.active .wstrip-dot{background:var(--green); border-color:var(--green); border-style:solid;}
-  .wstrip-day.active .wstrip-dot.filled::after{background:#fff;}
-  .wstrip-day:active .wstrip-dot{transform:scale(.9);}
+  .ds-dot.filled{background:var(--green-soft);}
+  .ds-day.today .ds-num{border-bottom:1.5px dashed var(--ink-faint); padding-bottom:1px;}
+  .ds-day.active .ds-letter{color:var(--green); font-weight:700;}
+  .ds-day.active .ds-num{color:var(--green);}
+  .ds-day.active .ds-dot{background:var(--green);}
+  .ds-day.active .ds-dot.filled{background:var(--green);}
+  .ds-day:active .ds-num{transform:scale(.9);}
+
+  /* ---- Dashboard (page "today") : grille de blocs cliquables ---- */
+  .dash-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;}
+  .dash-block{
+    background:var(--surface); border:none; border-radius:16px; padding:14px;
+    text-align:left; cursor:pointer; font-family:var(--font-sans);
+    display:flex; flex-direction:column; gap:5px; min-height:44px;
+    box-shadow:0 1px 3px rgba(28,43,34,.06), 0 8px 24px rgba(28,43,34,.04);
+  }
+  .dash-block:active{transform:scale(.97);}
+  .dash-block-top{display:flex; align-items:center; gap:6px;}
+  .dash-block-top .dash-ico svg{width:15px; height:15px; stroke:var(--ink-faint); fill:none; stroke-width:1.8;}
+  .dash-label{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft);}
+  .dash-value{font-family:var(--font-mono); font-size:17px; font-weight:700; color:var(--ink); line-height:1.15;}
+  .dash-sub{font-size:11.5px; color:var(--ink-faint);}
 
   section.card{
     background:var(--surface); border:none; border-radius:20px;
@@ -178,83 +205,30 @@
   .preset-chip{background:var(--green-soft); border:none; border-radius:20px; padding:8px 14px; font-size:13px; color:var(--green); font-weight:600; font-family:var(--font-sans); cursor:pointer;}
   .preset-chip:active{background:var(--green); color:#fff;}
 
+  /* Depuis la refonte dashboard-first, nav.tabs n'héberge plus de sélecteur
+     multi-destinations (5 onglets + "Plus") : toute la navigation passe par les
+     blocs du dashboard (page "today") et le bouton retour de l'en-tête. La barre
+     ne sert plus qu'à ancrer le bouton + en bas d'écran, à hauteur fixe et sans
+     déborder verticalement (cf. note CLAUDE.md sur le scroll cassé déjà rencontré
+     avec position:fixed pleine largeur — pas de backdrop-filter ici non plus). */
   nav.tabs{
     position:fixed; bottom:0; left:0; right:0;
     background:rgba(255,255,255,.94); border-top:1px solid var(--line);
-    display:flex; max-width:520px; margin:0 auto;
-    padding-bottom:env(safe-area-inset-bottom);
+    display:flex; align-items:center; justify-content:center;
+    max-width:520px; margin:0 auto;
+    padding:10px 0; padding-bottom:calc(10px + env(safe-area-inset-bottom));
     box-shadow:0 -8px 24px rgba(28,43,34,.05);
     z-index:20;
   }
-  nav.tabs button{
-    position:relative; flex:1; background:none; border:none; padding:10px 2px 8px; cursor:pointer;
-    display:flex; flex-direction:column; align-items:center; gap:3px;
-    color:var(--ink-faint); font-family:var(--font-sans); font-size:10px; font-weight:600;
-    transition:color .2s ease, transform .2s ease;
-  }
-  nav.tabs button::after{
-    content:""; position:absolute; left:22%; right:22%; bottom:0; height:3px;
-    border-radius:3px 3px 0 0; background:var(--green);
-    transform:scaleX(0); transform-origin:center; opacity:0;
-    transition:transform .25s cubic-bezier(.22,1,.36,1), opacity .2s ease;
-  }
-  nav.tabs button.active::after{transform:scaleX(1); opacity:1;}
-  nav.tabs button:active{transform:translateY(1px);}
-  nav.tabs button[title]::before{content:attr(title); display:none;}
-  nav.tabs button svg{width:19px; height:19px; stroke:var(--ink-faint); fill:none; stroke-width:1.8;}
-  nav.tabs .more-wrap{position:relative; flex:1; display:flex;}
-  nav.tabs .more-toggle svg circle{fill:currentColor;}
-  nav.tabs .more-menu{
-    position:absolute; bottom:calc(100% + 10px); right:0; min-width:170px;
-    background:var(--surface); border:1px solid var(--line); border-radius:14px;
-    box-shadow:0 8px 24px rgba(28,43,34,.16); padding:6px;
-    display:none; flex-direction:column; gap:2px; z-index:25;
-  }
-  nav.tabs .more-menu.open{display:flex;}
-  nav.tabs .more-menu button{
-    position:static; flex:none; flex-direction:row; justify-content:flex-start; align-items:center;
-    gap:10px; padding:10px 12px; border-radius:9px; font-size:13px; font-weight:600; color:var(--ink); width:100%;
-  }
-  nav.tabs .more-menu button::after{display:none;}
-  nav.tabs .more-menu button:active{background:var(--surface-2);}
-  nav.tabs .more-menu button.active{background:var(--green-soft); color:var(--green);}
-  nav.tabs .more-menu button svg{width:18px; height:18px; stroke:var(--ink-faint);}
-  nav.tabs .more-menu button.active svg{stroke:var(--green);}
-  nav.tabs button.active{color:var(--green);}
-  nav.tabs button.active svg{stroke:var(--green);}
-  @media (max-width:390px){
-    nav.tabs button{font-size:0; padding-top:11px;}
-    nav.tabs button svg{width:20px; height:20px;}
-  }
-  /* Le libellé au survol n'a de sens que sur un pointeur qui peut vraiment "hover"
-     (souris) : sur tactile, le focus reste collé après un tap (pas de mouseleave),
-     ce qui affichait le libellé en permanence tant qu'on ne touchait pas ailleurs. */
-  @media (max-width:390px) and (hover:hover) and (pointer:fine){
-    nav.tabs button:hover::before, nav.tabs button:focus-visible::before{
-      display:block; position:absolute; bottom:48px; left:50%; transform:translateX(-50%);
-      white-space:nowrap; background:var(--ink); color:#fff; padding:5px 8px;
-      border-radius:8px; font-size:11px; font-weight:600; z-index:30;
-    }
-  }
-
-  /* ---- Bouton + flottant (accès rapide, tous onglets) ----
-     Enfant de nav.tabs (position:fixed => établit déjà le containing block),
-     positionné en absolute pour flotter au-dessus de la barre sans perturber le
-     flex des boutons d'onglets. Pas de backdrop-filter ici (cf. note CLAUDE.md sur
-     le scroll cassé déjà rencontré avec ce pattern sur un élément fixed pleine largeur). */
-  /* Sélecteur "nav.tabs button.fab-add" (pas juste ".fab-add") : la règle
-     @media(max-width:390px) plus haut ("nav.tabs button{font-size:0; padding-top:11px}")
-     a une spécificité plus forte qu'une simple classe et gagnerait sinon sur mobile étroit,
-     quel que soit l'ordre dans le fichier — même spécificité ici pour neutraliser ça. */
   nav.tabs button.fab-add{
-    position:absolute; bottom:calc(100% - 4px); left:50%; transform:translateX(-50%);
-    width:54px; height:54px; border-radius:50%; border:4px solid var(--paper);
+    position:static;
+    width:50px; height:50px; border-radius:50%; border:none;
     background:var(--green); color:#fff; display:grid; place-content:center;
-    box-shadow:0 6px 16px rgba(28,43,34,.22); cursor:pointer; z-index:22; padding:0; font-size:0;
+    box-shadow:0 3px 10px rgba(28,43,34,.2); cursor:pointer; padding:0; font-size:0;
   }
-  .fab-add svg{width:24px; height:24px; stroke:#fff; stroke-width:2.4; fill:none; stroke-linecap:round;}
-  .fab-add:active{transform:translateX(-50%) scale(.94);}
-  body.dark .fab-add{box-shadow:0 6px 18px rgba(0,0,0,.5);}
+  .fab-add svg{width:23px; height:23px; stroke:#fff; stroke-width:2.4; fill:none; stroke-linecap:round;}
+  .fab-add:active{transform:scale(.94);}
+  body.dark .fab-add{box-shadow:0 3px 12px rgba(0,0,0,.5);}
 
   .fab-menu{display:flex; flex-direction:column; gap:8px; margin-top:14px;}
   .fab-menu-item{
@@ -487,6 +461,8 @@
   }
   body.dark #app{background:transparent;}
   body.dark section.card{background:var(--surface); box-shadow:0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);}
+  body.dark .date-strip{background:var(--surface); box-shadow:0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);}
+  body.dark .dash-block{background:var(--surface); box-shadow:0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);}
   body.dark nav.tabs{background:rgba(23,31,27,.94);}
   body.dark input, body.dark textarea, body.dark select{background:var(--surface-2); color:var(--ink);}
   body.dark .journal-textarea{background-image:linear-gradient(rgba(180,165,135,.05) 1px, transparent 1px), repeating-linear-gradient(to bottom, transparent 0, transparent 27px, #243027 27px, #243027 28px);}
@@ -501,19 +477,30 @@
   .theme-toggle{
     background:var(--surface-2); border:none; border-radius:12px;
     width:44px; height:44px; display:grid; place-content:center; cursor:pointer;
-    color:var(--ink-soft); margin-left:10px; flex-shrink:0;
+    color:var(--ink-soft); flex-shrink:0;
     box-shadow:0 1px 2px rgba(28,43,34,.05);
   }
   .theme-toggle:active{transform:scale(.95);}
   .theme-toggle svg{width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8;}
   body.dark .theme-toggle{color:var(--amber);}
 
+  /* ---- Icônes d'en-tête : retour + réglages (mêmes proportions que .theme-toggle,
+     dont le margin-left a été retiré au profit du gap sur .top-actions) ---- */
+  .icon-btn{
+    background:var(--surface-2); border:none; border-radius:12px;
+    width:44px; height:44px; display:grid; place-content:center; cursor:pointer;
+    color:var(--ink-soft); flex-shrink:0;
+    box-shadow:0 1px 2px rgba(28,43,34,.05);
+  }
+  .icon-btn:active{transform:scale(.95);}
+  .icon-btn svg{width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;}
+  .icon-btn.active{background:var(--green-soft); color:var(--green);}
+
   /* ---- Touch targets: 44px minimum ---- */
   .btn{ min-height:44px; }
   .seg button{ min-height:44px; }
   .preset-chip{ min-height:44px; }
   .food-row{ min-height:44px; padding:12px 4px; }
-  .daybar button{ width:44px; height:44px; line-height:44px; border-radius:12px; }
   .list-entry .del{ min-width:44px; min-height:44px; display:inline-grid; place-content:center; border-radius:10px; }
   .food-row button.star{ min-width:44px; min-height:44px; }
   .food-row button.edit{ min-height:36px; }

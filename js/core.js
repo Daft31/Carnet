@@ -238,10 +238,24 @@ function viewShoppingList(){
 }
 
 /* ===================== RENDU ===================== */
+// Depuis la refonte dashboard-first, il n'y a plus de barre d'onglets persistante :
+// "today" (Accueil, libellé TAB_LABELS) est le hub central, toute autre page s'y
+// atteint en cliquant un bloc du dashboard (dashCard) et s'en échappe via le
+// bouton retour de l'en-tête (#backBtn, voir index.html/app.js). render() pilote
+// aussi l'en-tête : le logo "Kalo" ne s'affiche que sur le dashboard (pour
+// regagner de la hauteur d'écran ailleurs), remplacé par [retour + titre de page]
+// sur toutes les autres pages.
 function render(){
-  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===activeTab));
-  const moreToggle = document.getElementById('moreToggle');
-  if(moreToggle) moreToggle.classList.toggle('active', ['notes','todos','shopping','settings'].includes(activeTab));
+  const onDashboard = activeTab==='today';
+  const brandBlock = document.getElementById('brandBlock');
+  const pageHead = document.getElementById('pageHead');
+  const pageHeading = document.getElementById('pageHeading');
+  if(brandBlock) brandBlock.hidden = !onDashboard;
+  if(pageHead) pageHead.hidden = onDashboard;
+  if(pageHeading) pageHeading.textContent = TAB_LABELS[activeTab] || '';
+  const settingsBtn = document.getElementById('settingsBtn');
+  if(settingsBtn) settingsBtn.classList.toggle('active', activeTab==='settings');
+  document.title = onDashboard ? 'Kalo' : `Kalo · ${TAB_LABELS[activeTab] || ''}`;
   const main = document.getElementById('main');
   if(activeTab==='today') main.innerHTML = viewToday();
   else if(activeTab==='meals') main.innerHTML = viewMeals();
@@ -255,9 +269,9 @@ function render(){
   bindTabEvents();
 }
 
-// Change d'onglet par programme (clic direct sur un onglet, ou action rapide type
-// bouton + flottant) : centralise le reset de scroll et la fermeture du sous-menu
-// "Plus". Le scroll ici est celui de la PAGE (window/#main), pas un scroll interne
+// Change d'onglet par programme (clic sur un bloc du dashboard, bouton retour,
+// réglages, ou action rapide type bouton + flottant) : centralise le reset de
+// scroll. Le scroll ici est celui de la PAGE (window/#main), pas un scroll interne
 // à #main — voir la note dédiée dans CLAUDE.md avant d'y toucher. Ne pas appeler
 // ceci depuis render() elle-même (rendus internes à un même onglet : ajout d'un
 // repas, coche d'une case… où on ne veut surtout pas sauter en haut de page).
@@ -265,36 +279,39 @@ function switchTab(tab){
   activeTab = tab; render();
   window.scrollTo(0, 0);
   document.getElementById('main').scrollTop = 0;
-  const moreMenu = document.getElementById('moreMenu');
-  if(moreMenu) moreMenu.classList.remove('open');
 }
 
-function dayBar(){
-  return `<div class="daybar">
-    <button data-act="prevday">‹</button>
-    <div class="label">${dateLabel(currentDate)}<small>${new Date(currentDate+'T12:00:00').toLocaleDateString('fr-FR')}</small></div>
-    <button data-act="nextday">›</button>
-  </div>`;
-}
-
-// Bandeau des 7 jours de la semaine contenant currentDate, pour sauter directement
-// à un jour récent (inspiré du sélecteur de semaine des apps de suivi nutrition).
-// Complète dayBar() (qui reste le seul moyen d'aller au-delà de cette semaine).
-function weekStrip(){
-  const start = weekStart(currentDate);
+// Bandeau de dates unique (remplace l'ancien duo dayBar()+weekStrip(), redondant :
+// des flèches jour précédent/suivant ET une bande de jours cliquables juste en
+// dessous). Un seul ruban scrollable horizontalement, centré sur currentDate, qui
+// couvre plusieurs semaines passées ET futures (pas juste la semaine en cours).
+// Taper un jour adjacent au jour sélectionné revient au même que les anciennes
+// flèches prev/next (il est toujours visible sans scroller, la fenêtre étant
+// centrée) ; naviguer plus loin re-centre la fenêtre autour du nouveau jour choisi
+// au render suivant, ce qui permet d'aller aussi loin qu'on veut par petits pas.
+// Le centrage visuel (scrollLeft) est fait après coup dans bindTabEvents() — voir
+// `centerDateStrip()` dans ui.js — car on ne peut pas le faire en pur HTML/CSS.
+const DATE_STRIP_RANGE = 21; // jours affichés avant/après currentDate
+function dateStrip(){
   const dowLetters = ['L','M','M','J','V','S','D'];
   const todayS = todayStr();
-  const days = [0,1,2,3,4,5,6].map(i=>shiftDate(start,i));
-  return `<div class="week-strip">
-    ${days.map((d,i)=>{
-      const hasEntries = entriesFor(d).some(e=>e.type==='meal');
-      const selected = d===currentDate;
-      const isToday = d===todayS;
-      return `<button class="wstrip-day${selected?' active':''}${isToday?' today':''}" data-jumpdate="${d}" type="button">
-        <span class="wstrip-letter">${dowLetters[i]}</span>
-        <span class="wstrip-dot${hasEntries?' filled':''}"></span>
-      </button>`;
-    }).join('')}
+  const days = [];
+  for(let i=-DATE_STRIP_RANGE;i<=DATE_STRIP_RANGE;i++) days.push(shiftDate(currentDate,i));
+  const items = days.map(d=>{
+    const dt = new Date(d+'T12:00:00');
+    const letter = dowLetters[(dt.getDay()+6)%7];
+    const hasEntries = entriesFor(d).some(e=>e.type==='meal');
+    const selected = d===currentDate;
+    const isToday = d===todayS;
+    return `<button class="ds-day${selected?' active':''}${isToday?' today':''}" data-jumpdate="${d}" type="button">
+      <span class="ds-letter">${letter}</span>
+      <span class="ds-num">${dt.getDate()}</span>
+      <span class="ds-dot${hasEntries?' filled':''}"></span>
+    </button>`;
+  }).join('');
+  return `<div class="date-strip">
+    <div class="date-strip-label">${dateLabel(currentDate)}<small>${new Date(currentDate+'T12:00:00').toLocaleDateString('fr-FR')}</small></div>
+    <div class="date-strip-scroll" id="dateStripScroll">${items}</div>
   </div>`;
 }
 
@@ -374,6 +391,89 @@ function macroTips(t){
   });
   return tips;
 }
+// Icônes réutilisées telles quelles depuis l'ancienne nav (identité visuelle
+// inchangée) pour les blocs du dashboard et les en-têtes de page.
+const DASH_ICONS = {
+  meals: '<svg viewBox="0 0 24 24"><path d="M6 3v8a2 2 0 002 2h0a2 2 0 002-2V3M6 3v18M10 3v5M18 3c-2 0-3 2-3 5s1 4 3 4v9"/></svg>',
+  workouts: '<svg viewBox="0 0 24 24"><path d="M4 12h3M17 12h3M7 12a2 2 0 002-2V8a2 2 0 00-2-2 2 2 0 00-2 2v8a2 2 0 002 2 2 2 0 002-2v-2M17 12a2 2 0 01-2-2V8a2 2 0 012-2 2 2 0 012 2v8a2 2 0 01-2 2 2 2 0 01-2-2v-2"/></svg>',
+  weight: '<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M9 5l1-2h4l1 2M12 13l2.5-3"/></svg>',
+  history: '<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-7 3L3 8"/><path d="M3 4v4h4M12 7v5l3 2"/></svg>',
+  notes: '<svg viewBox="0 0 24 24"><path d="M6 4h9l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z"/><path d="M14 4v4h4M8 12h8M8 16h5"/></svg>',
+  todos: '<svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="m8 12 2.2 2.2L16 8.5"/></svg>',
+  shopping: '<svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1.4"/><circle cx="19" cy="21" r="1.4"/><path d="M1.5 2h3l2.6 12.9a2 2 0 002 1.6h8.8a2 2 0 002-1.6L22 7H6.3"/></svg>',
+};
+// Libellés de page affichés dans l'en-tête (hors dashboard) et utilisés pour
+// <title> — voir render() dans core.js. 'today' = le dashboard lui-même.
+const TAB_LABELS = {
+  today:'Accueil', meals:'Repas', workouts:'Séances', weight:'Poids', history:'Historique',
+  notes:'Notes', todos:'To-do', shopping:'Courses', settings:'Réglages'
+};
+
+// Une carte cliquable du dashboard : résumé d'une section + navigation vers sa
+// page complète via switchTab() (liée dans bindTabEvents(), js/ui.js — même
+// mécanisme que l'ancienne nav). Volontairement un <button> sans contrôle
+// interactif imbriqué (pas de bouton dans un bouton) : juste un résumé, jamais
+// d'action modifiant les données directement depuis le dashboard.
+function dashCard(tab, label, value, sub){
+  return `<button class="dash-block" data-tab="${tab}" type="button">
+    <div class="dash-block-top"><span class="dash-ico">${DASH_ICONS[tab]}</span><span class="dash-label">${label}</span></div>
+    <div class="dash-value">${escapeHtml(value)}</div>
+    <div class="dash-sub">${escapeHtml(sub)}</div>
+  </button>`;
+}
+
+// Grille de résumés cliquables (dashboard) : un bloc par section, chacun affichant
+// un résumé pertinent pour la journée/l'état courant. Ne duplique aucun calcul —
+// réutilise les mêmes fonctions que les pages complètes (dayTotals, weeklyDeficit,
+// weighInTrend...). Cliquer navigue vers la page complète via switchTab().
+function dashboardGrid(t){
+  const remaining = settings.calorieGoal - t.kcalIn;
+  const over = t.kcalIn > settings.calorieGoal;
+  const mealsSub = over ? `Dépassé de ${Math.round(-remaining)} kcal` : `${Math.round(remaining)} kcal restants`;
+  const mealsCard = dashCard('meals', 'Repas', `${Math.round(t.kcalIn)} kcal`, mealsSub);
+
+  const todaysWorkouts = entriesFor(currentDate).filter(e=>e.type==='workout');
+  const wkKcal = Math.round(todaysWorkouts.reduce((s,e)=>s+e.kcalBurned,0));
+  const wkValue = todaysWorkouts.length ? `${todaysWorkouts.length} séance${todaysWorkouts.length>1?'s':''}` : 'Aucune';
+  const wkSub = todaysWorkouts.length ? `${wkKcal} kcal brûlées (info)` : "Rien aujourd'hui";
+  const workoutsCard = dashCard('workouts', 'Séances', wkValue, wkSub);
+
+  const sortedW = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date));
+  const latestW = sortedW[0];
+  let weightValue = '—', weightSub = 'Aucune pesée';
+  if(latestW){
+    weightValue = `${latestW.weight} kg`;
+    const trend = weighInTrend([...sortedW].reverse().map(e=>({date:e.date,weight:e.weight})), 'weight');
+    if(trend && trend.perWeek!=null){
+      weightSub = Math.abs(trend.perWeek)<0.15 ? 'Stable' : `${trend.perWeek<0?'↓':'↑'} ${Math.abs(trend.perWeek).toFixed(2)} kg/sem`;
+    } else weightSub = dateLabel(latestW.date);
+  }
+  const weightCard = dashCard('weight', 'Poids', weightValue, weightSub);
+
+  const curWeek = weeklyDeficit(weekStart(todayStr()));
+  let histValue = '—', histSub = 'Rien cette semaine';
+  if(curWeek.days.length){
+    const surplus = curWeek.total < 0;
+    histValue = `${Math.abs(Math.round(curWeek.total))} kcal`;
+    histSub = `${surplus?'Surplus':'Déficit'} cette semaine`;
+  }
+  const historyCard = dashCard('history', 'Historique', histValue, histSub);
+
+  const notesToday = entriesFor(currentDate).filter(e=>e.type==='note').length;
+  const notesTotal = logEntries.filter(e=>e.type==='note').length;
+  const notesCard = dashCard('notes', 'Notes', notesTotal ? `${notesTotal} note${notesTotal>1?'s':''}` : '—', notesToday ? `${notesToday} aujourd'hui` : "Aucune aujourd'hui");
+
+  const pendingTodos = todos.filter(x=>!x.done).length;
+  const todosCard = dashCard('todos', 'To-do', pendingTodos ? `${pendingTodos} à faire` : 'Tout fait ✓', `${todos.length} au total`);
+
+  const pendingShop = shoppingList.filter(x=>!x.checked).length;
+  const shopCard = dashCard('shopping', 'Courses', pendingShop ? `${pendingShop} à acheter` : (shoppingList.length ? 'Tout coché' : 'Liste vide'), `${shoppingList.length} article${shoppingList.length>1?'s':''} au total`);
+
+  return `<section class="dash-grid">
+    ${mealsCard}${workoutsCard}${weightCard}${historyCard}${notesCard}${todosCard}${shopCard}
+  </section>`;
+}
+
 function viewToday(){
   const t = dayTotals(currentDate);
   // Le budget restant ignore volontairement les séances de sport : brûler des
@@ -414,8 +514,8 @@ function viewToday(){
   const avg = Math.round(days.reduce((s,d)=>s+d.kcal,0)/7);
 
   return `
-  ${dayBar()}
-  ${weekStrip()}
+  ${dateStrip()}
+  ${dashboardGrid(t)}
   <section class="card">
     <div class="kcal-ring-wrap">
       <svg class="kcal-ring ${over?'over':''}" viewBox="0 0 120 120">
@@ -953,7 +1053,7 @@ function viewMeals(){
           <button class="edit" data-edit="${f.id}" title="Modifier les valeurs">✎</button>
         </div>`;
   return `
-  ${dayBar()}
+  ${dateStrip()}
   <section class="card">
     <h2>Ajouter un aliment</h2>
     <div class="row2" style="margin-top:0;">
@@ -999,7 +1099,7 @@ function viewWorkouts(){
   const weight = getCurrentWeight();
   const presetsForType = workoutPresets.filter(p=>p.type===wkType);
   return `
-  ${dayBar()}
+  ${dateStrip()}
   <section class="card">
     <h2>Nouvelle séance</h2>
     ${!weight ? `<div class="hint">Ajoute une pesée dans l'onglet Poids pour activer le calcul auto des calories (tapis/vélo/sport/club). En attendant, utilise "Saisie manuelle (IA)".</div>` : ''}
@@ -1412,7 +1512,7 @@ function viewNotes(){
   const todaysNotes = entriesFor(currentDate).filter(e=>e.type==='note').sort((a,b)=>a.time.localeCompare(b.time));
   const allNotes = logEntries.filter(e=>e.type==='note').sort((a,b)=> b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
   return `
-  ${dayBar()}
+  ${dateStrip()}
   <section class="card journal">
     <h2>Nouvelle note</h2>
     <textarea id="noteText" class="journal-textarea" placeholder="Une observation, un ressenti, un rappel pour toi…"></textarea>

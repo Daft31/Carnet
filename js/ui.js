@@ -264,6 +264,17 @@ function bindMealResultEvents(){
   if(favToggle) favToggle.onclick = ()=>{ openFavorites = !openFavorites; render(); };
 }
 
+// Centre le jour actif du bandeau de dates (js/core.js: dateStrip()) dans son
+// conteneur scrollable — ne peut pas se faire en CSS pur. Appelé à chaque render()
+// via bindTabEvents(), sans effet si le bandeau n'est pas dans la page courante.
+function centerDateStrip(){
+  const scrollEl = document.getElementById('dateStripScroll');
+  if(!scrollEl) return;
+  const activeEl = scrollEl.querySelector('.active');
+  if(!activeEl) return;
+  scrollEl.scrollLeft = activeEl.offsetLeft - (scrollEl.clientWidth/2) + (activeEl.clientWidth/2);
+}
+
 /* ===================== ÉVÉNEMENTS ===================== */
 function bindTabEvents(){
   const ttBtn = document.getElementById('themeToggle');
@@ -272,9 +283,14 @@ function bindTabEvents(){
     document.body.classList.toggle('dark',dark); LS.set('ct_theme',dark?'dark':'light');
     toast(dark?'Mode sombre activé 🌙':'Mode clair ☀️','success'); render();
   };
+  // Blocs cliquables du dashboard (js/core.js: dashCard()) : même mécanisme de
+  // navigation que l'ancienne barre d'onglets, juste posé sur #main au lieu de
+  // #tabs (ces boutons n'existent que sur la page "today").
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   document.querySelectorAll('[data-act="prevday"]').forEach(b=>b.onclick=()=>{ currentDate=shiftDate(currentDate,-1); render(); });
   document.querySelectorAll('[data-act="nextday"]').forEach(b=>b.onclick=()=>{ currentDate=shiftDate(currentDate,1); render(); });
   document.querySelectorAll('[data-jumpdate]').forEach(b=>b.onclick=()=>{ currentDate=b.dataset.jumpdate; render(); });
+  centerDateStrip();
   const todayLogToggle = document.querySelector('[data-toggle="todayLog"]');
   if(todayLogToggle) todayLogToggle.onclick = ()=>{ openTodayLog = !openTodayLog; render(); };
   document.querySelectorAll('[data-quickslot]').forEach(b=>b.onclick=()=>{ quickAddToSlot(b.dataset.quickslot); });

@@ -1,25 +1,23 @@
-document.getElementById('tabs').addEventListener('click', e=>{
-  const fabBtn = e.target.closest('#fabAdd');
-  if(fabBtn){
-    openFabMenu();
-    fabBtn.blur();
-    return;
-  }
-  const moreBtn = e.target.closest('#moreToggle');
-  if(moreBtn){
-    document.getElementById('moreMenu').classList.toggle('open');
-    moreBtn.blur();
-    return;
-  }
-  const b = e.target.closest('button[data-tab]'); if(!b) return;
-  // switchTab() (js/core.js) fait le render() + reset de scroll — voir sa note pour
-  // pourquoi ce reset est nécessaire et pourquoi il ne doit pas vivre dans render().
-  switchTab(b.dataset.tab);
-  b.blur();
+// Bouton + flottant (accès rapide, inchangé par la refonte dashboard-first —
+// juste réintégré dans la barre au lieu de flotter au-dessus, cf. css/style.css).
+document.getElementById('fabAdd').addEventListener('click', e=>{
+  openFabMenu();
+  e.currentTarget.blur();
 });
-document.addEventListener('click', e=>{
-  const wrap = document.getElementById('moreWrap');
-  if(wrap && !wrap.contains(e.target)) document.getElementById('moreMenu').classList.remove('open');
+
+// En-tête : bouton retour vers le dashboard ("today") et accès Réglages, tous deux
+// statiques dans index.html (jamais détruits par render(), donc liés une seule
+// fois ici — contrairement aux blocs du dashboard, liés à chaque render() dans
+// bindTabEvents() puisqu'ils vivent dans #main). switchTab() (js/core.js) fait le
+// render() + reset de scroll — voir sa note pour pourquoi ce reset est nécessaire
+// et pourquoi il ne doit pas vivre dans render().
+document.getElementById('backBtn').addEventListener('click', e=>{
+  switchTab('today');
+  e.currentTarget.blur();
+});
+document.getElementById('settingsBtn').addEventListener('click', e=>{
+  switchTab('settings');
+  e.currentTarget.blur();
 });
 
 function applyTheme(){
