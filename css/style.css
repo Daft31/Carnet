@@ -228,16 +228,19 @@
   /* Depuis la refonte dashboard-first, nav.tabs n'héberge plus de sélecteur
      multi-destinations (5 onglets + "Plus") : toute la navigation passe par les
      blocs du dashboard (page "today") et le bouton retour de l'en-tête. La barre
-     ne sert plus qu'à ancrer le bouton + en bas d'écran — hauteur ramenée à celle
-     de l'ancienne barre à onglets (~52px, pas de padding vertical superflu en plus
-     du bouton) pour ne pas paraître disproportionnée avec un seul bouton dedans
-     (cf. note CLAUDE.md sur le scroll cassé déjà rencontré avec position:fixed
+     ne sert plus qu'à ancrer le bouton + en bas d'écran. Retours utilisateur
+     successifs : une hauteur alignée sur l'ancienne barre à onglets (~52px)
+     paraissait toujours trop imposante avec un seul petit bouton dedans — réduite
+     nettement (~38px) puisque rien d'autre n'y vit ; le bouton (54px) déborde donc
+     légèrement en bas de la barre en plus de sa pointe du haut, sans que ça pose
+     de souci visuel (son propre liseré --paper le détache proprement du fond,
+     cf. note CLAUDE.md sur le scroll cassé déjà rencontré avec position:fixed
      pleine largeur — pas de backdrop-filter ici non plus). */
   nav.tabs{
     position:fixed; bottom:0; left:0; right:0;
     background:rgba(255,255,255,.94); border-top:1px solid var(--line);
     max-width:520px; margin:0 auto;
-    height:52px; padding-bottom:env(safe-area-inset-bottom);
+    height:38px; padding-bottom:env(safe-area-inset-bottom);
     box-shadow:0 -8px 24px rgba(28,43,34,.05);
     z-index:20;
   }
@@ -246,13 +249,18 @@
      de moitié façon ancien FAB flottant faisait trop "détaché" de la barre).
      Liseré --paper (couleur de fond de l'appli, adapté au thème) pour détacher
      proprement le haut du cercle de la barre. */
+  /* Taille du bouton ramenée à 44px (le minimum de zone tactile déjà utilisé
+     partout ailleurs dans l'appli, cf. section "Touch targets" plus bas) : avec
+     une barre aussi fine, un bouton à 54px déborderait carrément sous le bas de
+     l'écran en gardant une pointe minime en haut — 44px permet de garder les deux
+     à la fois (pointe discrète + barre fine) sans rien couper. */
   nav.tabs button.fab-add{
     position:absolute; top:-8px; left:50%; transform:translateX(-50%);
-    width:54px; height:54px; border-radius:50%; border:4px solid var(--paper);
+    width:44px; height:44px; border-radius:50%; border:3px solid var(--paper);
     background:var(--green); color:#fff; display:grid; place-content:center;
     box-shadow:0 3px 10px rgba(28,43,34,.2); cursor:pointer; padding:0; font-size:0;
   }
-  .fab-add svg{width:23px; height:23px; stroke:#fff; stroke-width:2.4; fill:none; stroke-linecap:round;}
+  .fab-add svg{width:19px; height:19px; stroke:#fff; stroke-width:2.4; fill:none; stroke-linecap:round;}
   .fab-add:active{transform:translateX(-50%) scale(.94);}
   body.dark .fab-add{box-shadow:0 3px 12px rgba(0,0,0,.5);}
 
