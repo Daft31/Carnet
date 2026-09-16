@@ -397,6 +397,17 @@ function bindTabEvents(){
       bindMealResultEvents();
     });
     document.querySelectorAll('[data-slot]').forEach(b=>b.onclick=()=>{ mealSlot=b.dataset.slot; render(); });
+    // Raccourci "Repas fréquent" (brique 9B) : distinct du CTA des Insights
+    // dashboard (data-quickadd + getInsightById, soumis au cooldown 4j) — ici
+    // recalculé à chaque rendu, jamais masqué par un cooldown, puisque c'est
+    // un raccourci utilitaire permanent et non une observation ponctuelle.
+    // Réutilise buildQuickAddDraft()/openQuickAddModal() sans modification.
+    document.querySelectorAll('[data-quickaddslot]').forEach(b=>b.onclick=()=>{
+      const pattern = frequentMealFor(b.dataset.quickaddslot);
+      const draft = pattern ? buildQuickAddDraft(pattern) : null;
+      if(!draft){ toast('Plus assez de données pour ce repas'); return; }
+      openQuickAddModal(draft);
+    });
     bindMealResultEvents();
     const addBtn = document.getElementById('addCustomFoodBtn');
     if(addBtn) addBtn.onclick = openCustomFoodModal;

@@ -1189,33 +1189,53 @@ function recurringMealPatterns({days, mealSlots, minSamples, minShare, minLeadPt
   return patterns;
 }
 
-const INSIGHT_BREAKFAST_WINDOW_DAYS = 30;
-const INSIGHT_MIN_BREAKFAST_DAYS = 8;
-const INSIGHT_BREAKFAST_DOMINANT_RATIO = 0.5; // strictement >, un 50/50 pile ne compte pas
-const INSIGHT_BREAKFAST_CLOSE_MARGIN_PTS = 10; // 2e option à moins de 10 points -> trop ambigu
+// Seuils de dominance (brique 6/9B) : mêmes valeurs qu'avant la généralisation
+// (window 30j, 8 échantillons min, majorité stricte >50%, 2e option à plus de
+// 10 points d'écart) — appliqués maintenant à N'IMPORTE QUEL créneau, pas
+// seulement Petit-déj. Un seul jeu de seuils pour les 4 créneaux : pas de
+// raison produit d'avoir un dîner "habituel" plus facile à établir qu'un
+// petit-déj habituel.
+const FREQUENT_MEAL_WINDOW_DAYS = 30;
+const FREQUENT_MEAL_MIN_SAMPLES = 8;
+const FREQUENT_MEAL_DOMINANT_RATIO = 0.5; // strictement >, un 50/50 pile ne compte pas
+const FREQUENT_MEAL_CLOSE_MARGIN_PTS = 10; // 2e option à moins de 10 points -> trop ambigu
 
-// Couche Insight : choisit d'exposer UNIQUEMENT le pattern petit-déjeuner (pas les
-// 3 autres créneaux, volontairement — voir note sur recurringMealPatterns() ci-
-// dessus). Un simple wrapper fin autour du détecteur générique, aucune logique de
-// regroupement ici.
-function commonBreakfastInsight(){
+// Couche Insight générique (brique 9B) : UN seul helper pour les 4 créneaux —
+// remplace l'ancienne logique spécifique au petit-déj. Toujours un wrapper fin
+// autour de recurringMealPatterns(), aucune logique de regroupement propre.
+// Le detector applique déjà exactement la règle de dominance qu'on veut (>50%
+// ET marge de 10pts sur le 2e) : pas de "top-N" à construire, un seul appelant
+// peut donc toujours se contenter de patterns[0] ou null.
+function frequentMealFor(slot){
   const patterns = recurringMealPatterns({
-    days: INSIGHT_BREAKFAST_WINDOW_DAYS,
-    mealSlots: ['Petit-déj'],
-    minSamples: INSIGHT_MIN_BREAKFAST_DAYS,
-    minShare: INSIGHT_BREAKFAST_DOMINANT_RATIO,
-    minLeadPts: INSIGHT_BREAKFAST_CLOSE_MARGIN_PTS,
+    days: FREQUENT_MEAL_WINDOW_DAYS,
+    mealSlots: [slot],
+    minSamples: FREQUENT_MEAL_MIN_SAMPLES,
+    minShare: FREQUENT_MEAL_DOMINANT_RATIO,
+    minLeadPts: FREQUENT_MEAL_CLOSE_MARGIN_PTS,
   });
   const top = patterns[0];
   if(!top) return null;
   const names = top.foodIds.map(id=>allFoods().find(f=>f.id===id)?.name).filter(Boolean);
   if(!names.length) return null;
+  return { mealSlot: top.mealSlot, foodIds: top.foodIds, matchingEntries: top.matchingEntries, names };
+}
+
+// Choisit d'exposer UNIQUEMENT le pattern petit-déjeuner sur "Kalo a remarqué"
+// (pas les 3 autres créneaux, volontairement — voir note sur
+// recurringMealPatterns() ci-dessus) : cooldown 4j, plafond 2 insights,
+// formulation "Kalo a remarqué" — adapté à une OBSERVATION, pas à un
+// raccourci utilitaire. Les 3 autres créneaux sont exposés différemment,
+// sans cooldown, directement dans le flow d'ajout (voir viewMeals()).
+function commonBreakfastInsight(){
+  const pattern = frequentMealFor('Petit-déj');
+  if(!pattern) return null;
   return {
     id:'breakfast_combo',
-    text:`Ton petit-déjeuner le plus fréquent est : ${frenchList(names)}.`,
-    mealSlot: top.mealSlot,
-    foodIds: top.foodIds,
-    matchingEntries: top.matchingEntries,
+    text:`Ton petit-déjeuner le plus fréquent est : ${frenchList(pattern.names)}.`,
+    mealSlot: pattern.mealSlot,
+    foodIds: pattern.foodIds,
+    matchingEntries: pattern.matchingEntries,
   };
 }
 
@@ -1881,6 +1901,11 @@ function favoritesSection(){
 }
 function viewMeals(){
   const q = normalizeSearch(mealSearchQ.trim());
+  // Contextuel au créneau actif uniquement (brique 9B) : jamais le petit-déj
+  // habituel au milieu de l'ajout d'un dîner, même si le petit-déj a un
+  // pattern plus "fort" statistiquement. Masqué dès que l'utilisateur tape
+  // une recherche — c'est un raccourci de démarrage, pas un widget permanent.
+  const frequentMeal = q.length===0 ? frequentMealFor(mealSlot) : null;
   let results = [];
   if(q.length){
     results = allFoods().filter(f=>normalizeSearch(f.name).includes(q));
@@ -1905,6 +1930,11 @@ function viewMeals(){
     <div class="seg" id="mealseg">
       ${MEAL_SLOTS.map(s=>`<button data-slot="${s}" class="${mealSlot===s?'active':''}">${s}</button>`).join('')}
     </div>
+    ${frequentMeal ? `<div class="freq-meal">
+      <div class="freq-meal-label">Repas fréquent</div>
+      <div class="freq-meal-name">${escapeHtml(frenchList(frequentMeal.names))}</div>
+      <button class="btn small ghost" data-quickaddslot="${frequentMeal.mealSlot}" type="button">Ajouter ce repas</button>
+    </div>` : ''}
     <label>Chercher un aliment</label>
     <input id="foodsearch" type="text" placeholder="riz, poulet, yaourt…" value="${escapeHtml(mealSearchQ)}" autocomplete="off">
     <div class="search-results">

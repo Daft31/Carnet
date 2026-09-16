@@ -157,6 +157,15 @@
   .insight-figure-row{display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:13px; color:var(--ink-soft); margin:0 0 10px; padding-bottom:8px; border-bottom:1px solid var(--line);}
   .insight-block > *:last-child{margin-bottom:0; border-bottom:none; padding-bottom:0;}
 
+  /* Raccourci "Repas fréquent" dans le flow d'ajout (brique 9B) — distinct des
+     Insights dashboard (pas de cooldown, pas de plafond, recalculé à chaque
+     rendu) : un bloc discret, pas une carte, juste sous le sélecteur de
+     créneau. */
+  .freq-meal{background:var(--surface-2); border-radius:10px; padding:10px 12px; margin:10px 0;}
+  .freq-meal-label{font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); margin-bottom:4px;}
+  .freq-meal-name{font-size:14px; font-weight:600; margin-bottom:8px;}
+  .freq-meal .btn{margin-top:0;}
+
   /* Hauteur plafonnée + scroll interne : avec 6-8+ aliments, la liste ne doit
      jamais repousser le récapitulatif macros / CTA hors de portée (le modal
      entier scrolle déjà à 85vh, mais sans ce plafond le CTA finirait hors-écran
