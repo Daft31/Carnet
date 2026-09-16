@@ -90,12 +90,20 @@ function bindChartHover(wrapId, points, seriesDefs){
 }
 
 function openQtyModal(food){
+  // Portion habituelle (brique 9A) : préremplissage discret uniquement — pas de
+  // label ("quantité habituelle"), pas de badge. Une suggestion silencieuse,
+  // pas une affirmation ; l'utilisateur modifie librement, et la confirmation
+  // enregistre toujours source:'manual' (voir plus bas) — 'recurring' reste
+  // réservé au flow Quick-add de repas récurrents, une portion suggérée ici
+  // n'en fait pas une "vérité" différente d'une saisie manuelle normale.
+  const typical = typicalGramsFor(food.id);
+  const defaultGrams = typical!=null ? Math.round(typical) : 100;
   openModal(`
     <h3>${escapeHtml(food.name)}</h3>
     <div class="hint">Valeurs pour 100 g : ${food.kcal} kcal · P${food.protein} G${food.carbs} L${food.fat}</div>
     <label>Quantité</label>
     <div class="seg"><button type="button" id="qtyGrams" class="active">Grammes</button><button type="button" id="qtyPortions">Portions (${escapeHtml(food.serving_label||((food.serving_g||100)+" g"))})</button></div>
-    <input id="qtyInput" type="number" inputmode="numeric" value="100" autofocus>
+    <input id="qtyInput" type="number" inputmode="numeric" value="${defaultGrams}" autofocus>
     <div class="qty-preview" id="qtyPreview"></div>
     <button class="btn" id="qtyConfirm">Ajouter à ${mealSlot}</button>
   `);

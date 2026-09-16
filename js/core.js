@@ -1229,6 +1229,26 @@ function medianGrams(values){
   return n%2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2;
 }
 
+// Portion habituelle d'un aliment (brique 9A) : médiane des grammages des
+// TYPICAL_PORTION_RECENT_SAMPLES dernières entrées valides — pas une fenêtre
+// calendaire. Pour un aliment rare, "les 8 dernières" = tout l'historique
+// disponible (repli naturel, aucune branche de code séparée) ; pour un
+// aliment fréquent, ça protège contre un historique ancien qui noierait un
+// changement récent de portion (ex. 100g -> 160g). Seuil minimal
+// TYPICAL_PORTION_MIN_SAMPLES : sous ce seuil, aucune personnalisation —
+// jamais une portion suggérée sur une seule occurrence.
+const TYPICAL_PORTION_MIN_SAMPLES = 3; // reprend PERIOD_MIN_COVERAGE_DAYS comme plancher déjà établi
+const TYPICAL_PORTION_RECENT_SAMPLES = 8; // reprend INSIGHT_MIN_BREAKFAST_DAYS comme taille d'échantillon personnel déjà validée
+function typicalGramsFor(foodId){
+  const grams = logEntries
+    .filter(e=>e.type==='meal' && e.foodId===foodId && e.grams!=null)
+    .sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))
+    .slice(-TYPICAL_PORTION_RECENT_SAMPLES)
+    .map(e=>e.grams);
+  if(grams.length < TYPICAL_PORTION_MIN_SAMPLES) return null;
+  return medianGrams(grams);
+}
+
 // Construit le brouillon Quick-add à partir d'un pattern détecté : pour chaque
 // foodId, grammage = médiane des occurrences dans matchingEntries qui ont un
 // grammage connu, sinon dernier grammage connu (toutes entrées confondues, pas
