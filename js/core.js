@@ -763,6 +763,60 @@ function weekendVsWeekdayInsight(){
   return { id:'weekend_vs_weekday', text:`Sur les 14 derniers jours, tes apports journaliers moyens sont ${dir} le week-end (${Math.round(avgWeekend)} kcal) que les jours de semaine (${Math.round(avgWeekday)} kcal).` };
 }
 
+const INSIGHT_BREAKFAST_WINDOW_DAYS = 30;
+const INSIGHT_MIN_BREAKFAST_DAYS = 8;
+const INSIGHT_BREAKFAST_DOMINANT_RATIO = 0.5; // strictement >, un 50/50 pile ne compte pas
+const INSIGHT_BREAKFAST_CLOSE_MARGIN = 0.10; // 2e option à moins de 10 points -> trop ambigu
+
+// Repas habituel sur un créneau (ici Petit-déj) : regroupe les petits-déj des 30
+// derniers jours par "signature" = l'ensemble des foodId présents ce jour-là (le
+// grammage n'entre PAS dans la signature — une variation de quantité ne doit pas
+// faire apparaître deux repas identiques comme différents, cf. discussion avec
+// l'utilisateur). Volontairement strict à l'inverse : un ingrédient en plus/en
+// moins change la signature, donc deux repas réellement différents ne sont jamais
+// fusionnés — pas de tolérance floue, pas de système de similarité. Les entrées
+// sans foodId (repas décrits en texte libre par l'IA, sans identité stable) ne
+// participent à aucune signature : un jour où le petit-déj n'est identifiable que
+// via l'IA compte quand même dans le dénominateur (jour avec petit-déj) mais ne
+// peut jamais faire gagner une combinaison, ce qui dilue honnêtement la confiance
+// plutôt que de l'ignorer.
+function commonBreakfastInsight(){
+  const today = todayStr();
+  const comboCounts = {}; // signature -> {count, foodIds, entries:[]}
+  let totalBreakfastDays = 0;
+  for(let i=0;i<INSIGHT_BREAKFAST_WINDOW_DAYS;i++){
+    const d = shiftDate(today, -i);
+    const dayMeals = entriesFor(d).filter(e=>e.type==='meal' && e.mealSlot==='Petit-déj');
+    if(!dayMeals.length) continue;
+    totalBreakfastDays++;
+    const withFoodId = dayMeals.filter(e=>e.foodId);
+    if(!withFoodId.length) continue; // jour compté, mais aucune combinaison possible
+    const ids = [...new Set(withFoodId.map(e=>e.foodId))].sort();
+    const sig = ids.join('|');
+    if(!comboCounts[sig]) comboCounts[sig] = {count:0, foodIds:ids, entries:[]};
+    comboCounts[sig].count++;
+    comboCounts[sig].entries.push(...withFoodId);
+  }
+  if(totalBreakfastDays < INSIGHT_MIN_BREAKFAST_DAYS) return null;
+  const combos = Object.values(comboCounts).sort((a,b)=>b.count-a.count);
+  const top = combos[0];
+  if(!top) return null;
+  const topRatio = top.count/totalBreakfastDays;
+  if(topRatio <= INSIGHT_BREAKFAST_DOMINANT_RATIO) return null;
+  const second = combos[1];
+  if(second && (second.count/totalBreakfastDays) >= topRatio - INSIGHT_BREAKFAST_CLOSE_MARGIN) return null;
+  const names = top.foodIds.map(id=>allFoods().find(f=>f.id===id)?.name).filter(Boolean);
+  if(!names.length) return null;
+  // matchingEntries : gardé disponible pour une future réutilisation (proposer ce
+  // repas en un clic, cf. Brique 6) — pas exploité côté affichage pour l'instant.
+  return {
+    id:'breakfast_combo',
+    text:`Ton petit-déjeuner le plus fréquent est : ${frenchList(names)}.`,
+    foodIds: top.foodIds,
+    matchingEntries: top.entries,
+  };
+}
+
 // Cooldown minimal : un insight déjà montré ne réapparaît pas avant N jours, même
 // s'il reste vrai — évite qu'un même constat (ex. tendance de poids stable sur
 // plusieurs semaines) s'affiche à l'identique chaque jour. Volontairement basique
@@ -782,7 +836,7 @@ function isInsightOnCooldown(id){
 }
 
 function kaloInsights(){
-  const candidates = [weightTrendInsight(), weekendVsWeekdayInsight()].filter(Boolean);
+  const candidates = [weightTrendInsight(), weekendVsWeekdayInsight(), commonBreakfastInsight()].filter(Boolean);
   // Le filtrage cooldown se fait AVANT le plafond : un insight en cooldown libère
   // sa place pour un autre candidat éligible, plutôt que de bloquer un slot pour
   // rien.
