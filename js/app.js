@@ -26,6 +26,7 @@ function applyTheme(){
 }
 applyTheme();
 normalizeTodos();
+normalizeRecipeBooks();
 applyTheme();
 render();
 

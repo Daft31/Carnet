@@ -293,6 +293,12 @@
   .hist-day{border:none; border-radius:14px; margin-bottom:10px; overflow:hidden; background:var(--surface); box-shadow:0 1px 2px rgba(28,43,34,.05), 0 4px 14px rgba(28,43,34,.04);}
   .hist-head{display:flex; justify-content:space-between; align-items:center; padding:13px 14px; cursor:pointer; background:var(--surface);}
   .hist-head .d{font-weight:700; font-size:13.5px; text-transform:capitalize;}
+  /* .hist-head/.hist-day sont réutilisés tels quels pour l'accordéon des livres de
+     recettes (voir recipeBookCard() dans core.js) : le text-transform:capitalize
+     ci-dessus est pensé pour des libellés de date ("lundi 12 janvier"), pas pour un
+     nom de livre libre choisi par l'utilisateur — on le désactive ici pour ne pas
+     déformer visuellement des noms comme "recettes de mamie". */
+  .recipe-book-head .d{text-transform:none;}
   .hist-head .n{font-family:var(--font-mono); font-size:13px; color:var(--ink-soft);}
   .hist-body{padding:0 14px 12px; display:none;}
   .hist-body.open{display:block;}

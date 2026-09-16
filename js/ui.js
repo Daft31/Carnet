@@ -576,6 +576,50 @@ function bindTabEvents(){
     if(clearCheckedBtn) clearCheckedBtn.onclick = ()=>{
       shoppingList = shoppingList.filter(x=>!x.checked); save(); render(); toast('Articles cochés supprimés ✓');
     };
+  }
+
+  // Page dédiée "Recettes" (livres + recettes qu'ils contiennent) — voir
+  // viewRecipes()/recipeBookCard()/recipeRow() dans core.js pour le rendu, et
+  // openSaveRecipeModal()/openMoveBookRecipesModal() dans recipeimport.js pour les
+  // modales de choix de livre (import) et de suppression d'un livre non-vide.
+  if(activeTab==='recipes'){
+    const addBook = ()=>{
+      const input = document.getElementById('newBookName');
+      const name = input?.value.trim();
+      if(!name){ toast('Donne un nom au livre'); return; }
+      createRecipeBook(name);
+      render(); toast('Livre créé ✓');
+    };
+    document.getElementById('addBookBtn')?.addEventListener('click', addBook);
+    document.getElementById('newBookName')?.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addBook(); } });
+
+    document.querySelectorAll('[data-book-toggle]').forEach(el=>el.onclick=()=>{
+      const id = el.dataset.bookToggle;
+      openRecipeBookId = openRecipeBookId===id ? null : id;
+      render();
+    });
+    document.querySelectorAll('[data-book-rename]').forEach(b=>b.onclick=()=>{
+      const book = recipeBooks.find(x=>x.id===b.dataset.bookRename); if(!book) return;
+      const name = prompt('Renommer le livre', book.name); if(name===null) return;
+      const clean = name.trim(); if(!clean){ toast('Le nom du livre ne peut pas être vide'); return; }
+      renameRecipeBook(book.id, clean); render();
+    });
+    document.querySelectorAll('[data-book-delete]').forEach(b=>b.onclick=()=>{
+      const book = recipeBooks.find(x=>x.id===b.dataset.bookDelete); if(!book) return;
+      const bookRecipes = recipes.filter(r=>r.bookId===book.id);
+      if(!bookRecipes.length){
+        if(!confirm(`Supprimer le livre "${book.name}" ?`)) return;
+        deleteRecipeBookEmpty(book.id); render(); toast('Livre supprimé');
+        return;
+      }
+      const otherBooks = recipeBooks.filter(x=>x.id!==book.id);
+      if(!otherBooks.length){
+        toast(`Crée d'abord un autre livre pour pouvoir déplacer les recettes de "${book.name}"`, 'warn');
+        return;
+      }
+      openMoveBookRecipesModal(book, bookRecipes, otherBooks);
+    });
+
     document.querySelectorAll('[data-recipe-toggle]').forEach(el=>el.onclick=()=>{
       const id = el.dataset.recipeToggle;
       openRecipeId = openRecipeId===id ? null : id;
@@ -586,6 +630,11 @@ function bindTabEvents(){
       recipes = recipes.filter(r=>r.id!==id);
       if(openRecipeId===id) openRecipeId = null;
       save(); render(); toast('Recette supprimée');
+    });
+    document.querySelectorAll('[data-recipe-addshop]').forEach(b=>b.onclick=()=>{
+      const r = recipes.find(x=>x.id===b.dataset.recipeAddshop); if(!r) return;
+      const count = addIngredientsToShoppingList(r.ingredients, r.name);
+      toast(count ? 'Ingrédients ajoutés à la liste de courses ✓' : 'Aucun ingrédient à ajouter');
     });
   }
 
@@ -624,7 +673,7 @@ function bindTabEvents(){
       workoutPresets = workoutPresets.filter(p=>p.id!==b.dataset.delpreset); save(); render();
     });
     document.getElementById('exportBtn').onclick = ()=>{
-      const blob = new Blob([JSON.stringify({settings,customFoods,foodOverrides,favorites,weightEntries,profile,workoutPresets,logEntries,todos,shoppingList,recipes,favSports},null,2)], {type:'application/json'});
+      const blob = new Blob([JSON.stringify({settings,customFoods,foodOverrides,favorites,weightEntries,profile,workoutPresets,logEntries,todos,shoppingList,recipes,recipeBooks,favSports},null,2)], {type:'application/json'});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href=url; a.download = `carnet-sauvegarde-${todayStr()}.json`; a.click();
       URL.revokeObjectURL(url);
@@ -646,6 +695,7 @@ function bindTabEvents(){
           if(data.todos) todos = data.todos;
           if(data.shoppingList) shoppingList = data.shoppingList;
           if(data.recipes) recipes = data.recipes;
+          if(data.recipeBooks) recipeBooks = data.recipeBooks;
           if(data.favSports) favSports = data.favSports;
           save(); render(); toast('Import réussi ✓');
         }catch(err){ toast('Fichier invalide'); }
@@ -658,7 +708,7 @@ function bindTabEvents(){
         customFoods = []; foodOverrides = {}; favorites = []; weightEntries = [];
         profile = {sex:'H', age:'', height:'', activity:'modere', goalWeight:'', rate:'-0.5'};
         workoutPresets = [];
-        logEntries = []; todos = []; shoppingList = []; recipes = [];
+        logEntries = []; todos = []; shoppingList = []; recipes = []; recipeBooks = [];
         favSports = [{type:'tapis'}, {type:'velo'}];
         save(); render(); toast('Données réinitialisées');
       }

@@ -29,7 +29,8 @@ let profile = LS.get('ct_profile', {sex:'H', age:'', height:'', activity:'modere
 let logEntries = LS.get('ct_log', []); // {id,date,type,...}
 let todos = LS.get('ct_todos', []); // {id,text,daily,done,completedDate}
 let shoppingList = LS.get('ct_shoppingList', []); // {id,name,checked,qty,source}
-let recipes = LS.get('ct_recipes', []); // {id,name,ingredients:[{name,qty}],steps,servings,sourceUrl,savedAt} — recettes importées, référence simple (pas de gestion élaborée)
+let recipes = LS.get('ct_recipes', []); // {id,name,ingredients:[{name,qty}],steps,servings,sourceUrl,savedAt,bookId} — recettes importées, rangées par livre (voir recipeBooks)
+let recipeBooks = LS.get('ct_recipeBooks', []); // {id,name} — "livres de cuisine" créés librement par l'utilisateur, chaque recette appartient à un seul livre
 let currentDate = todayStr();
 let activeTab = 'today';
 
@@ -58,6 +59,7 @@ function save(){
   LS.set('ct_todos',todos);
   LS.set('ct_shoppingList',shoppingList);
   LS.set('ct_recipes',recipes);
+  LS.set('ct_recipeBooks',recipeBooks);
   LS.set('ct_favSports',favSports);
 }
 function isFavorite(id){ return favorites.includes(id); }
@@ -162,6 +164,72 @@ function normalizeTodos(){
   todos.forEach(t=>{ if(t.daily && t.done && t.completedDate!==today){t.done=false; t.completedDate=null; changed=true;} });
   if(changed) save();
 }
+
+// Migration une seule fois : d'anciennes recettes importées avant l'introduction
+// des "livres" n'ont pas de bookId. Si aucun livre n'existe encore, on en crée un
+// par défaut et on y range les recettes orphelines — pas de bucket "Sans livre"
+// permanent dans l'UI, juste un rattrapage au premier chargement après la mise à
+// jour. N'agit qu'une fois : dès qu'un livre existe, on ne retouche plus rien ici.
+function normalizeRecipeBooks(){
+  recipeBooks = Array.isArray(recipeBooks) ? recipeBooks : [];
+  recipes = Array.isArray(recipes) ? recipes : [];
+  const orphans = recipes.filter(r=>!r.bookId);
+  if(orphans.length && recipeBooks.length===0){
+    const defaultBook = {id:uid(), name:'Mes recettes'};
+    recipeBooks.push(defaultBook);
+    orphans.forEach(r=>{ r.bookId = defaultBook.id; });
+    save();
+  }
+}
+
+// ===================== LIVRES DE RECETTES : opérations de données =====================
+// Ces fonctions ne touchent qu'à l'état (recipes/recipeBooks) + save() ; le rendu et
+// les modales vivent dans core.js (viewRecipes) / recipeimport.js (modales de choix
+// de livre) / ui.js (bindTabEvents), pour rester cohérent avec le reste du fichier.
+function createRecipeBook(name){
+  const clean = (name||'').trim();
+  if(!clean) return null;
+  const book = {id:uid(), name:clean};
+  recipeBooks.push(book);
+  save();
+  return book;
+}
+function renameRecipeBook(id, name){
+  const book = recipeBooks.find(b=>b.id===id);
+  const clean = (name||'').trim();
+  if(!book || !clean) return;
+  book.name = clean;
+  save();
+}
+// Ne supprime jamais un livre non-vide directement : voir moveBookRecipesAndDelete()
+// pour le cas avec recettes, appelé depuis une modale de choix de livre cible
+// (ui.js/recipeimport.js) plutôt que de perdre des recettes silencieusement.
+function deleteRecipeBookEmpty(id){
+  recipeBooks = recipeBooks.filter(b=>b.id!==id);
+  if(openRecipeBookId===id) openRecipeBookId = null;
+  save();
+}
+function moveBookRecipesAndDelete(fromId, toId){
+  recipes.forEach(r=>{ if(r.bookId===fromId) r.bookId = toId; });
+  recipeBooks = recipeBooks.filter(b=>b.id!==fromId);
+  if(openRecipeBookId===fromId) openRecipeBookId = toId;
+  save();
+}
+// Factorisé depuis js/recipeimport.js (riAddShopBtn) pour être réutilisé aussi par
+// le bouton "Ajouter aux courses" d'une recette déjà enregistrée (page Recettes) —
+// même format d'article que le reste de la liste de courses ({id,name,checked,qty,source}).
+function addIngredientsToShoppingList(ingredients, sourceName){
+  if(!Array.isArray(ingredients) || !ingredients.length) return 0;
+  let count = 0;
+  ingredients.forEach(i=>{
+    const iname = (i.name||'').trim();
+    if(!iname) return;
+    shoppingList.push({id:uid(), name:iname, qty:(i.qty||'').trim()||null, checked:false, source:sourceName});
+    count++;
+  });
+  if(count) save();
+  return count;
+}
 function viewTodos(){
   normalizeTodos();
   const done=todos.filter(t=>t.done).length;
@@ -188,22 +256,69 @@ function viewTodos(){
   </section>`;
 }
 
-// Petite section "référence" pour les recettes importées via TikTok (js/recipeimport.js) :
-// volontairement minimale (pas d'édition, juste consulter/supprimer) — cf. consigne MVP.
-function recipesSection(){
-  if(!recipes.length) return '';
-  const row = r => `<div class="list-entry">
+// Une recette dans le détail d'un livre : ligne repliable (accordéon sur
+// openRecipeId, même mécanisme que l'ancienne page "Courses" avant la refonte
+// livres/page dédiée) + détail
+// ingrédients/étapes/lien source + bouton "Ajouter aux courses" propre à CETTE
+// recette (contrairement à l'import, où l'ajout se fait avant même d'enregistrer).
+function recipeRow(r){
+  const open = openRecipeId===r.id;
+  return `<div class="list-entry">
     <div class="main recipe-head" data-recipe-toggle="${r.id}">
       <div class="title">${escapeHtml(r.name)}</div>
-      <div class="sub">${r.ingredients.length} ingrédient${r.ingredients.length>1?'s':''}${r.servings?' · '+r.servings+' pers.':''} ${openRecipeId===r.id?'▲':'▼'}</div>
+      <div class="sub">${r.ingredients.length} ingrédient${r.ingredients.length>1?'s':''}${r.servings?' · '+r.servings+' pers.':''} ${open?'▲':'▼'}</div>
     </div>
     <button class="del" data-recipe-delete="${r.id}" aria-label="Supprimer la recette">✕</button>
   </div>
-  ${openRecipeId===r.id?`<div class="recipe-detail">
+  ${open?`<div class="recipe-detail">
     ${r.ingredients.length?`<ul class="recipe-ing">${r.ingredients.map(i=>`<li>${escapeHtml(i.name||'')}${i.qty?' — '+escapeHtml(i.qty):''}</li>`).join('')}</ul>`:''}
     ${r.steps&&r.steps.length?`<ol class="recipe-steps">${r.steps.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ol>`:'<div class="empty">Étapes non précisées dans la légende.</div>'}
+    ${r.sourceUrl?`<div class="hint"><a href="${escapeHtml(r.sourceUrl)}" target="_blank" rel="noopener noreferrer">Voir la vidéo source ↗</a></div>`:''}
+    <button class="btn ghost small" data-recipe-addshop="${r.id}" type="button" style="margin-top:10px;">Ajouter aux courses</button>
   </div>`:''}`;
-  return `<section class="card"><h2>Recettes importées (${recipes.length})</h2><div class="recipe-list">${recipes.map(row).join('')}</div></section>`;
+}
+
+// Un livre : accordéon sur openRecipeBookId (même pattern que l'historique par
+// semaine — hist-day/hist-head/hist-body) ; renommer/supprimer n'apparaissent que
+// livre ouvert, pour ne pas surcharger la vue fermée avec des actions destructives.
+function recipeBookCard(book){
+  const bookRecipes = recipes.filter(r=>r.bookId===book.id);
+  const open = openRecipeBookId===book.id;
+  return `<div class="hist-day">
+    <div class="hist-head recipe-book-head" data-book-toggle="${book.id}">
+      <div class="d">${escapeHtml(book.name)}</div>
+      <div class="n">${bookRecipes.length} recette${bookRecipes.length>1?'s':''} ${open?'▲':'▼'}</div>
+    </div>
+    <div class="hist-body ${open?'open':''}">
+      <div class="row2" style="margin-top:0;">
+        <button class="btn ghost small" data-book-rename="${book.id}" type="button">Renommer</button>
+        <button class="btn ghost small" data-book-delete="${book.id}" type="button" style="color:var(--rust);">Supprimer</button>
+      </div>
+      ${bookRecipes.length ? `<div class="recipe-list" style="margin-top:10px;">${bookRecipes.map(recipeRow).join('')}</div>` : '<div class="empty">Ce livre est vide pour l\'instant.</div>'}
+    </div>
+  </div>`;
+}
+
+// Page dédiée aux recettes ("livres de cuisine") : pas liée à une date précise
+// (comme Poids/Courses), donc pas de dateStrip() — juste un page-title, à
+// l'instar de viewWeight()/viewShoppingList(). Créer un livre est possible ici à
+// tout moment (pas seulement pendant un import, cf. openSaveRecipeModal dans
+// js/recipeimport.js).
+function viewRecipes(){
+  return `<h1 class="page-title">Recettes</h1>
+  <section class="card">
+    <h2>Nouveau livre</h2>
+    <div class="todo-form">
+      <input id="newBookName" type="text" maxlength="60" placeholder="Ex. Desserts, Plats rapides…" autocomplete="off">
+      <button class="btn primary" id="addBookBtn" type="button">Créer le livre</button>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Mes livres (${recipeBooks.length})</h2>
+    ${recipeBooks.length
+      ? recipeBooks.map(recipeBookCard).join('')
+      : '<div class="empty">Aucun livre pour l\'instant — crée-en un ci-dessus, puis importe une recette depuis le bouton + pour la ranger dedans.</div>'}
+  </section>`;
 }
 
 function viewShoppingList(){
@@ -233,8 +348,7 @@ function viewShoppingList(){
       <button class="btn ghost small" id="shopClearChecked" type="button">Vider les cochés</button>
     </div>
     <div class="todo-list">${checked.map(item).join('')}</div>`:''}
-  </section>
-  ${recipesSection()}`;
+  </section>`;
 }
 
 /* ===================== RENDU ===================== */
@@ -264,6 +378,7 @@ function render(){
   else if(activeTab==='notes') main.innerHTML = viewNotes();
   else if(activeTab==='todos') main.innerHTML = viewTodos();
   else if(activeTab==='shopping') main.innerHTML = viewShoppingList();
+  else if(activeTab==='recipes') main.innerHTML = viewRecipes();
   else if(activeTab==='history') main.innerHTML = viewHistory();
   else if(activeTab==='settings') main.innerHTML = viewSettings();
   bindTabEvents();
@@ -409,12 +524,13 @@ const DASH_ICONS = {
   notes: '<svg viewBox="0 0 24 24"><path d="M6 4h9l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z"/><path d="M14 4v4h4M8 12h8M8 16h5"/></svg>',
   todos: '<svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="m8 12 2.2 2.2L16 8.5"/></svg>',
   shopping: '<svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1.4"/><circle cx="19" cy="21" r="1.4"/><path d="M1.5 2h3l2.6 12.9a2 2 0 002 1.6h8.8a2 2 0 002-1.6L22 7H6.3"/></svg>',
+  recipes: '<svg viewBox="0 0 24 24"><path d="M4 5.5c2.2-1.3 5.3-1.3 8 .5 2.7-1.8 5.8-1.8 8-.5v13c-2.2-1.3-5.3-1.3-8 .5-2.7-1.8-5.8-1.8-8-.5z"/><path d="M12 6v13"/></svg>',
 };
 // Libellés de page affichés dans l'en-tête (hors dashboard) et utilisés pour
 // <title> — voir render() dans core.js. 'today' = le dashboard lui-même.
 const TAB_LABELS = {
   today:'Accueil', meals:'Repas', workouts:'Séances', weight:'Poids', history:'Historique',
-  notes:'Notes', todos:'To-do', shopping:'Courses', settings:'Réglages'
+  notes:'Notes', todos:'To-do', shopping:'Courses', recipes:'Recettes', settings:'Réglages'
 };
 
 // Tronque un texte pour un aperçu de carte, sur un mot entier (pas de coupure en
@@ -481,6 +597,13 @@ function dashboardGrid(t){
   const wkSub = todaysWorkouts.length ? `${wkKcal} kcal brûlées (info)` : "Rien aujourd'hui";
   const workoutsCard = dashCard('workouts', 'Séances', wkValue, wkSub);
 
+  // Placée juste après "Repas" (les deux touchent à la nutrition). Résumé sur les
+  // livres plutôt qu'un simple compteur de recettes : c'est le rangement par livre
+  // qui est le point d'entrée mental de cette page, pas la liste plate.
+  const recipesValue = recipes.length ? `${recipes.length} recette${recipes.length>1?'s':''}` : 'Aucune';
+  const recipesSub = recipeBooks.length ? `${recipeBooks.length} livre${recipeBooks.length>1?'s':''}` : 'Crée un livre';
+  const recipesCard = dashCard('recipes', 'Recettes', recipesValue, recipesSub);
+
   const sortedW = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date));
   const latestW = sortedW[0];
   let weightValue = '—', weightSub = 'Aucune pesée';
@@ -518,7 +641,7 @@ function dashboardGrid(t){
   const shopCard = dashCard('shopping', 'Courses', pendingShop ? `${pendingShop} à acheter` : (shoppingList.length ? 'Tout coché' : 'Liste vide'), `${shoppingList.length} article${shoppingList.length>1?'s':''} au total`);
 
   return `<section class="dash-grid">
-    ${mealsCard}${workoutsCard}${weightCard}${historyCard}${notesCard}${todosCard}${shopCard}
+    ${mealsCard}${recipesCard}${workoutsCard}${weightCard}${historyCard}${notesCard}${todosCard}${shopCard}
   </section>`;
 }
 
@@ -1202,6 +1325,7 @@ let openHistWeek = null;
 let openCustomFoods = false;
 let openFavorites = false;
 let openRecipeId = null;
+let openRecipeBookId = null;
 // Géométrie SVG partagée par les graphiques de l'onglet Poids.
 const CHART_W=320, CHART_H=150, CHART_PADL=36, CHART_PADR=14, CHART_PADT=16, CHART_PADB=24;
 function chartXFor(i,n){ return CHART_PADL + (n>1 ? (i/(n-1)) : 0)*(CHART_W-CHART_PADL-CHART_PADR); }

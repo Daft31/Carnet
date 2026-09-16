@@ -1,4 +1,4 @@
-/* ===================== IMPORT DE RECETTE (TIKTOK) ===================== */
+/* ===================== IMPORT DE RECETTE (TIKTOK) + LIVRES ===================== */
 /* Appelle la fonction serverless /api/parse-recipe (Vercel) : celle-ci va
    chercher la légende de la vidéo TikTok via l'API oEmbed publique de
    TikTok, puis la fait structurer en recette par l'IA Mammouth (même
@@ -8,7 +8,17 @@
    d'en inventer un autre : VERCEL_API_BASE est déjà défini là-bas (ce
    fichier est chargé après mealparser.js dans index.html, donc la constante
    est disponible en global). Sur GitHub Pages (pas de fonction serverless),
-   on appelle donc explicitement le domaine Vercel de prod. */
+   on appelle donc explicitement le domaine Vercel de prod.
+
+   Ce fichier héberge aussi les modales liées aux "livres de cuisine"
+   (openSaveRecipeModal, openMoveBookRecipesModal) : le choix/création de livre
+   au moment d'enregistrer une recette importée, et la modale de suppression
+   d'un livre non-vide. La page dédiée "Recettes" (liste des livres, détail
+   d'un livre/d'une recette) vit dans js/core.js (viewRecipes()) comme les
+   autres pages ; les mutations pures de données (createRecipeBook,
+   renameRecipeBook, deleteRecipeBookEmpty, moveBookRecipesAndDelete,
+   addIngredientsToShoppingList) vivent aussi dans core.js pour rester
+   réutilisables sans dépendre de ce fichier. */
 function recipeApiUrl() {
   if (location.hostname.endsWith('.vercel.app')) return '/api/parse-recipe';
   return `${VERCEL_API_BASE}/api/parse-recipe`;
@@ -71,19 +81,73 @@ function openRecipeResultModal(data, sourceUrl) {
     <button class="btn ghost" id="riRedoBtn" type="button">Importer une autre recette</button>
   `);
   document.getElementById('riAddShopBtn').onclick = () => {
-    if (!ingredients.length) { toast('Aucun ingrédient à ajouter'); return; }
-    ingredients.forEach(i => {
-      const iname = (i.name || '').trim();
-      if (!iname) return;
-      shoppingList.push({ id: uid(), name: iname, qty: (i.qty || '').trim() || null, checked: false, source: name });
-    });
-    save();
+    const count = addIngredientsToShoppingList(ingredients, name);
+    if (!count) { toast('Aucun ingrédient à ajouter'); return; }
     toast('Ingrédients ajoutés à la liste de courses ✓');
   };
   document.getElementById('riSaveRecipeBtn').onclick = () => {
-    recipes.unshift({ id: uid(), name, ingredients, steps, servings: data.servings || null, sourceUrl, savedAt: todayStr() });
-    save();
-    toast('Recette enregistrée ✓');
+    openSaveRecipeModal({ name, ingredients, steps, servings: data.servings || null, sourceUrl });
   };
   document.getElementById('riRedoBtn').onclick = openRecipeImportModal;
+}
+
+/* ===================== LIVRES DE RECETTES ===================== */
+// Choix du livre au moment d'enregistrer une recette importée : livre existant
+// (bouton par livre) ou création à la volée d'un nouveau livre. On enregistre la
+// recette seulement une fois le livre choisi/créé — jamais de recette sans bookId
+// à partir d'ici (les seules recettes sans bookId sont d'anciennes recettes
+// pré-migration, voir normalizeRecipeBooks() dans core.js).
+function openSaveRecipeModal(draft) {
+  const bookButtons = recipeBooks.map(b => {
+    const count = recipes.filter(r => r.bookId === b.id).length;
+    return `<button class="btn ghost" data-picksavebook="${b.id}" type="button" style="margin-top:8px;">${escapeHtml(b.name)} <span class="hint" style="margin:0;display:inline;">(${count})</span></button>`;
+  }).join('');
+  openModal(`
+    <h3>Dans quel livre ranger cette recette ?</h3>
+    <div class="hint">Choisis un livre existant, ou crée-en un nouveau ci-dessous.</div>
+    ${recipeBooks.length ? bookButtons : '<div class="empty">Aucun livre pour l\'instant — crée-en un ci-dessous.</div>'}
+    <label>Nouveau livre</label>
+    <input id="newBookNameModal" type="text" maxlength="60" placeholder="Ex. Desserts, Plats rapides…" autofocus>
+    <button class="btn" id="saveRecipeCreateBookBtn" type="button">Créer ce livre et enregistrer</button>
+  `);
+  const saveInto = (bookId, bookName) => {
+    recipes.unshift({ id: uid(), name: draft.name, ingredients: draft.ingredients, steps: draft.steps, servings: draft.servings, sourceUrl: draft.sourceUrl, bookId, savedAt: todayStr() });
+    save();
+    closeModal();
+    toast(bookName ? `Recette enregistrée dans "${bookName}" ✓` : 'Recette enregistrée ✓');
+  };
+  document.querySelectorAll('[data-picksavebook]').forEach(b => b.onclick = () => {
+    const book = recipeBooks.find(x => x.id === b.dataset.picksavebook);
+    saveInto(b.dataset.picksavebook, book && book.name);
+  });
+  document.getElementById('saveRecipeCreateBookBtn').onclick = () => {
+    const bookName = document.getElementById('newBookNameModal').value.trim();
+    if (!bookName) { toast('Donne un nom au livre'); return; }
+    const book = createRecipeBook(bookName);
+    saveInto(book.id, book.name);
+  };
+}
+
+// Suppression d'un livre non-vide : jamais de perte silencieuse de recettes — on
+// force le choix d'un livre de destination avant de vraiment supprimer. Le cas
+// "livre vide" (suppression directe après confirm()) est géré dans ui.js, qui
+// n'ouvre cette modale que si le livre contient au moins une recette.
+function openMoveBookRecipesModal(book, bookRecipes, otherBooks) {
+  const options = otherBooks.map(b => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('');
+  openModal(`
+    <h3>Supprimer "${escapeHtml(book.name)}"</h3>
+    <div class="hint">Ce livre contient ${bookRecipes.length} recette${bookRecipes.length > 1 ? 's' : ''}. Choisis où les déplacer avant de supprimer le livre — rien n'est perdu.</div>
+    <label>Déplacer les recettes vers</label>
+    <select id="moveBookTarget">${options}</select>
+    <button class="btn rust" id="moveBookConfirmBtn" type="button">Déplacer les recettes et supprimer le livre</button>
+    <button class="btn ghost" id="moveBookCancelBtn" type="button">Annuler</button>
+  `);
+  document.getElementById('moveBookConfirmBtn').onclick = () => {
+    const targetId = document.getElementById('moveBookTarget').value;
+    moveBookRecipesAndDelete(book.id, targetId);
+    closeModal();
+    render();
+    toast('Livre supprimé, recettes déplacées ✓');
+  };
+  document.getElementById('moveBookCancelBtn').onclick = closeModal;
 }
