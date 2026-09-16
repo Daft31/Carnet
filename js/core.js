@@ -1047,12 +1047,46 @@ function weightIntakeAlignment(cmp){
   return { metrics:['weight','kcal'], text, figures:[whatChangedFigure('kcal',k), whatChangedFigure('weight',w)] };
 }
 
-// Insight-layer (brique 7A, étendu 8A) au-dessus de comparePeriods() : compose
-// jusqu'à 2 "groupes" affichés dans "Ce qui a changé". Un groupe est soit le
-// contexte croisé A1 (2 métriques, 1 phrase, 2 figures — compte pour UNE place
-// sur les 2), soit une métrique simple (1 phrase, 1 figure). Ne décide PAS de
-// la subsomption avec weightTrendInsight() ni de la place dans les 2 slots
-// globaux — ce choix reste centralisé dans kaloInsights().
+// Formulations B1 — purement descriptives, aucun mot d'interprétation ("tu
+// n'as pas compensé", "cela risque de", "c'est pourquoi") : uniquement le
+// contraste entre les deux faits, jamais une explication du contraste.
+const ACTIVITY_INTAKE_TEXT = {
+  up: `Ton nombre de séances a augmenté cette semaine alors que ton apport calorique moyen est resté stable.`,
+  down: `Ton nombre de séances a diminué cette semaine alors que ton apport calorique moyen est resté stable.`,
+};
+
+// Contexte croisé B1 (brique 8B) : DIVERGENCE, pas co-mouvement comme A1 — un
+// signal change significativement pendant que l'autre reste stable (avec
+// assez de données, voir note ci-dessous). C'est le contraste lui-même qui est
+// l'info, pas une explication de ce contraste. Volontairement restreint à
+// sessionsPerWeek/kcal en V1 (pas de généralisation à d'autres paires) et
+// volontairement restreint au poids EXCLU de cet Insight même s'il bouge en
+// même temps (mélanger 3 signaux commencerait à suggérer une mécanique
+// causale implicite) — le poids reste un contexte séparé, éventuel, pour plus
+// tard.
+function activityIntakeShift(cmp){
+  const s = cmp.sessionsPerWeek, k = cmp.kcal;
+  if(s.status!=='significant_change') return null;
+  // 'stable' ne peut être atteint par comparePeriods() que si les deux côtés
+  // sont `enough` (sinon le statut serait 'insufficient_data') — donc ce test
+  // garantit à la fois "stable" ET "stable avec assez de données", sans
+  // relire `enough` séparément (même principe que weightIntakeAlignment()).
+  if(k.status!=='stable') return null;
+  const dir = s.delta>0 ? 'up' : 'down';
+  // Ordre séances puis calories : suit l'ordre de la phrase ("nombre de
+  // séances... alors que... apport calorique..."), pas l'ordre de priorité
+  // général (qui régit la SÉLECTION, pas la présentation d'un groupe déjà
+  // sélectionné) — même convention que weightIntakeAlignment().
+  return { metrics:['sessionsPerWeek','kcal'], text: ACTIVITY_INTAKE_TEXT[dir], figures:[whatChangedFigure('sessionsPerWeek',s), whatChangedFigure('kcal',k)] };
+}
+
+// Insight-layer (brique 7A, étendu 8A/8B) au-dessus de comparePeriods() :
+// compose jusqu'à 2 "groupes" affichés dans "Ce qui a changé". Un groupe est
+// soit un contexte croisé (A1 co-mouvement OU B1 divergence — structurellement
+// exclusifs entre eux : A1 exige kcal significatif, B1 exige kcal stable, les
+// deux ne peuvent jamais être vrais simultanément), soit une métrique simple.
+// Ne décide PAS de la subsomption avec weightTrendInsight() ni de la place
+// dans les 2 slots globaux — ce choix reste centralisé dans kaloInsights().
 function whatChangedInsight(){
   const cmp = weeklyMetricsComparison();
   const groups = [];
@@ -1061,7 +1095,13 @@ function whatChangedInsight(){
   const alignment = weightIntakeAlignment(cmp);
   if(alignment){
     groups.push({ kind:'weight_intake_alignment', ...alignment });
-    consumedIds = alignment.metrics;
+    consumedIds = consumedIds.concat(alignment.metrics);
+  }
+
+  const shift = activityIntakeShift(cmp);
+  if(shift){
+    groups.push({ kind:'activity_intake_shift', ...shift });
+    consumedIds = consumedIds.concat(shift.metrics);
   }
 
   WHAT_CHANGED_CONTENT_IDS
