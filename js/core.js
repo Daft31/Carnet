@@ -398,43 +398,48 @@ function switchTab(tab){
 
 // Bandeau de dates unique (remplace l'ancien duo dayBar()+weekStrip(), redondant :
 // des flèches jour précédent/suivant ET une bande de jours cliquables juste en
-// dessous). Un seul ruban scrollable horizontalement, centré sur currentDate, qui
-// couvre plusieurs semaines passées ET futures (pas juste la semaine en cours).
-// Taper un jour adjacent au jour sélectionné revient au même que les anciennes
-// flèches prev/next (il est toujours visible sans scroller, la fenêtre étant
-// centrée) ; naviguer plus loin re-centre la fenêtre autour du nouveau jour choisi
-// au render suivant, ce qui permet d'aller aussi loin qu'on veut par petits pas.
-// Le centrage visuel (scrollLeft) est fait après coup dans bindTabEvents() — voir
-// `centerDateStrip()` dans ui.js — car on ne peut pas le faire en pur HTML/CSS.
-const DATE_STRIP_RANGE = 21; // jours affichés avant/après currentDate
+// dessous). Découpé en semaines complètes lundi→dimanche (weekStart()), avec un
+// snap au swipe (scroll-snap-type sur .date-strip-scroll) qui fait défiler une
+// semaine entière à la fois — retour utilisateur : un ruban de jours en fenêtre
+// glissante (±N jours centrés sur le jour actif) mélangeait visuellement fin de
+// semaine passée et début de semaine en cours, pas assez "propre". Chaque semaine
+// occupe 100% de la largeur (.ds-week), les jours se répartissent dedans à parts
+// égales (.ds-day en flex:1, plus une largeur fixe comme avant). Le centrage
+// visuel sur la semaine active (scrollLeft) est fait après coup dans
+// bindTabEvents() — voir `centerDateStrip()` dans ui.js.
+const WEEK_STRIP_RANGE = 10; // semaines affichées avant/après la semaine de currentDate
 function dateStrip(){
   const dowLetters = ['L','M','M','J','V','S','D'];
   const todayS = todayStr();
-  const days = [];
-  for(let i=-DATE_STRIP_RANGE;i<=DATE_STRIP_RANGE;i++) days.push(shiftDate(currentDate,i));
-  const items = days.map(d=>{
-    const dt = new Date(d+'T12:00:00');
-    const letter = dowLetters[(dt.getDay()+6)%7];
-    const hasEntries = entriesFor(d).some(e=>e.type==='meal');
-    const selected = d===currentDate;
-    const isToday = d===todayS;
-    return `<button class="ds-day${selected?' active':''}${isToday?' today':''}" data-jumpdate="${d}" type="button">
-      <span class="ds-letter">${letter}</span>
-      <span class="ds-num">${dt.getDate()}</span>
-      <span class="ds-dot${hasEntries?' filled':''}"></span>
-    </button>`;
+  const curWeekStart = weekStart(currentDate);
+  const weekStarts = [];
+  for(let w=-WEEK_STRIP_RANGE; w<=WEEK_STRIP_RANGE; w++) weekStarts.push(shiftDate(curWeekStart, w*7));
+  const weekBlocks = weekStarts.map(ws=>{
+    const days = [0,1,2,3,4,5,6].map(i=>shiftDate(ws,i));
+    const dayButtons = days.map((d,i)=>{
+      const dt = new Date(d+'T12:00:00');
+      const hasEntries = entriesFor(d).some(e=>e.type==='meal');
+      const selected = d===currentDate;
+      const isToday = d===todayS;
+      return `<button class="ds-day${selected?' active':''}${isToday?' today':''}" data-jumpdate="${d}" type="button">
+        <span class="ds-letter">${dowLetters[i]}</span>
+        <span class="ds-num">${dt.getDate()}</span>
+        <span class="ds-dot${hasEntries?' filled':''}"></span>
+      </button>`;
+    }).join('');
+    return `<div class="ds-week" data-weekstart="${ws}">${dayButtons}</div>`;
   }).join('');
   // Le libellé ("Aujourd'hui", "Hier"...) est un vrai bouton qui ouvre le
   // sélecteur de date natif (input[type=date] cliqué par programme via
   // showPicker(), voir bindTabEvents() dans ui.js) — pour choisir directement une
-  // date lointaine sans faire défiler le ruban jour par jour.
+  // date lointaine sans faire défiler le ruban semaine par semaine.
   return `<div class="date-strip">
     <button class="date-strip-label" id="dateStripLabel" type="button">
       <span>${dateLabel(currentDate)}<small>${new Date(currentDate+'T12:00:00').toLocaleDateString('fr-FR')}</small></span>
       <svg class="ds-cal-ico" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
     </button>
     <input type="date" id="dateStripPicker" class="date-strip-picker" value="${currentDate}" tabindex="-1" aria-hidden="true">
-    <div class="date-strip-scroll" id="dateStripScroll">${items}</div>
+    <div class="date-strip-scroll" id="dateStripScroll">${weekBlocks}</div>
   </div>`;
 }
 

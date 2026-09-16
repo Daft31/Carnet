@@ -255,15 +255,17 @@ function bindMealResultEvents(){
   if(favToggle) favToggle.onclick = ()=>{ openFavorites = !openFavorites; render(); };
 }
 
-// Centre le jour actif du bandeau de dates (js/core.js: dateStrip()) dans son
-// conteneur scrollable — ne peut pas se faire en CSS pur. Appelé à chaque render()
-// via bindTabEvents(), sans effet si le bandeau n'est pas dans la page courante.
+// Aligne la semaine active du bandeau de dates (js/core.js: dateStrip()) sur le
+// bord de son conteneur scrollable (scroll-snap-align:start côté CSS, voir
+// .ds-week) — ne peut pas se faire en CSS pur au premier rendu. Appelé à chaque
+// render() via bindTabEvents(), sans effet si le bandeau n'est pas dans la page
+// courante.
 function centerDateStrip(){
   const scrollEl = document.getElementById('dateStripScroll');
   if(!scrollEl) return;
-  const activeEl = scrollEl.querySelector('.active');
-  if(!activeEl) return;
-  scrollEl.scrollLeft = activeEl.offsetLeft - (scrollEl.clientWidth/2) + (activeEl.clientWidth/2);
+  const weekEl = scrollEl.querySelector(`.ds-week[data-weekstart="${weekStart(currentDate)}"]`);
+  if(!weekEl) return;
+  scrollEl.scrollLeft = weekEl.offsetLeft;
 }
 
 /* ===================== ÉVÉNEMENTS ===================== */
