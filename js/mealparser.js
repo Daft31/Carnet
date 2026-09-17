@@ -15,11 +15,17 @@ function aiMealApiUrl() {
   return `${VERCEL_API_BASE}/api/parse-meal`;
 }
 
-function openAIDescribeModal() {
+// `prefillText` (brique cohérence Reformuler) : texte à remettre dans la
+// textarea à l'ouverture — utilisé uniquement par le bouton "Reformuler" de
+// openAIResultModal(), qui repasse la description ORIGINALE (celle réellement
+// envoyée à l'analyse précédente), jamais le nom/les ingrédients/les macros
+// du résultat IA. Undefined au premier appel (FAB, bouton "Décrire un repas")
+// -> textarea vide comme avant, aucun changement de ce cas.
+function openAIDescribeModal(prefillText) {
   openModal(`
     <h3>Décrire un repas (IA)</h3>
     <div class="hint">Décris ton repas en langage naturel, l'IA estime les macros. Exemple : "poulet 150g avec riz et brocolis".</div>
-    <textarea id="aiMealText" placeholder="ex. burger + frites au restaurant"></textarea>
+    <textarea id="aiMealText" placeholder="ex. burger + frites au restaurant">${escapeHtml(prefillText || '')}</textarea>
     <div id="aiStatus" class="hint" style="display:none;"></div>
     <button class="btn" id="aiSubmitBtn" type="button">Analyser</button>
   `);
@@ -39,7 +45,7 @@ function openAIDescribeModal() {
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.details || json.error || 'Erreur inconnue');
-      openAIResultModal(json.data);
+      openAIResultModal(json.data, text);
     } catch (e) {
       statusEl.textContent = '❌ ' + (e.message || "Erreur lors de l'analyse");
       btn.disabled = false;
@@ -58,7 +64,7 @@ function confidenceNotice(confidence) {
   return '⚠️ Estimation IA, vérifie si besoin avant de confirmer.';
 }
 
-function openAIResultModal(data) {
+function openAIResultModal(data, sourceText) {
   const kcal = Math.round(parseFloat(data.calories) || 0);
   // Valeurs d'affichage arrondies (même rendu que l'ancien `.toFixed(0)` statique) :
   // ce sont elles qui deviennent la valeur initiale des champs éditables ci-dessous,
@@ -127,5 +133,9 @@ function openAIResultModal(data) {
     });
     save(); closeModal(); render(); toast('Ajouté ✓');
   };
-  document.getElementById('aiRedoBtn').onclick = openAIDescribeModal;
+  // Repasse la description d'origine (paramètre `sourceText`, jamais `data`) —
+  // voir le commentaire sur `prefillText` dans openAIDescribeModal() : incohérence
+  // relevée à l'audit, le chemin d'erreur réseau préservait déjà le texte tapé
+  // (seul `statusEl` était modifié), "Reformuler" doit se comporter pareil.
+  document.getElementById('aiRedoBtn').onclick = () => openAIDescribeModal(sourceText);
 }
