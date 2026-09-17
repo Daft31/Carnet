@@ -1266,6 +1266,20 @@ function frequentMealFor(slot){
 // formulation "Kalo a remarqué" — adapté à une OBSERVATION, pas à un
 // raccourci utilitaire. Les 3 autres créneaux sont exposés différemment,
 // sans cooldown, directement dans le flow d'ajout (voir viewMeals()).
+//
+// Brique 12B — invariant volontaire, à ne jamais casser en séparant les deux
+// implémentations : cette fonction appelle frequentMealFor('Petit-déj') et se
+// contente de recopier mealSlot/foodIds/matchingEntries tels quels (aucune
+// transformation) — c'est EXACTEMENT le même appel que fait viewMeals() pour
+// le bloc "Repas fréquent" permanent. Les deux surfaces ne peuvent donc
+// jamais diverger sur le contenu (même pattern, recalculé à chaque render,
+// aucun cache séparé) : seule leur VISIBILITÉ diffère, et c'est la seule
+// différence voulue — ici gatée par cooldown (observation, "Kalo a
+// remarqué"), là-bas permanente tant que le pattern existe (raccourci
+// utilitaire, pas une observation). Si un jour cette fonction recalcule le
+// pattern autrement qu'en appelant frequentMealFor(), c'est un bug : les deux
+// surfaces recommenceraient à pouvoir raconter des choses différentes pour
+// le même repas.
 function commonBreakfastInsight(){
   const pattern = frequentMealFor('Petit-déj');
   if(!pattern) return null;
@@ -2083,6 +2097,10 @@ function viewMeals(){
   // habituel au milieu de l'ajout d'un dîner, même si le petit-déj a un
   // pattern plus "fort" statistiquement. Masqué dès que l'utilisateur tape
   // une recherche — c'est un raccourci de démarrage, pas un widget permanent.
+  // Sur le créneau Petit-déj, c'est le MÊME appel que commonBreakfastInsight()
+  // (brique 12B) — jamais de cache ni de logique dupliquée entre ce bloc
+  // permanent et la carte dashboard cooldown-gatée : seule la visibilité doit
+  // différer, jamais le contenu.
   const frequentMeal = q.length===0 ? frequentMealFor(mealSlot) : null;
   let results = [];
   if(q.length){
@@ -2148,6 +2166,11 @@ function mealProvenanceLabel(e){
   if(e.source==='catalog' || e.source==='scan') parts.push('officiel');
   else if(e.source==='ai') parts.push('estimé IA');
   else if(e.source==='recurring') parts.push('repas habituel');
+  // quantitySource (brique 12A) : uniquement pour un ajout manuel dont la quantité
+  // proposée venait de typicalGramsFor() — jamais pour les anciennes entrées (champ
+  // absent, cette branche ne matche simplement pas, pas d'étiquetage rétroactif) ni
+  // pour 'user'/'default' (rien à signaler, discret par design, pas un badge partout).
+  else if(e.source==='manual' && e.quantitySource==='habitual') parts.push('quantité habituelle');
   else if(e.grams==null) parts.push('estimé');
   return parts.join(' · ');
 }

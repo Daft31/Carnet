@@ -137,7 +137,17 @@ function openQtyModal(food){
     logEntries.push({
       id:uid(), date:currentDate, type:'meal', mealSlot, foodId:food.id, foodName:food.name, grams:g,
       kcal:food.kcal*f, protein:food.protein*f, carbs:food.carbs*f, fat:food.fat*f,
-      time:new Date().toTimeString().slice(0,5), source:'manual'
+      time:new Date().toTimeString().slice(0,5), source:'manual',
+      // quantitySource (brique 12A) : origine de la quantité, distincte de `source`
+      // (origine du REPAS). Capturée à la création, jamais déduite après coup d'une
+      // comparaison grammage-vs-médiane (fragile et parfois faux : un utilisateur
+      // peut saisir manuellement exactement la même valeur que la suggestion sans
+      // qu'elle vienne de typicalGramsFor()). `typical` est figé à l'ouverture de la
+      // modale (pas recalculé à la frappe) : reflète fidèlement ce qui a été PROPOSÉ,
+      // pas ce qui a été retenu — si la suggestion habituelle est ensuite modifiée par
+      // l'utilisateur, quantitySource reste 'habitual' (V1 volontaire, voir discussion
+      // produit : ne pas perdre l'info que la proposition initiale était personnalisée).
+      quantitySource: typical!=null ? 'habitual' : 'user'
     });
     save(); closeModal(); mealSearchQ=''; render(); toast('Ajouté ✓');
   });
