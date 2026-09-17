@@ -499,8 +499,19 @@ function bindTabEvents(){
         </div>`;
       const resultsNode = document.querySelector('#main .search-results');
       if(!resultsNode) return;
+      // Même logique que la branche q.length===0 de viewMeals() (js/core.js) —
+      // cette mise à jour incrémentale ne doit jamais diverger du rendu complet.
+      // Bug corrigé (audit Tâche 14, P2) : recentFoods() manquait ici, donc
+      // effacer une recherche tapée faisait disparaître "Récents" jusqu'au
+      // prochain render() complet (changement de créneau/onglet).
       resultsNode.innerHTML = q.length===0
-        ? (favoritesSection() || '<div class="empty">Cherche un aliment, ou marque tes aliments récurrents en favoris (★) pour les retrouver ici direct.</div>')
+        ? (function(){
+            const recents = recentFoods(6);
+            const favSection = favoritesSection();
+            const recSection = recents.length? `<div class="recent-label">Récents</div>${recents.map(foodRow).join('')}` : '';
+            const empty = '<div class="empty">Cherche un aliment, ou marque tes aliments récurrents en favoris (★) pour les retrouver ici direct.</div>';
+            return favSection + recSection || empty;
+          })()
         : (results.length ? results.map(foodRow).join('') : `<div class="empty">Aucun résultat. Tu peux l'ajouter en aliment perso ci-dessous.</div>`);
       bindMealResultEvents();
     });
