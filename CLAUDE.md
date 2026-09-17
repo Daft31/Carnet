@@ -58,6 +58,10 @@ Ces principes ont émergé au fil des briques 6 à 12 (couche personnalisation/I
 - **Changer d'onglet doit remettre le scroll en haut** (`window.scrollTo(0,0)` + `#main.scrollTop=0` dans `switchTab()`, `js/core.js`, juste après `render()`). Bug réel déjà rencontré et corrigé : `render()` remplace `main.innerHTML` mais ne touche jamais à la position de scroll de la fenêtre ; sans ce reset, on atterrit sur le nouvel onglet à la position laissée par le précédent. Ne pas déplacer ce reset à l'intérieur de `render()` elle-même (appelée aussi après de simples actions dans le même onglet — ajout d'un repas, coche d'une case — où on ne veut surtout pas sauter en haut de page à chaque fois) : il doit rester spécifique à `switchTab()`.
 - Le vrai scroll de cette appli est le scroll de **page** (`window`/`document`), pas un scroll interne à `#main`. En diagnostiquer un futur bug de scroll, tester `window.scrollY`/`document.documentElement.scrollHeight`, pas seulement `main.scrollTop`.
 - Par prudence, éviter `backdrop-filter` sur `nav.tabs` (ou tout élément `position:fixed` pleine largeur) et toute animation avec `transform` directement sur `#main` : patterns CSS connus pour poser des problèmes de performance/scroll sur certains GPU/pilotes Android.
+- **Garde anti-double-confirmation** sur les 4 boutons de confirmation d'ajout (`qtyConfirm`/`qaConfirm`/`scanQtyConfirm`/`aiConfirmBtn`) : un booléen `confirmed` local à chaque ouverture de modale (pas une variable globale), vérifié en premier dans le handler et posé uniquement **après** que la validation ait réussi — jamais avant, sinon une première saisie invalide bloquerait tout réessai. Nécessaire car `closeModal()` laisse le bouton cliquable pendant les ~180ms de son animation de fermeture : un double-tap physique redéclenchait deux fois le même ajout avant ce correctif. Toute nouvelle modale de confirmation qui écrit dans `logEntries` doit reprendre ce pattern.
+- **`mealSearchResultsHtml(q, results)`** (`js/core.js`, juste avant `viewMeals()`) est la **seule source de vérité** pour le bloc Récents/Favoris/`foodRow`/état-vide de la recherche dans l'onglet Repas — utilisée à la fois par `viewMeals()` (rendu complet) et par le handler `input` incrémental (`js/ui.js`, qui ne redémonte jamais `#foodsearch` à chaque frappe pour éviter le flicker clavier mobile). Ne jamais recopier cette logique séparément dans l'un des deux chemins : une divergence entre eux a déjà causé un bug livré (Récents qui ne réapparaissaient pas après effacement d'une recherche).
+- **`mealSearchQ` se réinitialise à la sortie de l'onglet Repas**, pas seulement après un ajout réussi : `switchTab(tab)` remet `mealSearchQ=''` dès que l'onglet actif est `'meals'` et que `tab` ne l'est pas (avant de changer `activeTab`). `switchTab()` est le seul point de sortie réel de Repas (bouton retour, Réglages, raccourcis du FAB) — un reset localisé au seul `#backBtn` laisserait les sorties par le FAB non couvertes.
+- **Vocabulaire des toasts de confirmation** : `'Ajouté ✓'`/`'Repas ajouté ✓'` sont réservés aux actions qui écrivent réellement dans `logEntries` (catalogue/favoris/récents, scanner, IA, Quick-add). La création d'une simple définition réutilisable sans écriture dans `logEntries` (aliment personnalisé dans `customFoods`, préréglage de séance) utilise `'X enregistré ✓'` — jamais `'ajouté'`, qui laisserait croire que la consommation est déjà tracée au journal.
 
 ## Workflow git : quand pousser direct sur `main`, quand passer par une branche + PR
 
@@ -66,11 +70,121 @@ Ces principes ont émergé au fil des briques 6 à 12 (couche personnalisation/I
 - Si un agent délégué travaille sur un tel chantier, il doit committer/pousser uniquement sur sa branche dédiée et ne jamais ouvrir de PR ni merger sans confirmation explicite de l'utilisateur.
 - **Chantier Supabase** : une Phase 1 (auth par lien magique, additive/défensive) existe déjà sur la branche `claude/supabase-migration` (schéma SQL + plan de migration également présents sur cette branche). Ce code n'existe **pas** sur `main` ni sur les autres branches de travail — avant de reconcevoir quoi que ce soit sur ce chantier, lire ce qui existe déjà sur cette branche plutôt que repartir de zéro.
 
+## Multi-Agent Git Workflow
+
+Depuis la mise en place de ce workflow (voir historique Git, commit `docs: établir le workflow Git multi-agents`), Kalo peut être travaillé en parallèle par plusieurs agents Claude spécialisés par domaine (UI/UX, direction artistique, marketing, accessibilité, performance, sécurité, tests, etc.), en plus du chat de développement générique habituel. Cette section est la référence unique pour ce fonctionnement — **tout nouvel agent doit la lire avant de commencer**.
+
+### Ce que cette section change (et ce qu'elle ne change pas)
+
+- **Ne change rien** au workflow historique décrit juste au-dessus pour le chat de développement générique/solo : petits fixes et ajustements courants continuent, par défaut, en push direct sur `main`.
+- **Ajoute une règle nouvelle et stricte pour tout agent spécialisé par domaine** (un agent créé pour travailler spécifiquement UI/UX, DA, marketing, accessibilité, performance, sécurité, tests...) : **cet agent ne pousse jamais directement sur `main`**, quelle que soit la taille du changement. Il travaille exclusivement sur sa branche dédiée `agent/<domaine>`.
+- Le chantier Supabase (`claude/supabase-migration`, voir ci-dessus) reste un cas à part : c'est une branche de migration/architecture, pas une branche d'agent-domaine, mais la même règle de fond s'applique (jamais de push direct sur `main`, intégration via PR uniquement, avec confirmation explicite de l'utilisateur).
+
+### Convention de nommage des branches
+
+```
+main                    branche stable/intégrée — référence du projet
+agent/<domaine>         branche de travail d'un agent spécialisé
+```
+
+Exemples actuels et futurs : `agent/ui-ux`, `agent/da`, `agent/marketing`, `agent/accessibility`, `agent/performance`, `agent/security`, `agent/testing`.
+
+Un domaine = une branche. Si un même agent couvre en pratique deux domaines proches (ex. UI/UX et direction artistique confondues dans le même travail), ne pas créer artificiellement deux branches — le nommer selon le domaine dominant et le documenter explicitement dans le "État des branches agents" ci-dessous, plutôt que d'inventer une séparation qui n'existe pas dans le travail réel.
+
+### `main` — responsabilité
+
+Doit contenir en permanence : fonctionnalités validées, documentation synchronisée, état cohérent du produit. Aucun agent spécialisé ne pousse directement dessus. Un push direct sur `main` par un agent de domaine, même pour un correctif jugé mineur par cet agent, est une violation de ce workflow — pas une exception à laisser passer silencieusement.
+
+### `agent/<domaine>` — responsabilité
+
+Peut contenir du travail en cours, de l'expérimentation, des commits intermédiaires. N'est jamais considérée comme intégrée tant qu'elle n'a pas été validée puis fusionnée dans `main`. Un agent peut pousser librement sur sa propre branche sans validation préalable.
+
+### Workflow d'un agent spécialisé
+
+1. **Lire** `CLAUDE.md` (ce fichier) et `README.md` en entier avant toute action, même pour une tâche qui semble petite.
+2. **Partir d'un `main` à jour** : `git fetch origin main && git checkout -b agent/<domaine> origin/main` (ou, si la branche existe déjà, la mettre à jour depuis `main` avant de continuer — voir "Branches longues" ci-dessous).
+3. **Vérifier qu'aucun autre agent ne travaille déjà sur exactement le même périmètre** (voir "État des branches agents" ci-dessous, à tenir à jour par le chat Archiviste).
+4. **Travailler uniquement sur sa branche**, committer régulièrement, pousser sur GitHub (`git push -u origin agent/<domaine>`). Ne jamais pousser directement sur `main`, ne jamais ouvrir de PR ni merger soi-même sans confirmation explicite de l'utilisateur.
+5. **Ne pas se déclarer "terminé" comme s'il s'agissait d'une intégration.** "Terminé" signifie : travail de l'agent achevé et prêt pour relecture — pas validé, pas fusionné. À la fin de son chantier, l'agent doit produire un état clair : résumé du travail, fichiers modifiés, fonctionnalités/modifications réalisées, tests effectués, limites connues, conflits ou dépendances éventuels, statut du chantier.
+6. **Signaler que la branche est prête pour validation/intégration** — au chat Archiviste, ou à l'utilisateur directement.
+
+### Intégration dans `main`
+
+```
+agent/<domaine> → validation (chat Archiviste / utilisateur) → main
+```
+
+C'est une étape distincte du développement, jamais automatique. Avant toute fusion, vérifier au minimum : code, tests (s'ils existent), absence de régression évidente, cohérence avec l'architecture Kalo (principes de ce fichier), cohérence UX si le domaine est concerné, documentation à jour, version (voir plus bas), compatibilité avec d'autres branches récemment intégrées. Une branche qui dit "terminé" n'est pas de fait "validée" — ce sont deux états différents, ne jamais les confondre.
+
+### Travail en parallèle (plusieurs agents simultanés)
+
+Deux branches (ex. `agent/ui-ux` et `agent/da`) peuvent partir du même état connu de `main` et évoluer en parallèle. Si elles touchent des fichiers communs (typiquement `css/style.css`, `index.html`), vérifier avant intégration : conflits Git, conflits logiques (deux agents changent la même règle dans des sens différents), incohérences visuelles, modifications d'un agent silencieusement écrasées par l'autre. Un merge Git qui s'effectue sans conflit technique ne garantit pas un résultat correct — le vérifier quand même. **Ne jamais décréter d'ordre d'intégration fixe** (ex. "UI/UX toujours avant DA") : décider au cas par cas selon les dépendances réelles entre les deux chantiers au moment de l'intégration.
+
+### Branches longues / synchronisation avec `main`
+
+Un agent qui travaille longtemps sur sa branche peut prendre du retard par rapport à `main`. Avant intégration, vérifier si la branche a besoin d'être resynchronisée. Ne pas rebase/merge automatiquement une branche d'agent sans raison concrète (ex. conflit avéré ou dépendance sur un changement récent de `main`) — préserver l'historique et minimiser les opérations qui le réécrivent inutilement.
+
+### Rôle du chat Archiviste
+
+Un chat dédié ("Archiviste / Gardien Git & Documentation de Kalo") fait le pont entre chaque chantier d'agent et l'état officiel du repository :
+
+```
+Agent spécialisé → branche agent/<domaine> → travail + commits + push → branche prête
+   → chat Archiviste → audit / documentation / version / validation → intégration → main
+```
+
+Ce chat n'est pas un agent produit : il ne développe pas de fonctionnalité, ne refactore pas "pendant qu'il y est", ne corrige pas de bug hors de son périmètre d'archivage. Son rôle : synchroniser README/CLAUDE.md/changelog, vérifier l'état des branches, maintenir les versions, archiver les décisions (y compris les décisions de **ne pas** construire quelque chose), vérifier la cohérence code/documentation, préparer et contrôler l'intégration des branches vers `main`.
+
+### Versioning — état réel et proposition
+
+**État constaté (vérifié dans le repo, pas supposé)** : `package.json` contient un champ `"version": "1.0.0"` qui n'est référencé nulle part ailleurs (aucun affichage dans l'UI, aucun tag Git, aucun `CHANGELOG.md`). Il n'existe donc **aucune convention de version réellement en usage** dans ce projet à ce jour — ne pas prétendre le contraire.
+
+**Proposition (non appliquée automatiquement, à valider par l'utilisateur avant adoption)** : un numéro `MAJOR.MINOR.PATCH` simple, incrémenté **uniquement au moment où un chantier est intégré dans `main`** (jamais à la création d'une branche, jamais par agent, jamais proportionnellement au nombre de chantiers en cours) :
+- `PATCH` : correctifs/ajustements mineurs intégrés.
+- `MINOR` : nouvelle capacité ou brique produit intégrée.
+- `MAJOR` : changement d'architecture ou de comportement significatif (ex. arrivée du multi-utilisateur Supabase).
+
+La responsabilité de l'incrément, si cette convention est adoptée, reviendrait au chat Archiviste au moment de l'intégration — jamais à l'agent de domaine lui-même. Trois branches en cours de travail ne justifient jamais trois incréments de version : la version reflète l'état livré sur `main`, pas le nombre d'agents actifs.
+
+### État des branches agents (à tenir à jour par le chat Archiviste)
+
+| Branche | Domaine | Statut |
+| --- | --- | --- |
+| `agent/ui-ux` | UI/UX | Contient 2 commits (positionnement de la ligne d'objectif calorique sur le graphe, alignement de couleur des CTA positifs) hérités de l'ancienne branche `claude/busy-einstein-z2b995`, renommée pour respecter la convention. Non intégrée à `main` à ce jour. |
+| `agent/da` | Direction artistique | Créée comme point de départ à partir de l'ancienne branche `claude/webapp-refinement-e1n74o`, qui était strictement identique à `main` au moment du renommage (aucun travail propre dedans) — sert de base vierge pour un futur travail DA, pas une branche contenant déjà un chantier DA achevé. |
+| `claude/supabase-migration` | Migration architecture (hors convention agent/\<domaine\>) | Phase 1 (auth lien magique) écrite, non fusionnée. Voir section dédiée plus haut. |
+
+**Nettoyage en attente (limitation d'outillage constatée, pas une décision produit)** : au moment de ce renommage, la suppression des anciens noms de branches distants (`claude/busy-einstein-z2b995`, `claude/webapp-refinement-e1n74o`, ainsi que `Dev` — une branche historique pré-refactor, très divergente, jugée obsolète) a échoué avec une erreur HTTP 403 : les identifiants Git disponibles dans les sessions d'agent permettent de créer/pousser des branches mais pas d'en supprimer côté distant. Ces trois branches existent donc encore sur GitHub en doublon/obsolètes le temps qu'un humain avec les droits suffisants les supprime manuellement (Settings → Branches, ou `git push origin --delete <branche>` avec un compte disposant du droit de suppression de refs).
+
+### Before Starting Work (checklist pour tout nouvel agent spécialisé)
+
+1. Lire `CLAUDE.md` (ce fichier) en entier.
+2. Lire `README.md` si besoin de contexte produit général.
+3. Vérifier la branche Git actuelle (`git branch --show-current`) et l'état du repo (`git status`).
+4. Partir d'un `main` à jour (`git fetch origin main`).
+5. Créer ou reprendre `agent/<domaine>` — jamais travailler directement sur `main`.
+6. Vérifier dans le tableau "État des branches agents" ci-dessus qu'aucun autre agent ne travaille déjà sur exactement le même périmètre.
+7. Lire les contraintes produit pertinentes (règles à ne jamais casser, décisions de ne-pas-construire) avant de modifier quoi que ce soit.
+
+```
+Agent <domaine>
+      ↓
+lit CLAUDE.md + README.md
+      ↓
+vérifie main à jour
+      ↓
+agent/<domaine>
+      ↓
+travail + commits + push
+      ↓
+ready for validation
+```
+
 ## État des briques (jusqu'à la Brique 12)
 
 Chronologie fonctionnelle, toutes dans `js/core.js` sauf mention contraire. "Hors périmètre" = limite volontaire, pas un oubli.
 
-- **Provenance `source`/`confidence`** — chaque entrée `meal` porte un `source` (`manual`/`recurring`/`scan`/`catalog`/`ai`), affiché discrètement via `mealProvenanceLabel()`. `confidence` (`catalog`/`mixed`/estimation) n'existe que dans la réponse IA transitoire (`js/mealparser.js`) : à la sauvegarde, `mixed` est réduit à `source:'ai'` — la nuance "partiellement reconnu" ne persiste pas. Incohérence connue, non corrigée (mineure, hors scope Brique 12).
+- **Provenance `source`/`confidence`** — chaque entrée `meal` porte un `source` (`manual`/`recurring`/`scan`/`catalog`/`ai`), affiché discrètement via `mealProvenanceLabel()`. `confidence` (`catalog`/`mixed`/estimation) n'existe que dans la réponse IA transitoire (`js/mealparser.js`) : à la sauvegarde, `mixed` est réduit à `source:'ai'` — la nuance "partiellement reconnu" ne persiste pas. Incohérence connue, non corrigée (mineure, hors scope Brique 12, auditée puis jugée P3 — voir cycle d'audit post-Brique 12 plus bas). Depuis ce même cycle, un résultat `confidence:'catalog'` modifié manuellement dans `openAIResultModal()` avant confirmation dégrade aussi `source` en `'ai'` (jamais une nouvelle catégorie) — réévalué à chaque frappe via un prédicat unique `matchesOriginal()`, donc redevient `'catalog'` si la valeur est restaurée exactement à l'identique. `'officiel'` (`mealProvenanceLabel()`) ne doit jamais s'afficher sur un nombre que l'utilisateur vient de taper lui-même.
 - **Recommandations personnalisées (`topFoodsFor`)** — suggestions "à privilégier/éviter" dans le bloc Conseils du dashboard : triées par pertinence nutritionnelle d'abord, avec un bonus (plafonné à 5 occurrences) pour les aliments favoris/personnellement fréquents (`personalFoodFrequency`, fenêtre 60 jours). **Ce comportement a changé depuis une version antérieure du produit qui piochait volontairement hors de l'historique** — ne pas se fier à un vieux commentaire ou une vieille doc qui dirait le contraire.
 - **Kalo Insights v0** (`kaloInsights()`/`kaloInsightsCard()`) — carte "Kalo a remarqué", max `INSIGHT_MAX_SHOWN=2` affichés, cooldown `INSIGHT_COOLDOWN_DAYS=4` par insight (voir `isInsightOnCooldown()` — le jour même de la première apparition n'est jamais compté comme cooldown). Composée de `whatChangedInsight`, `weightTrendInsight`, `weekendVsWeekdayInsight`, `commonBreakfastInsight`, avec subsomption (si `whatChanged` couvre déjà le poids, `weightTrendInsight` est retiré du pool pour ne jamais doublonner).
 - **Détection des repas récurrents + Quick-add** (`recurringMealPatterns()`, `frequentMealFor(slot)`) — détecteur générique par créneau : `FREQUENT_MEAL_WINDOW_DAYS=30`, `FREQUENT_MEAL_MIN_SAMPLES=8`, dominance stricte `>50%` avec 2e option à `>10pts` d'écart. Signature = ensemble exact de `foodId` (zéro fuzzy matching, zéro tolérance — un ingrédient en plus/en moins = pattern différent). Exposé sur deux surfaces **prouvées identiques** (Brique 12B, voir plus bas) : bloc permanent dans `viewMeals()` et carte dashboard `commonBreakfastInsight()` (Petit-déj uniquement, cooldown Insight standard).
@@ -101,6 +215,17 @@ Conclusions de l'audit à connaître avant de rouvrir quoi que ce soit sur ce p�
 - Le système de repas fréquents (`recurringMealPatterns`) utilise une **correspondance exacte** de l'ensemble des `foodId` — aucun fuzzy matching, aucun embedding. Volontaire et documenté, pas un manque à corriger dans l'immédiat.
 - Ces limitations sont des **choix architecturaux assumés à ce stade**, pas des bugs — ne pas les traiter comme des tickets à corriger sans nouveau signal d'usage réel qui en démontre le besoin.
 - Le wording du banner Calibration ("Kalo apprend de tes habitudes") a été audité spécifiquement et jugé **suffisamment honnête** dans son registre courant (pas une revendication ML) — décision **KEEP**, ne pas rouvrir cette question sans signal nouveau.
+
+## Cycle d'audit UX du parcours d'ajout de repas (post-Brique 12)
+
+Après la Brique 12 (gelée), une série d'audits UX ciblés puis un audit transversal de l'app entière ont été menés sur le parcours "ajouter un repas" (catalogue/favoris/récents/repas fréquent/Quick-add/scanner/IA/aliment personnalisé) et sur les écrans principaux, suivis d'un audit technique de consolidation. Conclusions et changements réels à connaître :
+
+- **Corrections livrées** (comportement réel, pas juste visuel) : toggle Grammes↔Portions convertit réellement la valeur affichée au changement d'unité ; la carte Poids du dashboard affiche une fraîcheur explicite (`· hier`/`· il y a Nj`) quand la dernière pesée n'est pas du jour même ; l'Historique fait écho au streak calorique du dashboard ; le résultat d'une description IA (`openAIResultModal()`) est éditable (kcal/macros) avant confirmation, avec validation (macro vide → 0g légitime, valeur négative/non-numérique → rejetée avec toast) ; "Reformuler" repasse la description originale telle que tapée, jamais reconstruite depuis le résultat IA ; provenance catalogue correctement dégradée après modification manuelle (voir le bullet Provenance ci-dessus) ; garde anti-double-confirmation sur les 4 chemins d'ajout ; Récents réapparaissent immédiatement après effacement d'une recherche ; toast de création d'aliment personnalisé distinct d'un ajout au journal ; `mealSearchQ` réinitialisé à la sortie de Repas ; duplication Récents/Favoris/`foodRow` consolidée dans `mealSearchResultsHtml()` (voir les bullets correspondants dans "Avant de modifier l'UI/UX" ci-dessus pour le détail de chaque pattern à respecter).
+- **Audit transversal des écrans principaux et des parcours quotidiens réels** (dashboard, repas, historique, poids, activité, insights, et dix parcours utilisateur bout-en-bout incluant une fermeture/réouverture réelle de l'app) : **aucun problème P0/P1 démontré**. Seule incohérence de vocabulaire notée : `'enregistré'` est utilisé à la fois pour un événement journalisé (séance, pesée) et pour une définition réutilisable (aliment perso, préréglage) — pas de confusion démontrée à ce jour (chaque toast reprend le libellé exact du bouton cliqué), à surveiller seulement si un signal d'usage réel apparaît.
+- **Audit technique de consolidation** (duplication, couplage, état global, modales, validations, provenance, tests, complexité des fonctions, localStorage, documentation) : architecture jugée globalement saine, pas de refactor massif justifié. Un seul point de dette corrigé (la duplication de recherche ci-dessus). Un point signalé mais **volontairement non corrigé** : `openCustomFoodModal()`/`openEditFoodModal()` (`js/ui.js`) acceptent une saisie de kcal/macro négative ou non numérique sans la rejeter (`parseFloat(...)||0` ne filtre pas le signe), contrairement à la validation plus stricte d'`openAIResultModal()` — gap pré-existant (pas introduit par ce cycle), laissé tel quel faute de signal d'usage réel démontrant un risque concret ; ne pas le "corriger" par symétrie seule sans un vrai signal.
+- **Important pour un futur agent** : les fichiers de test Playwright écrits au fil de ce cycle (un par correctif ci-dessus, plusieurs dizaines de fichiers en régression active au moment de l'audit) **ne sont pas committés dans ce repo** — ils n'existent que dans le scratchpad éphémère de la session qui les a écrits, jamais dans `git` (pas de dossier `tests/`, pas de dépendance de test dans `package.json`). Ne pas supposer qu'une suite de tests existe quelque part dans le projet ; en écrire une ciblée pour toute nouvelle modification reste la norme ici, pas l'exception.
+
+Phase actuelle du produit inchangée par ce cycle : toujours "usage réel / observation" (voir plus bas) — ce cycle était un audit puis correctif de friction déjà existante dans une brique déjà livrée, pas un nouveau chantier de construction.
 
 ## Decisions / Do Not Build
 
