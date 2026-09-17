@@ -526,7 +526,12 @@ function bindTabEvents(){
     const scanBtn = document.getElementById('scanBarcodeBtn');
     if(scanBtn) scanBtn.onclick = openScannerModal;
     const aiBtn = document.getElementById('aiDescribeBtn');
-    if(aiBtn) aiBtn.onclick = openAIDescribeModal;
+    // Jamais une référence directe (`aiBtn.onclick = openAIDescribeModal`) : le
+    // navigateur passerait alors le MouseEvent du clic comme premier argument
+    // (`prefillText`), qu'escapeHtml() (core.js) tente ensuite de traiter comme du
+    // texte et fait planter avant même l'ouverture de la modale. Même pattern que
+    // fabAi/aiRedoBtn, qui enveloppent déjà correctement l'appel.
+    if(aiBtn) aiBtn.onclick = ()=>openAIDescribeModal();
   }
 
   if(activeTab==='workouts'){
