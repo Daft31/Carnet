@@ -53,24 +53,42 @@ function openWorkoutImportModal() {
   };
 }
 
+function workoutBlockTypeLabel(type) {
+  return { standard: 'Standard', emom: 'EMOM', amrap: 'AMRAP', tabata: 'Tabata', circuit: 'Circuit' }[type] || type;
+}
+
 // Synthétise les blocks/exercices structurés par l'IA en texte plat, pour les faire
 // passer par le même moteur canonique que la saisie manuelle libre (estimateManualSession,
 // catalogue EXERCISES kcal/rep + kcal/min réels) plutôt que par un MET fixe grossier —
 // garantit un calcul cohérent entre "saisie manuelle (IA)" et une éventuelle note tapée à
 // la main décrivant les mêmes exercices.
+//
+// Chaque block démarre par une ligne d'en-tête (nom + type + durée + tours), pas seulement
+// la liste des exercices : estimateManualSession() (js/core.js) détecte un "block chronométré"
+// (EMOM/AMRAP/Tabata/Circuit) via une regex cherchant ces mots dans le texte, et c'est cette
+// détection qui déclenche son calcul principal (médiane kcal/min du catalogue × durée), le
+// seul chemin fiable quand peu d'exercices sont reconnus individuellement. Sans cet en-tête,
+// un programme EMOM/circuit importé par l'IA était structurellement traité comme du texte libre
+// sans contexte de block, retombant sur un calcul par répétitions bien plus fragile — cause
+// racine du bug "séance à 0 kcal" pour les EMOM/circuits (bird dogs, gainage, step-ups...).
 function blocksToText(blocks) {
-  return (blocks || []).flatMap(b => (b.exercises || []).map(ex => {
-    const bits = [];
-    if (ex.sets != null && ex.reps != null) bits.push(`${ex.sets}x${ex.reps}`);
-    else if (ex.reps != null) bits.push(String(ex.reps));
-    else if (ex.sets != null) bits.push(`${ex.sets} séries`);
-    if (ex.restSec != null) bits.push(`repos ${ex.restSec}s`);
-    return `${ex.name}${bits.length ? ' ' + bits.join(', ') : ''}`;
-  })).join('\n');
-}
-
-function workoutBlockTypeLabel(type) {
-  return { standard: 'Standard', emom: 'EMOM', amrap: 'AMRAP', tabata: 'Tabata', circuit: 'Circuit' }[type] || type;
+  return (blocks || []).flatMap(b => {
+    const header = [
+      b.name,
+      b.type && b.type !== 'standard' ? workoutBlockTypeLabel(b.type) : null,
+      b.durationMin ? `${b.durationMin} min` : null,
+      b.rounds ? `${b.rounds} tours` : null,
+    ].filter(Boolean).join(' ');
+    const lines = (b.exercises || []).map(ex => {
+      const bits = [];
+      if (ex.sets != null && ex.reps != null) bits.push(`${ex.sets}x${ex.reps}`);
+      else if (ex.reps != null) bits.push(String(ex.reps));
+      else if (ex.sets != null) bits.push(`${ex.sets} séries`);
+      if (ex.restSec != null) bits.push(`repos ${ex.restSec}s`);
+      return `${ex.name}${bits.length ? ' ' + bits.join(', ') : ''}`;
+    });
+    return header ? [header, ...lines] : lines;
+  }).join('\n');
 }
 
 function exerciseLineHtml(ex) {
