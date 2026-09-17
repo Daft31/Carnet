@@ -2115,6 +2115,34 @@ function favoritesSection(){
   const toggle = `<div class="recent-label list-toggle" data-toggle="favorites">Favoris (${favFoods.length}) <span class="chev">${openFavorites?'▲':'▼'}</span></div>`;
   return toggle + (openFavorites ? `<div class="food-chips">${favFoods.map(chip).join('')}</div>` : '');
 }
+// Zone "search-results" de l'onglet Repas (audit Tâche 21/22) : seule source de
+// vérité pour ce bloc — appelée à la fois par le rendu complet (viewMeals()
+// ci-dessous) ET par la mise à jour incrémentale du champ de recherche
+// (bindTabEvents(), js/ui.js), qui ne redémonte jamais #foodsearch à chaque
+// frappe (évite le flicker clavier mobile) mais doit produire exactement le
+// même contenu que viewMeals() le ferait. Avant cette factorisation, les deux
+// chemins recopiaient cette logique séparément — une divergence entre eux a
+// déjà causé un bug livré et corrigé (Récents ne réapparaissaient pas après
+// effacement d'une recherche, audit Tâche 14, correctif Tâche 16). `results`
+// reste calculé par chaque appelant (algorithme de filtrage/tri inchangé,
+// hors périmètre de cette consolidation) ; cette fonction ne fait que
+// construire le HTML à partir de `q` et `results` déjà prêts.
+function mealSearchResultsHtml(q, results){
+  const foodRow = f => `
+        <div class="food-row" data-pick="${f.id}">
+          <div><div class="fn">${escapeHtml(f.name)}</div><div class="fm">/100g · ${f.kcal} kcal · P${f.protein} G${f.carbs} L${f.fat}</div></div>
+          <button class="star ${isFavorite(f.id)?'active':''}" data-fav="${f.id}" title="Favori">${isFavorite(f.id)?'★':'☆'}</button>
+          <button class="edit" data-edit="${f.id}" title="Modifier les valeurs">✎</button>
+        </div>`;
+  if(q.length===0){
+    const recents = recentFoods(6);
+    const favSection = favoritesSection();
+    const recSection = recents.length? `<div class="recent-label">Récents</div>${recents.map(foodRow).join('')}` : '';
+    const empty = '<div class="empty">Cherche un aliment, ou marque tes aliments récurrents en favoris (★) pour les retrouver ici direct.</div>';
+    return favSection + recSection || empty;
+  }
+  return results.length? results.map(foodRow).join('') : `<div class="empty">Aucun résultat. Tu peux l'ajouter en aliment perso ci-dessous.</div>`;
+}
 function viewMeals(){
   const q = normalizeSearch(mealSearchQ.trim());
   // Contextuel au créneau actif uniquement (brique 9B) : jamais le petit-déj
@@ -2132,12 +2160,6 @@ function viewMeals(){
     results.sort((a,b)=> (isFavorite(b.id)-isFavorite(a.id)) || a.name.localeCompare(b.name));
     results = results.slice(0,30);
   }
-  const foodRow = f => `
-        <div class="food-row" data-pick="${f.id}">
-          <div><div class="fn">${escapeHtml(f.name)}</div><div class="fm">/100g · ${f.kcal} kcal · P${f.protein} G${f.carbs} L${f.fat}</div></div>
-          <button class="star ${isFavorite(f.id)?'active':''}" data-fav="${f.id}" title="Favori">${isFavorite(f.id)?'★':'☆'}</button>
-          <button class="edit" data-edit="${f.id}" title="Modifier les valeurs">✎</button>
-        </div>`;
   return `
   ${dateStrip()}
   <section class="card">
@@ -2158,15 +2180,7 @@ function viewMeals(){
     <label>Chercher un aliment</label>
     <input id="foodsearch" type="text" placeholder="riz, poulet, yaourt…" value="${escapeHtml(mealSearchQ)}" autocomplete="off">
     <div class="search-results">
-      ${q.length===0
-        ? (function(){
-            const recents = recentFoods(6);
-            const favSection = favoritesSection();
-            const recSection = recents.length? `<div class="recent-label">Récents</div>${recents.map(foodRow).join('')}` : '';
-            const empty = '<div class="empty">Cherche un aliment, ou marque tes aliments récurrents en favoris (★) pour les retrouver ici direct.</div>';
-            return favSection + recSection || empty;
-          })()
-        : (results.length? results.map(foodRow).join('') : `<div class="empty">Aucun résultat. Tu peux l'ajouter en aliment perso ci-dessous.</div>`)}
+      ${mealSearchResultsHtml(q, results)}
     </div>
     <button class="btn ghost" id="addCustomFoodBtn">+ Ajouter un aliment personnalisé</button>
   </section>

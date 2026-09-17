@@ -498,28 +498,14 @@ function bindTabEvents(){
         results.sort((a,b)=> (isFavorite(b.id)-isFavorite(a.id)) || a.name.localeCompare(b.name));
         results = results.slice(0,30);
       }
-      const foodRow = f => `
-        <div class="food-row" data-pick="${f.id}">
-          <div><div class="fn">${escapeHtml(f.name)}</div><div class="fm">/100g · ${f.kcal} kcal · P${f.protein} G${f.carbs} L${f.fat}</div></div>
-          <button class="star ${isFavorite(f.id)?'active':''}" data-fav="${f.id}" title="Favori">${isFavorite(f.id)?'★':'☆'}</button>
-          <button class="edit" data-edit="${f.id}" title="Modifier les valeurs">✎</button>
-        </div>`;
       const resultsNode = document.querySelector('#main .search-results');
       if(!resultsNode) return;
-      // Même logique que la branche q.length===0 de viewMeals() (js/core.js) —
-      // cette mise à jour incrémentale ne doit jamais diverger du rendu complet.
-      // Bug corrigé (audit Tâche 14, P2) : recentFoods() manquait ici, donc
-      // effacer une recherche tapée faisait disparaître "Récents" jusqu'au
-      // prochain render() complet (changement de créneau/onglet).
-      resultsNode.innerHTML = q.length===0
-        ? (function(){
-            const recents = recentFoods(6);
-            const favSection = favoritesSection();
-            const recSection = recents.length? `<div class="recent-label">Récents</div>${recents.map(foodRow).join('')}` : '';
-            const empty = '<div class="empty">Cherche un aliment, ou marque tes aliments récurrents en favoris (★) pour les retrouver ici direct.</div>';
-            return favSection + recSection || empty;
-          })()
-        : (results.length ? results.map(foodRow).join('') : `<div class="empty">Aucun résultat. Tu peux l'ajouter en aliment perso ci-dessous.</div>`);
+      // Seule source de vérité pour ce bloc, partagée avec viewMeals()
+      // (js/core.js) — voir mealSearchResultsHtml() pour le détail (audit
+      // Tâche 21/22, consolidation de la duplication qui avait causé le bug
+      // corrigé à la Tâche 16 : Récents ne réapparaissaient pas après
+      // effacement d'une recherche).
+      resultsNode.innerHTML = mealSearchResultsHtml(q, results);
       bindMealResultEvents();
     });
     document.querySelectorAll('[data-slot]').forEach(b=>b.onclick=()=>{ mealSlot=b.dataset.slot; render(); });
