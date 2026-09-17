@@ -688,7 +688,17 @@ function dashboardGrid(t){
     weightValue = `${latestW.weight} kg`;
     const trend = weighInTrend([...sortedW].reverse().map(e=>({date:e.date,weight:e.weight})), 'weight');
     if(trend && trend.perWeek!=null){
-      weightSub = Math.abs(trend.perWeek)<0.15 ? 'Stable' : `${trend.perWeek<0?'↓':'↑'} ${Math.abs(trend.perWeek).toFixed(2)} kg/sem`;
+      const trendText = Math.abs(trend.perWeek)<0.15 ? 'Stable' : `${trend.perWeek<0?'↓':'↑'} ${Math.abs(trend.perWeek).toFixed(2)} kg/sem`;
+      // Fraîcheur (audit UX dashboard) : la tendance remplaçait entièrement la date
+      // de la dernière pesée, donnant la même autorité visuelle à un poids du jour
+      // même et à un poids vieux de plusieurs jours. Repère ajouté seulement quand
+      // la dernière pesée n'est PAS d'aujourd'hui — silence = poids du jour même,
+      // cohérent avec les autres cartes du dashboard qui ne précisent jamais
+      // "aujourd'hui" explicitement. Compact par construction (pas dateLabel(), dont
+      // la forme longue pour une date >1j conviendrait mal à une petite carte).
+      const daysSince = daysBetween(latestW.date, todayStr());
+      const freshness = daysSince<=0 ? '' : daysSince===1 ? ' · hier' : ` · il y a ${daysSince}j`;
+      weightSub = trendText + freshness;
     } else weightSub = dateLabel(latestW.date);
   }
   const weightCard = dashCard('weight', 'Poids', weightValue, weightSub);
