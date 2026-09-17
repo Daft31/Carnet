@@ -76,6 +76,16 @@ En complément, une couche d'**Insights** ("Kalo a remarqué") produit des const
 
 **Kalo est en phase d'usage réel, pas en phase de construction active.** Aucun nouveau chantier ne doit être lancé sans un signal concret (friction récurrente, problème observé, donnée sous-exploitée dont la valeur est démontrée) — voir le protocole détaillé dans `CLAUDE.md`. Le fait qu'une amélioration soit possible n'est pas, à lui seul, une raison de la construire.
 
+## 10. Workflow Git multi-agents
+
+Kalo peut être travaillé par plusieurs agents Claude spécialisés par domaine en parallèle (UI/UX, direction artistique, marketing, accessibilité, performance, sécurité, tests...), en plus du développement générique habituel.
+
+- `main` = version stable/intégrée, la seule référence du projet.
+- `agent/<domaine>` (ex. `agent/ui-ux`, `agent/da`) = branche de travail d'un agent spécialisé. Un agent de domaine ne pousse **jamais** directement sur `main`.
+- Chaque branche `agent/<domaine>` est validée (code, tests, cohérence, documentation) avant d'être fusionnée dans `main` — "terminé" par un agent ne veut pas dire "intégré".
+
+Le détail opérationnel complet (création de branche, validation, intégration, gestion du travail parallèle, versioning) est dans `CLAUDE.md`, section "Multi-Agent Git Workflow" — à lire avant de démarrer tout nouveau chantier d'agent spécialisé.
+
 ## Structure du repo
 
 ```

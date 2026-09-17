@@ -70,6 +70,116 @@ Ces principes ont émergé au fil des briques 6 à 12 (couche personnalisation/I
 - Si un agent délégué travaille sur un tel chantier, il doit committer/pousser uniquement sur sa branche dédiée et ne jamais ouvrir de PR ni merger sans confirmation explicite de l'utilisateur.
 - **Chantier Supabase** : une Phase 1 (auth par lien magique, additive/défensive) existe déjà sur la branche `claude/supabase-migration` (schéma SQL + plan de migration également présents sur cette branche). Ce code n'existe **pas** sur `main` ni sur les autres branches de travail — avant de reconcevoir quoi que ce soit sur ce chantier, lire ce qui existe déjà sur cette branche plutôt que repartir de zéro.
 
+## Multi-Agent Git Workflow
+
+Depuis la mise en place de ce workflow (voir historique Git, commit `docs: établir le workflow Git multi-agents`), Kalo peut être travaillé en parallèle par plusieurs agents Claude spécialisés par domaine (UI/UX, direction artistique, marketing, accessibilité, performance, sécurité, tests, etc.), en plus du chat de développement générique habituel. Cette section est la référence unique pour ce fonctionnement — **tout nouvel agent doit la lire avant de commencer**.
+
+### Ce que cette section change (et ce qu'elle ne change pas)
+
+- **Ne change rien** au workflow historique décrit juste au-dessus pour le chat de développement générique/solo : petits fixes et ajustements courants continuent, par défaut, en push direct sur `main`.
+- **Ajoute une règle nouvelle et stricte pour tout agent spécialisé par domaine** (un agent créé pour travailler spécifiquement UI/UX, DA, marketing, accessibilité, performance, sécurité, tests...) : **cet agent ne pousse jamais directement sur `main`**, quelle que soit la taille du changement. Il travaille exclusivement sur sa branche dédiée `agent/<domaine>`.
+- Le chantier Supabase (`claude/supabase-migration`, voir ci-dessus) reste un cas à part : c'est une branche de migration/architecture, pas une branche d'agent-domaine, mais la même règle de fond s'applique (jamais de push direct sur `main`, intégration via PR uniquement, avec confirmation explicite de l'utilisateur).
+
+### Convention de nommage des branches
+
+```
+main                    branche stable/intégrée — référence du projet
+agent/<domaine>         branche de travail d'un agent spécialisé
+```
+
+Exemples actuels et futurs : `agent/ui-ux`, `agent/da`, `agent/marketing`, `agent/accessibility`, `agent/performance`, `agent/security`, `agent/testing`.
+
+Un domaine = une branche. Si un même agent couvre en pratique deux domaines proches (ex. UI/UX et direction artistique confondues dans le même travail), ne pas créer artificiellement deux branches — le nommer selon le domaine dominant et le documenter explicitement dans le "État des branches agents" ci-dessous, plutôt que d'inventer une séparation qui n'existe pas dans le travail réel.
+
+### `main` — responsabilité
+
+Doit contenir en permanence : fonctionnalités validées, documentation synchronisée, état cohérent du produit. Aucun agent spécialisé ne pousse directement dessus. Un push direct sur `main` par un agent de domaine, même pour un correctif jugé mineur par cet agent, est une violation de ce workflow — pas une exception à laisser passer silencieusement.
+
+### `agent/<domaine>` — responsabilité
+
+Peut contenir du travail en cours, de l'expérimentation, des commits intermédiaires. N'est jamais considérée comme intégrée tant qu'elle n'a pas été validée puis fusionnée dans `main`. Un agent peut pousser librement sur sa propre branche sans validation préalable.
+
+### Workflow d'un agent spécialisé
+
+1. **Lire** `CLAUDE.md` (ce fichier) et `README.md` en entier avant toute action, même pour une tâche qui semble petite.
+2. **Partir d'un `main` à jour** : `git fetch origin main && git checkout -b agent/<domaine> origin/main` (ou, si la branche existe déjà, la mettre à jour depuis `main` avant de continuer — voir "Branches longues" ci-dessous).
+3. **Vérifier qu'aucun autre agent ne travaille déjà sur exactement le même périmètre** (voir "État des branches agents" ci-dessous, à tenir à jour par le chat Archiviste).
+4. **Travailler uniquement sur sa branche**, committer régulièrement, pousser sur GitHub (`git push -u origin agent/<domaine>`). Ne jamais pousser directement sur `main`, ne jamais ouvrir de PR ni merger soi-même sans confirmation explicite de l'utilisateur.
+5. **Ne pas se déclarer "terminé" comme s'il s'agissait d'une intégration.** "Terminé" signifie : travail de l'agent achevé et prêt pour relecture — pas validé, pas fusionné. À la fin de son chantier, l'agent doit produire un état clair : résumé du travail, fichiers modifiés, fonctionnalités/modifications réalisées, tests effectués, limites connues, conflits ou dépendances éventuels, statut du chantier.
+6. **Signaler que la branche est prête pour validation/intégration** — au chat Archiviste, ou à l'utilisateur directement.
+
+### Intégration dans `main`
+
+```
+agent/<domaine> → validation (chat Archiviste / utilisateur) → main
+```
+
+C'est une étape distincte du développement, jamais automatique. Avant toute fusion, vérifier au minimum : code, tests (s'ils existent), absence de régression évidente, cohérence avec l'architecture Kalo (principes de ce fichier), cohérence UX si le domaine est concerné, documentation à jour, version (voir plus bas), compatibilité avec d'autres branches récemment intégrées. Une branche qui dit "terminé" n'est pas de fait "validée" — ce sont deux états différents, ne jamais les confondre.
+
+### Travail en parallèle (plusieurs agents simultanés)
+
+Deux branches (ex. `agent/ui-ux` et `agent/da`) peuvent partir du même état connu de `main` et évoluer en parallèle. Si elles touchent des fichiers communs (typiquement `css/style.css`, `index.html`), vérifier avant intégration : conflits Git, conflits logiques (deux agents changent la même règle dans des sens différents), incohérences visuelles, modifications d'un agent silencieusement écrasées par l'autre. Un merge Git qui s'effectue sans conflit technique ne garantit pas un résultat correct — le vérifier quand même. **Ne jamais décréter d'ordre d'intégration fixe** (ex. "UI/UX toujours avant DA") : décider au cas par cas selon les dépendances réelles entre les deux chantiers au moment de l'intégration.
+
+### Branches longues / synchronisation avec `main`
+
+Un agent qui travaille longtemps sur sa branche peut prendre du retard par rapport à `main`. Avant intégration, vérifier si la branche a besoin d'être resynchronisée. Ne pas rebase/merge automatiquement une branche d'agent sans raison concrète (ex. conflit avéré ou dépendance sur un changement récent de `main`) — préserver l'historique et minimiser les opérations qui le réécrivent inutilement.
+
+### Rôle du chat Archiviste
+
+Un chat dédié ("Archiviste / Gardien Git & Documentation de Kalo") fait le pont entre chaque chantier d'agent et l'état officiel du repository :
+
+```
+Agent spécialisé → branche agent/<domaine> → travail + commits + push → branche prête
+   → chat Archiviste → audit / documentation / version / validation → intégration → main
+```
+
+Ce chat n'est pas un agent produit : il ne développe pas de fonctionnalité, ne refactore pas "pendant qu'il y est", ne corrige pas de bug hors de son périmètre d'archivage. Son rôle : synchroniser README/CLAUDE.md/changelog, vérifier l'état des branches, maintenir les versions, archiver les décisions (y compris les décisions de **ne pas** construire quelque chose), vérifier la cohérence code/documentation, préparer et contrôler l'intégration des branches vers `main`.
+
+### Versioning — état réel et proposition
+
+**État constaté (vérifié dans le repo, pas supposé)** : `package.json` contient un champ `"version": "1.0.0"` qui n'est référencé nulle part ailleurs (aucun affichage dans l'UI, aucun tag Git, aucun `CHANGELOG.md`). Il n'existe donc **aucune convention de version réellement en usage** dans ce projet à ce jour — ne pas prétendre le contraire.
+
+**Proposition (non appliquée automatiquement, à valider par l'utilisateur avant adoption)** : un numéro `MAJOR.MINOR.PATCH` simple, incrémenté **uniquement au moment où un chantier est intégré dans `main`** (jamais à la création d'une branche, jamais par agent, jamais proportionnellement au nombre de chantiers en cours) :
+- `PATCH` : correctifs/ajustements mineurs intégrés.
+- `MINOR` : nouvelle capacité ou brique produit intégrée.
+- `MAJOR` : changement d'architecture ou de comportement significatif (ex. arrivée du multi-utilisateur Supabase).
+
+La responsabilité de l'incrément, si cette convention est adoptée, reviendrait au chat Archiviste au moment de l'intégration — jamais à l'agent de domaine lui-même. Trois branches en cours de travail ne justifient jamais trois incréments de version : la version reflète l'état livré sur `main`, pas le nombre d'agents actifs.
+
+### État des branches agents (à tenir à jour par le chat Archiviste)
+
+| Branche | Domaine | Statut |
+| --- | --- | --- |
+| `agent/ui-ux` | UI/UX | Contient 2 commits (positionnement de la ligne d'objectif calorique sur le graphe, alignement de couleur des CTA positifs) hérités de l'ancienne branche `claude/busy-einstein-z2b995`, renommée pour respecter la convention. Non intégrée à `main` à ce jour. |
+| `agent/da` | Direction artistique | Créée comme point de départ à partir de l'ancienne branche `claude/webapp-refinement-e1n74o`, qui était strictement identique à `main` au moment du renommage (aucun travail propre dedans) — sert de base vierge pour un futur travail DA, pas une branche contenant déjà un chantier DA achevé. |
+| `claude/supabase-migration` | Migration architecture (hors convention agent/\<domaine\>) | Phase 1 (auth lien magique) écrite, non fusionnée. Voir section dédiée plus haut. |
+
+**Nettoyage en attente (limitation d'outillage constatée, pas une décision produit)** : au moment de ce renommage, la suppression des anciens noms de branches distants (`claude/busy-einstein-z2b995`, `claude/webapp-refinement-e1n74o`, ainsi que `Dev` — une branche historique pré-refactor, très divergente, jugée obsolète) a échoué avec une erreur HTTP 403 : les identifiants Git disponibles dans les sessions d'agent permettent de créer/pousser des branches mais pas d'en supprimer côté distant. Ces trois branches existent donc encore sur GitHub en doublon/obsolètes le temps qu'un humain avec les droits suffisants les supprime manuellement (Settings → Branches, ou `git push origin --delete <branche>` avec un compte disposant du droit de suppression de refs).
+
+### Before Starting Work (checklist pour tout nouvel agent spécialisé)
+
+1. Lire `CLAUDE.md` (ce fichier) en entier.
+2. Lire `README.md` si besoin de contexte produit général.
+3. Vérifier la branche Git actuelle (`git branch --show-current`) et l'état du repo (`git status`).
+4. Partir d'un `main` à jour (`git fetch origin main`).
+5. Créer ou reprendre `agent/<domaine>` — jamais travailler directement sur `main`.
+6. Vérifier dans le tableau "État des branches agents" ci-dessus qu'aucun autre agent ne travaille déjà sur exactement le même périmètre.
+7. Lire les contraintes produit pertinentes (règles à ne jamais casser, décisions de ne-pas-construire) avant de modifier quoi que ce soit.
+
+```
+Agent <domaine>
+      ↓
+lit CLAUDE.md + README.md
+      ↓
+vérifie main à jour
+      ↓
+agent/<domaine>
+      ↓
+travail + commits + push
+      ↓
+ready for validation
+```
+
 ## État des briques (jusqu'à la Brique 12)
 
 Chronologie fonctionnelle, toutes dans `js/core.js` sauf mention contraire. "Hors périmètre" = limite volontaire, pas un oubli.
