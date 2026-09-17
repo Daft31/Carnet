@@ -405,6 +405,20 @@ function render(){
 // ceci depuis render() elle-même (rendus internes à un même onglet : ajout d'un
 // repas, coche d'une case… où on ne veut surtout pas sauter en haut de page).
 function switchTab(tab){
+  // Sortie de l'onglet Repas = abandon du contexte de recherche (audit UX
+  // transversal, Tâche 18/19, P2) : mealSearchQ ne doit pas survivre à un
+  // aller-retour vers un autre onglet, contrairement au créneau ci-dessous
+  // qui se recalcule déjà à chaque entrée — sinon un utilisateur revenant sur
+  // Repas retrouve une recherche obsolète et les blocs Récents/Repas fréquent
+  // restent masqués sans raison. switchTab() est le SEUL point de sortie réel
+  // de Repas (bouton retour, Réglages, raccourcis du FAB) — vérifié sur tous
+  // ses appelants (js/app.js, js/ui.js) : aucun ne contourne switchTab() pour
+  // quitter l'onglet, donc pas besoin d'un reset dupliqué dans #backBtn.
+  // Condition volontairement stricte (activeTab==='meals' ET tab!=='meals') :
+  // ne se déclenche jamais quand on RESTE sur 'meals' (ex. FAB -> "Repas" en
+  // étant déjà dessus), cas où mealSearchQ n'a aucune raison d'être considéré
+  // comme abandonné.
+  if(activeTab==='meals' && tab!=='meals') mealSearchQ = '';
   // Créneau contextuel (brique 10) : recalculé à chaque ENTRÉE réelle sur
   // l'onglet Repas, jamais en cours de visite (les taps manuels sur
   // [data-slot] appellent render() directement, jamais switchTab() — donc un
