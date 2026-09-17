@@ -361,6 +361,9 @@
   .qty-preview .item{flex:1; text-align:center;}
   .qty-preview .item .n{font-family:var(--font-mono); font-weight:700; font-size:15px;}
   .qty-preview .item .l{font-size:10px; color:var(--ink-faint); margin-top:2px;}
+  /* Champs éditables du résultat IA (js/mealparser.js: openAIResultModal) — même
+     gabarit visuel que .item .n ci-dessus, dans un input plutôt qu'un div statique. */
+  .qty-preview .item input{width:100%; text-align:center; font-family:var(--font-mono); font-weight:700; font-size:15px; padding:2px 0; border:1px solid var(--line); border-radius:6px; background:var(--paper); color:var(--ink);}
 
   .toast{
     position:fixed; bottom:78px; left:50%; transform:translateX(-50%);

@@ -60,28 +60,68 @@ function confidenceNotice(confidence) {
 
 function openAIResultModal(data) {
   const kcal = Math.round(parseFloat(data.calories) || 0);
-  const protein = parseFloat(data.protein) || 0;
-  const carbs = parseFloat(data.carbs) || 0;
-  const fat = parseFloat(data.fat) || 0;
+  // Valeurs d'affichage arrondies (même rendu que l'ancien `.toFixed(0)` statique) :
+  // ce sont elles qui deviennent la valeur initiale des champs éditables ci-dessous,
+  // pas les floats bruts de `data` — ce que l'utilisateur voyait avant doit rester
+  // ce qu'il voit maintenant dans le champ, avant toute modification de sa part.
+  const proteinDisplay = Math.round(parseFloat(data.protein) || 0);
+  const carbsDisplay = Math.round(parseFloat(data.carbs) || 0);
+  const fatDisplay = Math.round(parseFloat(data.fat) || 0);
   const ingredients = Array.isArray(data.ingredients) ? data.ingredients : [];
   openModal(`
     <h3>${escapeHtml(data.name || 'Repas analysé')}</h3>
     ${ingredients.length ? `<div class="hint">${ingredients.map(escapeHtml).join(' · ')}</div>` : ''}
     <div class="qty-preview">
-      <div class="item"><div class="n">${kcal}</div><div class="l">kcal</div></div>
-      <div class="item"><div class="n">${protein.toFixed(0)}</div><div class="l">prot g</div></div>
-      <div class="item"><div class="n">${carbs.toFixed(0)}</div><div class="l">gluc g</div></div>
-      <div class="item"><div class="n">${fat.toFixed(0)}</div><div class="l">lip g</div></div>
+      <div class="item"><input id="aiKcalInput" type="number" inputmode="numeric" value="${kcal}"><div class="l">kcal</div></div>
+      <div class="item"><input id="aiProteinInput" type="number" inputmode="numeric" value="${proteinDisplay}"><div class="l">prot g</div></div>
+      <div class="item"><input id="aiCarbsInput" type="number" inputmode="numeric" value="${carbsDisplay}"><div class="l">gluc g</div></div>
+      <div class="item"><input id="aiFatInput" type="number" inputmode="numeric" value="${fatDisplay}"><div class="l">lip g</div></div>
     </div>
     <div class="hint" style="margin-top:10px;">${confidenceNotice(data.confidence)}</div>
+    <div class="hint" id="aiEditedNotice" style="display:none;">Valeurs modifiées manuellement.</div>
     <button class="btn" id="aiConfirmBtn" type="button">Ajouter à ${mealSlot}</button>
     <button class="btn ghost" id="aiRedoBtn" type="button">Reformuler</button>
   `);
+  const kcalInput = document.getElementById('aiKcalInput');
+  const proteinInput = document.getElementById('aiProteinInput');
+  const carbsInput = document.getElementById('aiCarbsInput');
+  const fatInput = document.getElementById('aiFatInput');
+  // Le bandeau de confiance (confidenceNotice) décrit la proposition D'ORIGINE de
+  // Kalo — ça reste vrai même après une modification manuelle, donc on ne le
+  // touche pas. Mais pour le cas 'catalog' spécifiquement ("pas une estimation"),
+  // laisser cette affirmation seule à l'écran juste sous des champs devenus
+  // éditables pourrait laisser croire qu'une valeur modifiée à la main reste
+  // "officielle" — un seul repère texte, discret, réutilisant .hint existant
+  // (aucune nouvelle classe), apparaît uniquement si une valeur diffère
+  // effectivement de la proposition initiale.
+  const editedNotice = document.getElementById('aiEditedNotice');
+  const checkEdited = () => {
+    const changed = kcalInput.value != kcal || proteinInput.value != proteinDisplay ||
+      carbsInput.value != carbsDisplay || fatInput.value != fatDisplay;
+    editedNotice.style.display = changed ? 'block' : 'none';
+  };
+  [kcalInput, proteinInput, carbsInput, fatInput].forEach(el => el.addEventListener('input', checkEdited));
   document.getElementById('aiConfirmBtn').onclick = () => {
+    const kcalRaw = parseFloat(kcalInput.value);
+    if (!Number.isFinite(kcalRaw) || kcalRaw <= 0) { toast('Entre un nombre de calories valide'); return; }
+    // Macro vide -> 0g (même convention que openCustomFoodModal/openEditFoodModal :
+    // un macro à 0 est une valeur légitime, pas une absence de saisie). Macro non
+    // numérique ou négative -> invalide, jamais enregistrée silencieusement.
+    const parseMacro = (input) => {
+      const raw = input.value.trim();
+      if (raw === '') return 0;
+      const v = parseFloat(raw);
+      if (!Number.isFinite(v) || v < 0) return null;
+      return v;
+    };
+    const proteinVal = parseMacro(proteinInput);
+    const carbsVal = parseMacro(carbsInput);
+    const fatVal = parseMacro(fatInput);
+    if (proteinVal === null || carbsVal === null || fatVal === null) { toast('Entre des valeurs de macros valides'); return; }
     logEntries.push({
       id: uid(), date: currentDate, type: 'meal', mealSlot,
       foodName: data.name || 'Repas (IA)', grams: null,
-      kcal, protein, carbs, fat,
+      kcal: Math.round(kcalRaw), protein: proteinVal, carbs: carbsVal, fat: fatVal,
       time: new Date().toTimeString().slice(0, 5),
       source: data.confidence === 'catalog' ? 'catalog' : 'ai'
     });
