@@ -634,23 +634,49 @@ function truncateText(text, maxLen){
   return (lastSpace>10 ? cut.slice(0,lastSpace) : cut) + '…';
 }
 
-// Nombre de jours consécutifs (en remontant depuis aujourd'hui) où au moins un
-// repas a été loggué ET où le total calorique du jour est resté sous l'objectif.
-// S'arrête au premier jour sans repas loggué OU en dépassement — un jour sans
-// saisie n'est ni compté ni pénalisé plus que ça, il stoppe juste le décompte
-// (pas de notion de "série cassée" affichée : voir dashboardGrid()).
-function calorieStreak(){
+// Marge de tolérance du streak calorique (audit produit dédié) : une journée
+// compte encore si kcalIn ne dépasse pas l'objectif de plus de 2%. Convention
+// produit assumée, PAS une vérité physiologique — les calories consommées sont
+// elles-mêmes des estimations (portions, catalogue, IA), donc un seuil au kcal
+// près donnait une fausse précision et cassait le streak pour une variance de
+// mesure normale (ex. +16 kcal sur 1725, +0.93%). Proportionnelle plutôt que
+// fixe : une marge fixe pénaliserait relativement plus les petits objectifs
+// (souvent en déficit) que les grands — même famille de raisonnement que
+// INSIGHT_KCAL_RELATIVE_DELTA ailleurs dans ce fichier, sans en reprendre la
+// valeur (métrique et question différentes).
+const CALORIE_STREAK_TOLERANCE = 0.02; // 2%
+
+// Seuil du jour = objectif × (1 + marge), arrondi au centième pour éviter
+// qu'une imprécision de flottant (ex. objectif non multiple de 50) ne fasse
+// basculer une valeur mathématiquement égale au seuil du mauvais côté de la
+// comparaison stricte `>` ci-dessous.
+function calorieStreakThreshold(goal){
+  return Math.round(goal * (1 + CALORIE_STREAK_TOLERANCE) * 100) / 100;
+}
+
+// Nombre de jours consécutifs (en remontant depuis `fromDate`) où au moins un
+// repas a été loggué ET où le total calorique du jour est resté sous le seuil
+// de tolérance. S'arrête au premier jour sans repas loggué OU en dépassement —
+// un jour sans saisie n'est ni compté ni pénalisé plus que ça, il stoppe juste
+// le décompte (pas de notion de "série cassée" affichée sur le nombre
+// lui-même : voir dashboardGrid() pour la distinction "aucun historique" vs
+// "série interrompue", qui réutilise cette même fonction décalée d'un jour
+// plutôt que de dupliquer la boucle).
+function calorieStreakAsOf(fromDate){
   let streak = 0;
-  let d = todayStr();
+  let d = fromDate;
   while(true){
     const dayEntries = entriesFor(d);
     if(!dayEntries.some(e=>e.type==='meal')) break;
     const t = dayTotals(d);
-    if(t.kcalIn > settings.calorieGoal) break;
+    if(t.kcalIn > calorieStreakThreshold(settings.calorieGoal)) break;
     streak++;
     d = shiftDate(d, -1);
   }
   return streak;
+}
+function calorieStreak(){
+  return calorieStreakAsOf(todayStr());
 }
 
 // Une carte cliquable du dashboard : résumé d'une section + navigation vers sa
@@ -724,7 +750,18 @@ function dashboardGrid(t){
   // indicateur de retard façon outil de suivi de tâches professionnel.
   const streak = calorieStreak();
   const histValue = streak>0 ? `${streak} jour${streak>1?'s':''}` : '—';
-  const histSub = streak>0 ? "d'affilée dans l'objectif" : 'Commence aujourd\'hui';
+  // Distinction "aucun historique" vs "série interrompue aujourd'hui" (audit
+  // produit dédié) : streak===0 ne dit pas pourquoi (jamais commencé, ou un
+  // vrai dépassement au-delà de la tolérance vient de casser une série). On
+  // ne regarde ça QUE si streak===0 (jamais recalculé quand la série est
+  // active) : calorieStreakAsOf(hier) > 0 veut dire qu'hier comptait encore
+  // dans une série — donc aujourd'hui l'a interrompue. Si hier n'a lui-même
+  // aucun repas loggué (ex. plusieurs jours sans saisie avant aujourd'hui),
+  // cette même fonction renvoie déjà 0 sans logique supplémentaire : la
+  // distinction ne se déclenche jamais artificiellement sur un vieux streak
+  // trop lointain pour avoir été "immédiatement actif".
+  const histSub = streak>0 ? "d'affilée dans l'objectif"
+    : (calorieStreakAsOf(shiftDate(todayStr(), -1))>0 ? 'Série interrompue' : 'Commence aujourd\'hui');
   const historyCard = dashCard('history', 'Historique', histValue, histSub);
 
   // Aperçu de la note du jour si il y en a une (vraiment récente, donc pertinente) —
