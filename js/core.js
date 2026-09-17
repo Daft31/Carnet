@@ -1621,7 +1621,17 @@ function viewToday(){
     const tt = dayTotals(ds);
     days.push({date:ds, kcal: tt.kcalIn, label:['D','L','M','M','J','V','S'][d.getDay()]});
   }
-  const maxK = Math.max(settings.calorieGoal, ...days.map(x=>x.kcal), 1);
+  // Marge de tête (+10%) sur l'échelle du graphique (barres ET ligne d'objectif,
+  // qui partagent ce même diviseur) : sans elle, quand l'objectif est déjà la
+  // valeur la plus haute (aucun jour ne l'atteint, cas courant), le ratio valait
+  // exactement 1 et la ligne pointillée se retrouvait au pixel supérieur du
+  // conteneur de 54px — collée au titre de la carte au-dessus, sans plus aucun
+  // rapport visuel avec les barres. Ce n'est pas un offset arbitraire sur la
+  // ligne seule : les deux gardent le même diviseur, donc leurs proportions
+  // relatives (ex. barre == ligne quand un jour atteint pile l'objectif) restent
+  // inchangées — seule l'échelle globale est légèrement resserrée pour garantir
+  // un espace de respiration constant en haut, quel que soit le jeu de données.
+  const maxK = Math.max(settings.calorieGoal, ...days.map(x=>x.kcal), 1) * 1.1;
   const goalLinePx = Math.round((settings.calorieGoal/maxK)*54);
   const bars = days.map((d,i)=>{
     const h = Math.round((d.kcal/maxK)*54);
