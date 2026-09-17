@@ -166,6 +166,16 @@ Un seul moteur déterministe calcule les kcal brûlées, quel que soit le type d
 
 Tests : `tests/workout-kcal.test.js` (aucune dépendance, exécuter avec `node tests/workout-kcal.test.js`) charge les vrais `js/core.js`/`js/workoutparser.js` dans un bac à sable Node (`vm`) et appelle directement les fonctions réelles — reproduit la séance exacte du bug rapporté, vérifie l'absence de régression sur tapis/vélo/séance "standard"/saisie manuelle tapée à la main, et l'intégration dans `dayTotals()`/`weeklyDeficit()` (règle : le sport n'est jamais soustrait des calories restantes, voir règle n°1 de `CLAUDE.md`).
 
+### Bug corrigé (2026-09-17) — bouton "Décrire un repas (IA)" sans effet (aucune modale)
+
+Signalé en prod (PWA téléphone **et** desktop) avec la console : `Uncaught TypeError: (s || "").replace is not a function`, à `escapeHtml` (`js/core.js:1716`), appelée depuis `openAIDescribeModal` (`js/mealparser.js:28`).
+
+**Cause racine** : `js/ui.js` liait ce bouton par **référence directe** — `aiBtn.onclick = openAIDescribeModal;` — au lieu d'un wrapper (`()=>openAIDescribeModal()`). Un handler `onclick` reçoit toujours le `MouseEvent` du clic comme premier argument : `openAIDescribeModal(prefillText)` recevait donc cet event comme `prefillText`. `escapeHtml(prefillText || '')` évalue l'event comme "truthy" (donc pas remplacé par `''`) puis tente `event.replace(...)`, qui n'existe pas sur un `MouseEvent` → exception, **avant** que `openModal()` ne soit appelée. D'où l'absence totale de modale (pas une erreur réseau, pas un problème de cache : le clic ne fait jamais réellement rien côté JS). Bug préexistant depuis le commit `f555e00` (14/09/2026), sans lien avec le correctif calories ci-dessus.
+
+**Correctif** : `js/ui.js`, binding du bouton "Décrire un repas (IA)" changé en `aiBtn.onclick = ()=>openAIDescribeModal();` — même pattern déjà utilisé (et déjà correct) pour les deux autres points d'appel de cette fonction (`fabAi`, `aiRedoBtn`). Audit du reste du code (`grep` de tous les `.onclick = <référence nue>`) : aucun autre point d'appel ne présente ce risque, les autres fonctions bindées par référence directe (`openCustomFoodModal`, `openScannerModal`, `closeModal`, `openWorkoutImportModal`, `submit` de `recipeimport.js`) ne déclarent aucun paramètre qu'elles utiliseraient, donc recevoir un `MouseEvent` en argument ne leur pose pas de problème.
+
+Tests : `tests/ai-describe-modal.test.js` (même approche vm que ci-dessus, charge les vrais `js/core.js`/`js/mealparser.js`) vérifie que `openAIDescribeModal()` (cas réel du bouton) et `openAIDescribeModal(texte)` (cas réel de "Reformuler") construisent bien la modale sans exception, et qu'aucune régression ne réintroduit un binding par référence directe de `openAIDescribeModal` dans `js/ui.js`.
+
 ## Déploiement
 
 - **GitHub Pages** : automatique via `.github/workflows/static.yml` à chaque push sur `main`. Sert tout le contenu du repo tel quel (site statique) — ce workflow ne lance aucun test et ne touche pas à Vercel.
