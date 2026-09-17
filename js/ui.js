@@ -117,10 +117,9 @@ function openQtyModal(food){
     <button class="btn" id="qtyConfirm">Ajouter à ${mealSlot}</button>
   `);
   let qtyMode='g';
-  document.getElementById('qtyGrams').onclick=()=>{qtyMode='g';document.getElementById('qtyGrams').classList.add('active');document.getElementById('qtyPortions').classList.remove('active');};
-  document.getElementById('qtyPortions').onclick=()=>{qtyMode='portion';document.getElementById('qtyPortions').classList.add('active');document.getElementById('qtyGrams').classList.remove('active');};
+  const servingG = food.serving_g||100;
   const updatePreview = ()=>{
-    const g = (parseFloat(document.getElementById('qtyInput').value)||0) * (qtyMode==='portion'?(food.serving_g||100):1);
+    const g = (parseFloat(document.getElementById('qtyInput').value)||0) * (qtyMode==='portion'?servingG:1);
     const f = g/100;
     document.getElementById('qtyPreview').innerHTML = `
       <div class="item"><div class="n">${Math.round(food.kcal*f)}</div><div class="l">kcal</div></div>
@@ -128,6 +127,25 @@ function openQtyModal(food){
       <div class="item"><div class="n">${Math.round(food.carbs*f)}</div><div class="l">gluc g</div></div>
       <div class="item"><div class="n">${Math.round(food.fat*f)}</div><div class="l">lip g</div></div>`;
   };
+  // Changer d'unité doit convertir la valeur affichée, pas juste réinterpréter le
+  // même nombre sous une autre unité (bug P0 identifié à l'audit UX) : sans ça,
+  // "160" en grammes cliqué sur "Portions" devenait silencieusement 160 portions.
+  // Conversion + preview recalculé synchronement au clic, jamais seulement sur le
+  // prochain `input` du champ.
+  const setQtyMode = (mode)=>{
+    if(mode===qtyMode) return;
+    const input = document.getElementById('qtyInput');
+    const current = parseFloat(input.value);
+    if(isFinite(current) && current>0){
+      input.value = mode==='portion' ? Math.round((current/servingG)*100)/100 : Math.round(current*servingG);
+    }
+    qtyMode = mode;
+    document.getElementById('qtyGrams').classList.toggle('active', mode==='g');
+    document.getElementById('qtyPortions').classList.toggle('active', mode==='portion');
+    updatePreview();
+  };
+  document.getElementById('qtyGrams').onclick=()=>setQtyMode('g');
+  document.getElementById('qtyPortions').onclick=()=>setQtyMode('portion');
   document.getElementById('qtyInput').addEventListener('input', updatePreview);
   updatePreview();
   document.getElementById('qtyConfirm').addEventListener('click', ()=>{
