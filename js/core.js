@@ -2644,8 +2644,18 @@ function viewNotes(){
 
 function viewHistory(){
   const weeks = weeklyDeficits();
-  if(!weeks.length) return `<h1 class="page-title">Historique</h1><div class="empty">Rien à afficher pour l'instant.</div>`;
-  const weeklyCards = `<div class="weekly-history-label">Déficit hebdomadaire</div>${weeks.map((week,index)=>weeklyDeficitCard(week,index===0 && week.start===weekStart(todayStr()))).join('')}`;
+  // Écho du streak de la carte dashboard (audit UX, brique cohérence History) :
+  // calorieStreak() est réutilisée telle quelle, aucun nouveau calcul. La carte
+  // "Historique" promettait un chiffre ("X jours d'affilée dans l'objectif") que
+  // cette page ne reprenait nulle part — un streak qui traverse une frontière de
+  // semaine (découpage lundi->dimanche des cartes ci-dessous) n'était vérifiable
+  // qu'en dépliant plusieurs semaines et en comparant chaque jour à la main.
+  // Une seule ligne de texte, même style que le libellé "Déficit hebdomadaire"
+  // déjà utilisé ici — pas de carte, pas de badge, pas de graphique.
+  const streak = calorieStreak();
+  const streakLine = streak>0 ? `<div class="weekly-history-label">${streak} jour${streak>1?'s':''} d'affilée dans l'objectif</div>` : '';
+  if(!weeks.length) return `<h1 class="page-title">Historique</h1>${streakLine}<div class="empty">Rien à afficher pour l'instant.</div>`;
+  const weeklyCards = `${streakLine}<div class="weekly-history-label">Déficit hebdomadaire</div>${weeks.map((week,index)=>weeklyDeficitCard(week,index===0 && week.start===weekStart(todayStr()))).join('')}`;
   return `<h1 class="page-title">Historique</h1>` + weeklyCards;
 }
 
