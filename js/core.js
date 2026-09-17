@@ -1459,16 +1459,25 @@ function viewOnboarding(){
   if(showOnboardingConfirm){
     const latest = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date))[0];
     const goals = computeGoals(profile, latest.weight);
+    // "Ton point de départ", pas "objectifs personnalisés" : à ce stade,
+    // goalWeight n'a jamais été demandé, donc dans computeGoals() la condition
+    // `if(goalWeight && rate)` est toujours fausse -> targetKcal === tdee,
+    // littéralement. Présenter ce TDEE de maintenance comme un "objectif"
+    // personnalisé de perte/prise serait trompeur — voir aussi le badge
+    // dashboard (viewToday()) qui distingue la même chose. Pas de case
+    // "Objectif calculé" ici : elle afficherait exactement le même chiffre que
+    // TDEE, une fausse information par duplication plutôt qu'un mensonge
+    // explicite, tout aussi trompeuse.
     return `
     <div class="onboarding">
-      <h1 class="page-title">Objectifs personnalisés</h1>
+      <h1 class="page-title">Ton point de départ</h1>
       <section class="card">
         <div class="trio">
           <div class="cell blue"><div class="k">Maintenance (TDEE)</div><div class="v">${goals.tdee}</div></div>
-          <div class="cell rust"><div class="k">Objectif calculé</div><div class="v">${goals.targetKcal}</div></div>
-          <div class="cell green"><div class="k">Protéines</div><div class="v">${goals.proteinG}g</div></div>
+          <div class="cell rust"><div class="k">Protéines</div><div class="v">${goals.proteinG}g</div></div>
+          <div class="cell green"><div class="k">Glucides</div><div class="v">${goals.carbG}g</div></div>
         </div>
-        <div class="hint" style="margin-top:10px;">Calcul basé sur la formule de Mifflin-St Jeor — à ajuster si besoin après quelques semaines d'usage, dans l'onglet Poids.</div>
+        <div class="hint" style="margin-top:10px;">Calcul basé sur la formule de Mifflin-St Jeor — à ajuster si besoin après quelques semaines d'usage.</div>
         <button class="btn" id="obGoToMeal" type="button">Ajouter mon premier repas</button>
       </section>
     </div>`;
@@ -1509,14 +1518,24 @@ function calibrationBanner(){
 
 function viewToday(){
   const t = dayTotals(currentDate);
-  // Objectif "provisoire" (Day 0) : vrai dès que computeGoals() ne peut pas
-  // produire de résultat pour ce profil (mêmes gardes que le calcul lui-même,
-  // rien de dupliqué) — couvre le cas de l'utilisateur existant avec données
-  // mais profil incomplet (scénario explicitement non bloquant, voir
-  // isNewUser()) : le badge disparaît de lui-même dès qu'un calcul
-  // personnalisé devient possible, sans logique séparée à maintenir.
+  // Deux notions distinctes (Day 0), pas une seule "objectif personnalisé" :
+  // - "profil personnalisé" = computeGoals() peut produire un résultat (âge/
+  //   taille/poids connus) -> mêmes gardes que le calcul lui-même, rien de
+  //   dupliqué.
+  // - "objectif de poids défini" = en plus du profil, goalWeight est renseigné
+  //   (le seul terme qui gate réellement `if(goalWeight && rate)` dans
+  //   computeGoals() — rate a toujours une valeur par défaut). Sans lui,
+  //   targetKcal === tdee : un point de départ, jamais un objectif de perte/
+  //   prise personnalisé, quel que soit l'état du profil par ailleurs.
+  // Le badge doit donc pouvoir rester affiché (sous un texte différent) même
+  // une fois le profil Day 0 complété, tant que l'objectif de poids ne l'est
+  // pas — voir viewOnboarding() pour le même distinguo sur la carte Day 0.
   const latestWeightEntry = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date))[0];
-  const hasPersonalizedGoal = !!(latestWeightEntry && computeGoals(profile, latestWeightEntry.weight));
+  const hasPersonalizedProfile = !!(latestWeightEntry && computeGoals(profile, latestWeightEntry.weight));
+  const hasWeightGoal = hasPersonalizedProfile && !!parseFloat(profile.goalWeight);
+  let goalBadge = '';
+  if(!hasPersonalizedProfile) goalBadge = 'Objectif provisoire · complète ton profil pour le personnaliser';
+  else if(!hasWeightGoal) goalBadge = 'Point de départ · définis un objectif de poids pour l\'affiner';
   // Le budget restant ignore volontairement les séances de sport : brûler des
   // calories ne doit pas "rembourser" de la marge pour manger plus.
   const remaining = settings.calorieGoal - t.kcalIn;
@@ -1572,7 +1591,7 @@ function viewToday(){
         <div class="big ${remaining<0?'neg':''}">${over?'+'+Math.round(-remaining):Math.round(remaining)} <span style="font-size:13px;color:var(--ink-soft);font-family:var(--font-sans);font-weight:600;">kcal</span></div>
         <div class="sub">${summaryText}</div>
         <span class="pill">${Math.round(pctRaw*100)}% de l'objectif</span>
-        ${hasPersonalizedGoal ? '' : '<span class="pill" data-provisional-goal>Objectif provisoire · complète ton profil pour le personnaliser</span>'}
+        ${goalBadge ? `<span class="pill" data-provisional-goal>${goalBadge}</span>` : ''}
       </div>
     </div>
     <div class="trio">
