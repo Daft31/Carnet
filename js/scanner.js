@@ -107,9 +107,13 @@ function openScannedProductModal(product) {
   };
   document.getElementById('scanQtyInput').addEventListener('input', update);
   update();
+  // Garde anti-double-confirmation (voir js/ui.js: openQtyModal, même raison).
+  let confirmed = false;
   document.getElementById('scanQtyConfirm').onclick = () => {
+    if (confirmed) return;
     const g = parseFloat(document.getElementById('scanQtyInput').value) || 0;
     if (g <= 0) { toast('Entre une quantité valide'); return; }
+    confirmed = true;
     const f = g / 100;
     logEntries.push({
       id: uid(), date: currentDate, type: 'meal', mealSlot, foodName: product.name, grams: g,

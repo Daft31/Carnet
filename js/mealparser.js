@@ -119,7 +119,10 @@ function openAIResultModal(data, sourceText) {
     carbsInput.value == carbsDisplay && fatInput.value == fatDisplay;
   const checkEdited = () => { editedNotice.style.display = matchesOriginal() ? 'none' : 'block'; };
   [kcalInput, proteinInput, carbsInput, fatInput].forEach(el => el.addEventListener('input', checkEdited));
+  // Garde anti-double-confirmation (voir js/ui.js: openQtyModal, même raison).
+  let confirmed = false;
   document.getElementById('aiConfirmBtn').onclick = () => {
+    if (confirmed) return;
     const kcalRaw = parseFloat(kcalInput.value);
     if (!Number.isFinite(kcalRaw) || kcalRaw <= 0) { toast('Entre un nombre de calories valide'); return; }
     // Macro vide -> 0g (même convention que openCustomFoodModal/openEditFoodModal :
@@ -136,6 +139,7 @@ function openAIResultModal(data, sourceText) {
     const carbsVal = parseMacro(carbsInput);
     const fatVal = parseMacro(fatInput);
     if (proteinVal === null || carbsVal === null || fatVal === null) { toast('Entre des valeurs de macros valides'); return; }
+    confirmed = true;
     // 'catalog' n'est conservé que si la valeur réellement enregistrée est
     // encore celle vérifiée par le catalogue (voir matchesOriginal ci-dessus) —
     // sinon 'ai' : pas une nouvelle catégorie de provenance, seulement le

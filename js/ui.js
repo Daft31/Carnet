@@ -148,9 +148,20 @@ function openQtyModal(food){
   document.getElementById('qtyPortions').onclick=()=>setQtyMode('portion');
   document.getElementById('qtyInput').addEventListener('input', updatePreview);
   updatePreview();
+  // Garde anti-double-confirmation (audit Tâche 14, P2) : `closeModal()` ne
+  // retire le bouton du DOM que 180ms plus tard (animation), donc un double-tap
+  // physique peut redéclencher ce handler avant que la modale ait disparu. Un
+  // booléen local à CETTE ouverture de modale (pas une variable globale) suffit :
+  // il repart à `false` à chaque nouvel `openQtyModal()`, donc n'empêche jamais
+  // un ajout légitime suivant une fois la modale rouverte. Posé après la
+  // validation (jamais avant) pour qu'un premier clic avec une quantité invalide
+  // laisse l'utilisateur réessayer normalement.
+  let confirmed = false;
   document.getElementById('qtyConfirm').addEventListener('click', ()=>{
+    if(confirmed) return;
     const g = (parseFloat(document.getElementById('qtyInput').value)||0) * (qtyMode==='portion'?(food.serving_g||100):1);
     if(g<=0){ toast('Entre une quantité valide'); return; }
+    confirmed = true;
     const f = g/100;
     logEntries.push({
       id:uid(), date:currentDate, type:'meal', mealSlot, foodId:food.id, foodName:food.name, grams:g,
@@ -207,7 +218,14 @@ function openQuickAddModal(draft){
   };
   document.querySelectorAll('.qaGrams').forEach(inp=>inp.addEventListener('input', updatePreview));
   updatePreview();
+  // Garde anti-double-confirmation (voir openQtyModal ci-dessus, même raison :
+  // fenêtre de ~180ms où le bouton reste cliquable pendant closeModal()). Posée
+  // seulement si au moins une entrée a réellement été ajoutée (`added>0`) — un
+  // clic qui échoue faute de quantité valide ne verrouille jamais rien, un
+  // deuxième essai après correction fonctionne normalement.
+  let confirmed = false;
   document.getElementById('qaConfirm').addEventListener('click', ()=>{
+    if(confirmed) return;
     const time = new Date().toTimeString().slice(0,5);
     let added = 0;
     document.querySelectorAll('.qaGrams').forEach(inp=>{
@@ -223,6 +241,7 @@ function openQuickAddModal(draft){
       added++;
     });
     if(!added){ toast('Entre au moins une quantité valide'); return; }
+    confirmed = true;
     save(); closeModal(); render(); toast('Repas ajouté ✓');
   });
 }
