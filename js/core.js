@@ -384,7 +384,8 @@ function render(){
   if(settingsBtn) settingsBtn.classList.toggle('active', activeTab==='settings');
   document.title = onDashboard ? 'Kalo' : `Kalo · ${TAB_LABELS[activeTab] || ''}`;
   const main = document.getElementById('main');
-  if(activeTab==='today') main.innerHTML = viewToday();
+  if(isNewUser() || showOnboardingConfirm) main.innerHTML = viewOnboarding();
+  else if(activeTab==='today') main.innerHTML = viewToday();
   else if(activeTab==='meals') main.innerHTML = viewMeals();
   else if(activeTab==='workouts') main.innerHTML = viewWorkouts();
   else if(activeTab==='weight') main.innerHTML = viewWeight();
@@ -1427,6 +1428,72 @@ function kaloInsightsCard(){
   </section>`;
 }
 
+// Day 0 — onboarding minimal (voir discussion produit). Condition dérivée de
+// l'état existant, pas un nouveau flag "onboardingDone" : un profil est
+// considéré "nouveau" uniquement s'il n'a NI historique (repas/pesée) NI profil
+// partiellement rempli — dès qu'une seule de ces conditions est fausse (même un
+// utilisateur qui a juste ouvert l'onglet Poids sans finaliser), on ne force
+// jamais l'écran, pour ne jamais interrompre quelqu'un qui a déjà commencé à
+// utiliser l'app. Terminer l'onboarding pousse une pesée + renseigne le
+// profil, donc isNewUser() redevient naturellement faux ensuite — aucun flag
+// "vu" séparé à maintenir.
+function isNewUser(){
+  return logEntries.length===0 && weightEntries.length===0 && !profile.age && !profile.height;
+}
+// État transitoire (non persisté, comme mealSearchQ/qtyMode) : bascule
+// l'onboarding sur son écran de confirmation juste après la validation du
+// profil, moment où isNewUser() devient déjà faux (une pesée vient d'être
+// ajoutée) — sans ce flag séparé, render() sauterait directement au dashboard
+// sans jamais montrer l'objectif calculé.
+let showOnboardingConfirm = false;
+
+// Formulaire à un seul écran (voir discussion produit) : les 4 champs qui
+// correspondent exactement aux gardes réelles de computeGoals() (weight/age/
+// height) + sexe (pas bloquant dans le calcul mais ~166 kcal d'écart selon le
+// choix, donc demandé quand même). Activité et objectif de poids restent
+// volontairement absents ici — déjà différables nativement par computeGoals()
+// (TDEE de maintenance sans eux), ajustables plus tard dans l'onglet Poids
+// inchangé. Aucune nouvelle logique de calcul : computeGoals() est repris tel
+// quel, à l'identique de son usage existant dans viewWeight().
+function viewOnboarding(){
+  if(showOnboardingConfirm){
+    const latest = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date))[0];
+    const goals = computeGoals(profile, latest.weight);
+    return `
+    <div class="onboarding">
+      <h1 class="page-title">Objectifs personnalisés</h1>
+      <section class="card">
+        <div class="trio">
+          <div class="cell blue"><div class="k">Maintenance (TDEE)</div><div class="v">${goals.tdee}</div></div>
+          <div class="cell rust"><div class="k">Objectif calculé</div><div class="v">${goals.targetKcal}</div></div>
+          <div class="cell green"><div class="k">Protéines</div><div class="v">${goals.proteinG}g</div></div>
+        </div>
+        <div class="hint" style="margin-top:10px;">Calcul basé sur la formule de Mifflin-St Jeor — à ajuster si besoin après quelques semaines d'usage, dans l'onglet Poids.</div>
+        <button class="btn" id="obGoToMeal" type="button">Ajouter mon premier repas</button>
+      </section>
+    </div>`;
+  }
+  return `
+  <div class="onboarding">
+    <h1 class="page-title">Commençons par personnaliser Kalo</h1>
+    <p class="hint" style="margin-top:-8px;">Ces quelques informations permettent de calculer un objectif quotidien adapté à ton profil.</p>
+    <section class="card">
+      <label>Poids actuel (kg)</label>
+      <input id="obWeight" type="number" step="0.1" inputmode="decimal" placeholder="ex. 78.4">
+      <label>Âge</label>
+      <input id="obAge" type="number" placeholder="ex. 32">
+      <label>Taille (cm)</label>
+      <input id="obHeight" type="number" placeholder="ex. 178">
+      <label>Sexe</label>
+      <div class="seg" id="obSexSeg">
+        <button type="button" data-sex="H" class="active">Homme</button>
+        <button type="button" data-sex="F">Femme</button>
+      </div>
+      <button class="btn" id="obSubmit" type="button">Personnaliser mes objectifs</button>
+    </section>
+  </div>`;
+}
+
 // Kalo Calibration — message d'entrée unique (voir discussion produit) :
 // répond à "pourquoi renseigner mes repas maintenant", jamais un système de
 // progression. Un simple banner dismissible, état UI pur (calibrationSeen),
@@ -1442,6 +1509,14 @@ function calibrationBanner(){
 
 function viewToday(){
   const t = dayTotals(currentDate);
+  // Objectif "provisoire" (Day 0) : vrai dès que computeGoals() ne peut pas
+  // produire de résultat pour ce profil (mêmes gardes que le calcul lui-même,
+  // rien de dupliqué) — couvre le cas de l'utilisateur existant avec données
+  // mais profil incomplet (scénario explicitement non bloquant, voir
+  // isNewUser()) : le badge disparaît de lui-même dès qu'un calcul
+  // personnalisé devient possible, sans logique séparée à maintenir.
+  const latestWeightEntry = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const hasPersonalizedGoal = !!(latestWeightEntry && computeGoals(profile, latestWeightEntry.weight));
   // Le budget restant ignore volontairement les séances de sport : brûler des
   // calories ne doit pas "rembourser" de la marge pour manger plus.
   const remaining = settings.calorieGoal - t.kcalIn;
@@ -1497,6 +1572,7 @@ function viewToday(){
         <div class="big ${remaining<0?'neg':''}">${over?'+'+Math.round(-remaining):Math.round(remaining)} <span style="font-size:13px;color:var(--ink-soft);font-family:var(--font-sans);font-weight:600;">kcal</span></div>
         <div class="sub">${summaryText}</div>
         <span class="pill">${Math.round(pctRaw*100)}% de l'objectif</span>
+        ${hasPersonalizedGoal ? '' : '<span class="pill" data-provisional-goal>Objectif provisoire · complète ton profil pour le personnaliser</span>'}
       </div>
     </div>
     <div class="trio">

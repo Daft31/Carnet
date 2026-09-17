@@ -381,6 +381,45 @@ function bindTabEvents(){
   const dismissCalibration = document.querySelector('[data-dismiss-calibration]');
   if(dismissCalibration) dismissCalibration.onclick = ()=>{ calibrationSeen = true; save(); render(); };
 
+  // Day 0 — onboarding minimal. Le toggle sexe ne déclenche PAS render() (contrairement
+  // à son équivalent dans l'onglet Poids) : un render() ici regénérerait le formulaire
+  // depuis viewOnboarding() et effacerait poids/âge/taille déjà tapés, qui ne sont pas
+  // des variables live comme mealSearchQ — même pattern que qtyGrams/qtyPortions dans
+  // openQtyModal() pour la même raison.
+  const obSexSeg = document.getElementById('obSexSeg');
+  if(obSexSeg) obSexSeg.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    obSexSeg.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+  });
+  const obSubmit = document.getElementById('obSubmit');
+  if(obSubmit) obSubmit.onclick = ()=>{
+    const weight = parseFloat(document.getElementById('obWeight').value);
+    const age = document.getElementById('obAge').value;
+    const height = document.getElementById('obHeight').value;
+    const sex = document.querySelector('#obSexSeg button.active').dataset.sex;
+    if(!weight || weight<=0){ toast('Indique un poids valide'); return; }
+    // Valide sur un profil temporaire avant toute mutation réelle : un
+    // formulaire invalide ne doit rien enregistrer (ni profil ni pesée ni
+    // objectifs) — computeGoals() repris tel quel, aucune nouvelle règle.
+    const goals = computeGoals({...profile, age, height, sex}, weight);
+    if(!goals){ toast('Indique ton âge et ta taille'); return; }
+    profile.age = age; profile.height = height; profile.sex = sex;
+    weightEntries.push({ id:uid(), date:todayStr(), weight, bodyFat:null, muscleMass:null, water:null, note:null });
+    settings.calorieGoal = goals.targetKcal;
+    settings.proteinGoal = goals.proteinG;
+    settings.carbGoal = goals.carbG;
+    settings.fatGoal = goals.fatG;
+    save();
+    showOnboardingConfirm = true;
+    render();
+  };
+  const obGoToMeal = document.getElementById('obGoToMeal');
+  if(obGoToMeal) obGoToMeal.onclick = ()=>{
+    showOnboardingConfirm = false;
+    switchTab('meals');
+    setTimeout(()=>document.getElementById('foodsearch')?.focus(), 0);
+  };
+
   if(activeTab==='meals'){
     const search = document.getElementById('foodsearch');
     if(search) search.addEventListener('input', e=>{
