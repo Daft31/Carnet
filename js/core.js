@@ -405,6 +405,12 @@ function render(){
 // ceci depuis render() elle-même (rendus internes à un même onglet : ajout d'un
 // repas, coche d'une case… où on ne veut surtout pas sauter en haut de page).
 function switchTab(tab){
+  // Créneau contextuel (brique 10) : recalculé à chaque ENTRÉE réelle sur
+  // l'onglet Repas, jamais en cours de visite (les taps manuels sur
+  // [data-slot] appellent render() directement, jamais switchTab() — donc un
+  // choix manuel n'est jamais écrasé pendant la même visite, et aucune mémoire
+  // n'est gardée d'une visite à l'autre : l'heure du moment fait toujours foi).
+  if(tab==='meals') mealSlot = mealSlotForTime();
   activeTab = tab; render();
   window.scrollTo(0, 0);
   document.getElementById('main').scrollTop = 0;
@@ -1656,6 +1662,21 @@ function dayLogList(date){
 function escapeHtml(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 const MEAL_SLOTS = ['Petit-déj','Déjeuner','Dîner','Collation'];
+// Brique 10 — créneau contextuel : aucune convention horaire n'existait déjà
+// dans Kalo pour ça (vérifié : ni dans macroTips(), ni dans le prompt IA
+// d'api/parse-meal.js), donc ces plages sont nouvelles, pas reprises d'un
+// endroit existant. Heures pleines, couverture 24h sans trou ni chevauchement,
+// Dîner traverse minuit (19h-4h59). Une SUGGESTION par défaut au moment où
+// l'utilisateur entre sur l'onglet Repas, jamais une prédiction ni une
+// mémoire — voir mealSlotForTime() et son unique point d'appel dans
+// switchTab().
+function mealSlotForTime(d = new Date()){
+  const h = d.getHours();
+  if(h>=5 && h<11) return 'Petit-déj';
+  if(h>=11 && h<15) return 'Déjeuner';
+  if(h>=15 && h<19) return 'Collation';
+  return 'Dîner';
+}
 let mealSearchQ = '';
 let mealSlot = 'Déjeuner';
 let workoutPresets = LS.get('ct_wpresets', []);
