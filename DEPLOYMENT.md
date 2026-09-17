@@ -1,45 +1,30 @@
 # Deployment Guide
 
-## Environment Variables Setup
+Kalo deploys to two places from this single repo. See `README.md` (section "Déploiement") and `CLAUDE.md` (rules 5–7) for the full context — this file only covers environment variable setup.
 
-### GitHub Secrets
-Add the following secrets to your GitHub repository:
+## GitHub Pages
 
-1. **CARNET_API_KEY** - Your Mammouth AI API key (nom de variable historique, gardé tel quel — voir CLAUDE.md)
-   - Go to: https://github.com/Daft31/Carnet/settings/secrets/actions
-   - Click "New repository secret"
-   - Name: `CARNET_API_KEY`
-   - Value: Your actual API key
+Fully automated by `.github/workflows/static.yml` on every push to `main`. No secrets, no build step, no tests — it just publishes the repo's static files as-is. This workflow does **not** touch Vercel and does **not** call the Mammouth API.
 
-2. **VERCEL_TOKEN** - Vercel authentication token
-   - Generated from Vercel dashboard
+## Vercel
 
-3. **VERCEL_ORG_ID** - Your Vercel organization ID
+Deployed automatically via Vercel's native GitHub integration (project `carnet` under the `daft31` account) — **not** via a GitHub Actions workflow. Two Vercel-specific workflow files (`deploy-to-vercel.yml`, `mammouth-api.yml`) existed previously, were broken from the start, and were deleted — do not recreate them (see `CLAUDE.md` rule 7).
 
-4. **VERCEL_PROJECT_ID** - Your Vercel project ID
+### Required setup
 
-### Vercel Environment Variables
-Set these directly in your Vercel project settings (Settings → Environment Variables),
-as a plain value — not via the legacy `@secret` reference syntax:
+1. **`CARNET_API_KEY`** — your Mammouth AI API key (historical variable name, kept as-is — see `CLAUDE.md` rule 2). **Not** an Anthropic key.
+   - Set in **Vercel → Settings → Environment Variables**, as a plain value (not the legacy `@secret` reference syntax from `vercel.json`).
+   - Used server-side only, shared by all three serverless functions: `api/parse-meal.js`, `api/parse-recipe.js`, `api/parse-workout.js`.
+2. **Vercel → Settings → Deployment Protection → "Vercel Authentication"** must stay **disabled** in Production. If re-enabled, every `/api/parse-*` route becomes unreachable from outside (blocked before the code even runs), which shows up as a generic "Failed to fetch" on the client.
 
-- **CARNET_API_KEY** - Your Mammouth AI API key (NOT an Anthropic key — see CLAUDE.md rule 2), used server-side only by `api/parse-meal.js`
-
-## Deployment Process
-
-1. Push your changes to the `main` branch
-2. GitHub Actions will automatically:
-   - Run tests using the Mammouth AI API (via `CARNET_API_KEY`)
-   - Deploy to Vercel using the deploy workflow
-   - Deploy static files to GitHub Pages
+No GitHub Secrets are required for Vercel deployment itself — Vercel's GitHub integration handles that independently of this repo's Actions.
 
 ## Troubleshooting
 
-### "CARNET_API_KEY not found" error
-- Verify the secret exists in GitHub Settings → Secrets and variables → Actions
-- Ensure the secret name is exactly `CARNET_API_KEY`
-- Check that Vercel project has `CARNET_API_KEY` configured
+### AI features fail with "Failed to fetch"
+- Check that `Vercel Authentication` (Deployment Protection) is disabled — this is the most common cause.
+- Check that `CARNET_API_KEY` is set in Vercel's environment variables.
+- If the Vercel production domain ever changes, `VERCEL_API_BASE` must be updated in all three client files (`js/mealparser.js`, `js/recipeimport.js`, `js/workoutparser.js`) — see `CLAUDE.md` rule 4.
 
-### Vercel Deployment Fails
-- Check that `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` are set
-- Ensure `CARNET_API_KEY` is configured in Vercel environment variables
-- Review the GitHub Actions logs for detailed error messages
+### Mammouth API errors
+- Check the model name in the relevant `api/parse-*.js` file is still valid on Mammouth's side — see `CLAUDE.md` rule 3 for the current (temporary) model situation.

@@ -1,57 +1,106 @@
 # Kalo
 
-Application web personnelle de suivi sportif et nutritionnel (calories, macros, poids, séances, historique). 100 % en français. Conçue au départ pour un usage strictement individuel (une seule personne, pas de comptes), mais utilisée en pratique par plusieurs personnes en parallèle (chacune avec ses propres données locales) — voir la section "Chantier en cours" plus bas pour l'évolution vers un vrai multi-utilisateur.
+Application web personnelle de suivi sportif et nutritionnel (calories, macros, poids, séances, historique). 100 % en français.
 
-> **Note de renommage** : l'appli s'appelait auparavant "Carnet" ; le nom visible (titre, header, logo) est désormais **Kalo**. Par prudence, l'infrastructure historique n'a **pas** été renommée en profondeur dans ce changement : le nom du repo GitHub, le domaine Vercel (`carnet-self.vercel.app`), le chemin GitHub Pages (`daft31.github.io/carnet`), le préfixe des clés `localStorage` (`ct_*`) et la variable d'environnement `CARNET_API_KEY` restent tels quels. Les renommer casserait des liens/domaines en prod ou (pour le préfixe `ct_*`) risquerait de faire perdre les données existantes des utilisateurs ; ce sont des changements distincts, plus risqués, à faire consciemment et séparément si un jour souhaité (voir aussi la règle correspondante dans `CLAUDE.md`).
+> **Note de renommage** : l'appli s'appelait auparavant "Carnet" ; le nom visible (titre, header, logo) est désormais **Kalo**. Par prudence, l'infrastructure historique n'a **pas** été renommée en profondeur : le nom du repo GitHub, le domaine Vercel (`carnet-self.vercel.app`), le chemin GitHub Pages (`daft31.github.io/carnet`), le préfixe des clés `localStorage` (`ct_*`) et la variable d'environnement `CARNET_API_KEY` restent tels quels. Les renommer casserait des liens/domaines en prod ou ferait perdre les données existantes des utilisateurs ; ce sont des changements distincts, plus risqués, à faire consciemment et séparément (voir la règle correspondante dans `CLAUDE.md`).
 
-Ce document s'adresse autant à un humain qu'à un futur agent IA qui interviendrait sur ce repo : il explique l'architecture, les pièges connus, et où trouver quoi.
+Ce document s'adresse autant à un humain qu'à un futur agent IA qui interviendrait sur ce repo.
 
-> 🤖 **Agents Claude (Claude Code, etc.), y compris tout agent délégué/spawné pour une sous-tâche** : lire **ce README en entier** et [`CLAUDE.md`](./CLAUDE.md) (qui condense les règles critiques à ne jamais casser — calcul calorique, clé API Mammouth, domaine Vercel en dur, workflow git par chantier...) **avant d'entreprendre ou d'exécuter quoi que ce soit** sur ce repo, même pour une tâche qui paraît petite ou isolée. Ne pas se contenter d'une lecture automatique partielle en début de session : vérifier explicitement que les deux fichiers ont été lus avant le premier commit.
+> 🤖 **Agents Claude (Claude Code, etc.), y compris tout agent délégué/spawné pour une sous-tâche** : lire **ce README en entier** et [`CLAUDE.md`](./CLAUDE.md) (règles critiques, principes d'architecture, état détaillé des briques, décisions de ne-pas-construire) **avant d'entreprendre ou d'exécuter quoi que ce soit** sur ce repo, même pour une tâche qui paraît petite ou isolée.
 
-## Aperçu rapide
+## 1. Kalo en quelques lignes
 
-- **Frontend** : HTML/CSS/JS vanilla, sans build step, sans framework, sans bundler. Tout l'état est stocké dans le `localStorage` du navigateur.
-- **Backend** : une seule fonction serverless (`api/parse-meal.js`) pour la fonctionnalité "décrire un repas par IA". Tout le reste est 100 % statique/client-side.
-- **Déploiement double** :
-  - **GitHub Pages** (`daft31.github.io/carnet`) — sert uniquement les fichiers statiques (`index.html`, `css/`, `js/`). Ne peut pas exécuter `api/parse-meal.js` (pas de serverless sur Pages).
-  - **Vercel** (domaine de prod stable : `carnet-self.vercel.app`) — sert la même appli statique **et** héberge la fonction serverless. C'est le seul endroit où l'IA de description de repas peut réellement tourner.
-- Conséquence : le front (`js/mealparser.js`) appelle **toujours** l'URL Vercel en dur pour l'IA (même quand l'appli est ouverte depuis GitHub Pages), avec CORS activé côté serveur pour l'autoriser.
+Un tracker sport/nutrition 100 % statique (HTML/CSS/JS vanilla, sans build, sans framework), toutes les données dans le `localStorage` du navigateur. Il calcule des objectifs personnalisés, enregistre repas/séances/pesées, et — sur un périmètre précis et volontairement limité — adapte certains de ses comportements futurs à partir de l'historique réel de chaque utilisateur (portions habituelles, repas fréquents), sans machine learning ni IA pour ces décisions-là.
+
+## 2. Objectif produit
+
+Réduire la friction de saisie au quotidien, donner une lecture honnête et non biaisée de l'équilibre calorique/macros, et — progressivement, à mesure que l'historique s'accumule — reconnaître certains comportements répétés de l'utilisateur pour lui faire gagner du temps (portion préremplie, repas fréquent en un tap) sans jamais prétendre comprendre plus que ce que les données permettent réellement d'établir.
+
+## 3. Fonctionnalités actuellement disponibles
+
+Navigation **dashboard-first** : un seul hub central ("Aujourd'hui"), composé de cartes cliquables résumant chaque section, plus un bouton "+" flottant pour les raccourcis d'ajout et une icône Réglages dans l'en-tête. Pas de barre d'onglets persistante classique.
+
+- **Aujourd'hui** (dashboard) : anneau de calories, macros du jour, carte "Kalo a remarqué" (Insights, voir §6), mini-graphe 7 jours, bloc Conseils (suggestions macro personnalisées par fréquence/favoris, voir §6), et une grille de cartes vers Repas / Recettes / Séances / Poids / Historique / Notes / To-do / Courses.
+  - ⚠️ **Règle volontaire** : calories "restantes" = `objectif − calories mangées`, jamais moins les calories brûlées en sport (affichées séparément, "Brûlées (info)").
+- **Repas** : recherche dans la base d'aliments intégrée, favoris, aliments personnalisés, créneau (Petit-déj/Déjeuner/Collation/Dîner) présélectionné selon l'heure, bloc "Repas fréquent" quand un pattern est détecté (Quick-add en un tap), portion préremplie automatiquement pour un aliment habituel (avec un petit label "quantité habituelle" dans le journal). Deux méthodes d'ajout rapide : **scanner un code-barres** (Open Food Facts) et **décrire un repas en langage libre (IA)**.
+- **Séances** : plusieurs types (tapis, vélo, sport libre, club, saisie IA d'un programme collé en texte libre), favoris de type de séance, préréglages, estimation kcal en temps réel.
+- **Poids** : suivi + graphes (poids, muscle, composition), interprétation en langage courant de la tendance, calcul BMR/TDEE, objectif de poids optionnel avec badge dashboard cliquable et libellé "Objectif : perte/prise/maintien".
+- **Recettes** : import depuis un lien TikTok public (oEmbed + IA), rangement par "livres" personnalisés.
+- **Courses** : liste manuelle + ajout automatique des ingrédients d'une recette importée.
+- **Historique** : déficit calorique hebdomadaire (expand/collapse par semaine).
+- **Notes**, **To-do**, **Réglages** (objectifs manuels, aliments perso, préréglages de séances, export/import JSON, reset complet).
+- **Onboarding Day 0** : à la toute première utilisation (aucun repas, aucune pesée, profil vide), un écran unique (poids/âge/taille/sexe) calcule immédiatement des objectifs de départ.
+
+## 4. Architecture / principes importants
+
+Résumé — le détail et la justification de chaque principe sont dans `CLAUDE.md` :
+
+- `localStorage` = seule persistance, aucun serveur de données, aucun compte.
+- L'historique brut (`logEntries`/`weightEntries`) est la source de vérité ; tout est recalculé à la demande plutôt que mis en cache dans un objet de connaissance séparé.
+- Logique déterministe d'abord — l'IA n'intervient que pour extraire du texte libre (repas décrit, recette, programme de sport), jamais pour une décision qu'une fonction déterministe peut prendre.
+- Aucune causalité déduite d'une corrélation dans les textes d'Insight ; silence préféré à un constat fragile.
+
+## 5. État actuel du projet
+
+Douze "briques" de personnalisation/intelligence ont été construites et validées (provenance des données, Insights, repas récurrents + Quick-add, portions habituelles, comparaison de périodes, onboarding, raffinement d'objectifs, créneau contextuel, traçabilité `quantitySource`, cohérence des deux surfaces "Repas fréquent"...). Détail brique par brique dans `CLAUDE.md`.
+
+**Chantier séparé, non fusionné sur `main`** : une migration vers un backend multi-utilisateur (Supabase — Postgres, auth par lien magique, Row Level Security) est en cours sur la branche dédiée `claude/supabase-migration` (Phase 1 auth déjà écrite là-bas). L'app utilisée en pratique (`main` et les autres branches) reste 100 % `localStorage`, sans compte, sans synchronisation entre appareils.
+
+## 6. Personnalisation actuelle
+
+Kalo adapte réellement son comportement futur sur deux points précis, tous deux basés sur une correspondance **exacte** (aucun fuzzy matching, aucune IA) :
+
+- **Portion habituelle** (`typicalGramsFor`) : si un aliment du catalogue a été logué au moins 3 fois, sa quantité se préremplit automatiquement (médiane des dernières occurrences), avec un petit rappel "quantité habituelle" dans le journal par la suite.
+- **Repas fréquent** (`frequentMealFor`) : si un même ensemble d'aliments domine nettement un créneau sur les 30 derniers jours (8 occurrences minimum), un raccourci "Ajouter ce repas" apparaît (et, ponctuellement, une carte sur le dashboard).
+
+En complément, une couche d'**Insights** ("Kalo a remarqué") produit des constats chiffrés sur l'historique personnel (tendance de poids, écart semaine/week-end, ce qui a changé d'une semaine à l'autre) — ce sont des analyses calculées sur les données de l'utilisateur, pas une adaptation du comportement du système : distinction importante, détaillée dans `CLAUDE.md` (section Brique 12).
+
+## 7. Limites connues
+
+- Les portions habituelles et les repas fréquents ne se déclenchent que sur une **correspondance exacte** d'identifiant d'aliment ou d'ensemble d'aliments — un utilisateur à alimentation très variée peut ne jamais en bénéficier.
+- Les entrées créées par **scan de code-barres** ou par **description IA** n'ont pas d'identifiant d'aliment stable : elles ne contribuent jamais aux portions habituelles, même en cas de répétition exacte du même produit/repas.
+- Le champ `quantitySource:'habitual'` prouve qu'une quantité personnalisée a été **proposée**, pas que l'utilisateur l'a acceptée telle quelle ni qu'il l'a réellement consommée.
+- Les Insights de comparaison de périodes ne peuvent structurellement pas apparaître avant environ 14 jours d'historique, quel que soit le comportement de l'utilisateur.
+- Les recettes importées (texte libre) ne sont pas reliées au catalogue nutritionnel — impossible aujourd'hui de "logger une recette comme repas" directement.
+- Un aliment reconnu "en partie" par le catalogue lors d'une description IA (confiance `mixed`) perd cette nuance à l'enregistrement (stocké comme `source:'ai'`, comme une estimation complète).
+
+## 8. Vision future (pas en construction aujourd'hui)
+
+À distinguer clairement de l'état actuel ci-dessus — rien de cette section n'est en cours de développement :
+
+- Un éventuel **assistant en langage naturel** ("Demande à Kalo") qui orchestrerait les capacités déterministes déjà présentes (repas fréquent, portion habituelle, comparaison de périodes...) pour répondre à des questions comme "quel est mon petit-déj le plus fréquent" ou "qu'est-ce qui a changé cette semaine" — toutes déjà calculables aujourd'hui sans IA. Un futur assistant ne doit jamais devenir un prétexte pour construire une nouvelle capacité "au cas où".
+- Un éventuel assouplissement (fuzzy matching) de la détection de repas fréquents/portions, si l'usage réel démontre que la correspondance exacte est trop restrictive pour une part significative des utilisateurs.
+- La migration Supabase multi-utilisateur (voir §5), une fois sa branche jugée prête et testée.
+
+## 9. Phase actuelle : usage réel / observation
+
+**Kalo est en phase d'usage réel, pas en phase de construction active.** Aucun nouveau chantier ne doit être lancé sans un signal concret (friction récurrente, problème observé, donnée sous-exploitée dont la valeur est démontrée) — voir le protocole détaillé dans `CLAUDE.md`. Le fait qu'une amélioration soit possible n'est pas, à lui seul, une raison de la construire.
 
 ## Structure du repo
 
 ```
-index.html          Coquille de l'appli (nav, tabs, conteneurs #main/#modal-root)
+index.html          Coquille de l'appli (en-tête, #main, #modal-root, bouton "+" flottant)
 css/style.css        Design system complet (couleurs, cards, modals, animations)
-js/core.js            État (localStorage), utilitaires, calculs, rendu de tous les onglets (view*)
-js/ui.js               Système de modal (openModal/closeModal) + liaison des événements par onglet (bindTabEvents)
+js/core.js            État (localStorage), utilitaires, calculs, rendu de toutes les pages (view*), moteur de personnalisation/Insights
+js/ui.js               Système de modal (openModal/closeModal) + liaison des événements (bindTabEvents)
 js/scanner.js          Scanner code-barres : Quagga2 (caméra) + Open Food Facts (base produits)
 js/mealparser.js       Feature IA "décrire un repas" : appelle /api/parse-meal
-js/app.js              Point d'entrée : listener des tabs, thème, render() initial, enregistrement du service worker
-api/parse-meal.js     Fonction serverless Vercel : proxy sécurisé vers l'API Mammouth AI
-manifest.json         Manifest PWA (nom, icônes, couleurs, display standalone) — rend Kalo installable sur l'écran d'accueil
-sw.js                  Service worker minimal (réseau en priorité + secours cache, same-origin GET uniquement) — condition technique pour l'installabilité PWA + usage hors-ligne basique
-icons/                 Icônes PWA générées depuis le logo (icon-192.png, icon-512.png, maskable-512.png)
-package.json          Pas de dépendances (l'API function utilise fetch natif de Node)
-vercel.json           Config build Vercel (pas de variables d'env ici, voir plus bas)
-.github/workflows/static.yml   Déploiement automatique vers GitHub Pages à chaque push sur main
-DEPLOYMENT.md         Notes de déploiement (variables GitHub Secrets, etc.)
+js/recipeimport.js     Import de recette (lien TikTok) : appelle /api/parse-recipe
+js/workoutparser.js    Saisie IA d'un programme de sport (texte libre) : appelle /api/parse-workout
+js/app.js              Point d'entrée : listeners de l'en-tête (retour/réglages) et du bouton "+", thème, render() initial, enregistrement du service worker
+api/parse-meal.js     Fonction serverless Vercel : proxy sécurisé vers l'API Mammouth AI (repas)
+api/parse-recipe.js   Fonction serverless Vercel : oEmbed TikTok + structuration recette via Mammouth AI
+api/parse-workout.js  Fonction serverless Vercel : structuration d'un programme de sport via Mammouth AI
+manifest.json         Manifest PWA (nom, icônes, couleurs, display standalone)
+sw.js                  Service worker minimal (réseau en priorité + secours cache, same-origin GET uniquement)
+icons/                 Icônes PWA (icon-192.png, icon-512.png, maskable-512.png)
+package.json          Pas de dépendances (les fonctions serverless utilisent fetch natif de Node)
+vercel.json           Config build Vercel
+.github/workflows/static.yml   Déploiement automatique vers GitHub Pages à chaque push sur main (seul workflow existant)
+DEPLOYMENT.md         Notes de déploiement (variables d'environnement)
 ```
 
-Aucun fichier `js/food.js` ni `js/workout.js` séparé : cette logique vit directement dans `core.js` (elle a été fusionnée lors d'un gros refactor, voir historique Git).
-
-## Fonctionnalités
-
-- **Aujourd'hui** (dashboard) : anneau de calories, macros du jour, mini-graphe "Calories — 7 derniers jours" avec une ligne rouge en pointillés superposée indiquant l'objectif calorique journalier (repère visuel rapide des excès sur la semaine), un bloc **Conseils** qui donne des suggestions concrètes d'aliments (issus de la base intégrée, jamais de l'historique/favoris de l'utilisateur — voir note ci-dessous) selon les macros en retard/excès et l'heure de la journée, et un bloc "Journal du jour" replié par défaut (cliquable pour dérouler).
-  - ⚠️ **Règle volontaire** : les calories "restantes" = `objectif − calories mangées`, **jamais** moins les calories brûlées en sport. Les calories brûlées sont affichées séparément ("Brûlées (info)"), à titre purement informatif — le but est d'éviter le biais "j'ai fait du sport donc je peux manger plus". Ne pas réintroduire de soustraction ici sans qu'on te le demande explicitement.
-  - ⚠️ **Suggestions "Conseils" volontairement non personnalisées** : elles piochent dans toute la base d'aliments (`allFoods()`), jamais dans les favoris/l'historique de l'utilisateur. Une tentative de personnalisation a produit des suggestions absurdes (ex. suggérer un plat composite comme "pâtes au saumon" en collation) — ne pas la réintroduire sans revalider soigneusement avec l'utilisateur. Les suggestions appliquent aussi une diversité par catégorie (au plus un aliment par catégorie) et excluent les aliments non comestibles tels quels (champ `state` = `raw`/`dry` sur les catégories où le cru n'est pas normal).
-- **Repas** : recherche dans la base d'aliments intégrée, favoris (affichés en chips compactes, repliées par défaut, cliquables pour dérouler le détail), aliments personnalisés, + 2 méthodes d'ajout rapide :
-  - **Scanner un code-barres** (caméra + Open Food Facts, aucune clé API requise, tout se passe côté client — Open Food Facts n'est utilisé que pour ce lookup produit par produit, jamais fusionné dans la base de recherche locale).
-  - **Décrire un repas (IA)** : texte libre → extraction structurée des macros via l'API Mammouth (voir section dédiée).
-- **Séances** : types tapis/vélo/renfo, préréglages, estimation kcal brûlées (affichage informatif uniquement, cf. règle ci-dessus).
-- **Poids** : suivi du poids + graphes SVG (poids, muscle, composition masse grasse/muscle/eau), une carte-résumé en langage courant qui interprète toute la tendance de pesée (pas juste la dernière valeur), calcul BMR/TDEE, objectif calorique adaptatif.
-- **Historique** : détail **par semaine** (regroupement expand/collapse, plus une liste plate qui grossissait sans fin) + déficit hebdomadaire, avec les calories brûlées en sport affichées à titre informatif à côté du déficit (jamais soustraites — cf. règle ci-dessus).
-- **Notes**, **To-do**, **Réglages** (objectifs manuels, gestion des aliments perso — liste repliée par défaut, cliquable pour dérouler —, export/import JSON, reset complet).
-- **Navigation** : hybride 5 onglets directs (Aujourd'hui/Repas/Séances/Poids/Historique) + un bouton "Plus" qui déplie un sous-menu (Notes/To-do/Réglages), pour éviter une barre d'onglets surchargée. Voir la note sur les IDs `#moreToggle`/`#moreMenu` dans `CLAUDE.md` avant d'y toucher.
+Aucun fichier `js/food.js` ni `js/workout.js` séparé : cette logique vit directement dans `core.js` (fusionnée lors d'un refactor historique, voir "Historique utile" plus bas).
 
 ## Modèle de données (localStorage)
 
@@ -59,81 +108,62 @@ Tout vit dans le navigateur, clé par clé (`LS.get/set` dans `core.js`) :
 
 | Clé localStorage     | Contenu                                              |
 | --------------------- | ----------------------------------------------------- |
-| `ct_settings`         | Objectifs (calories, protéines, glucides, lipides)    |
+| `ct_settings`         | Objectifs quotidiens (calories, protéines, glucides, lipides) |
 | `ct_customFoods`      | Aliments créés manuellement par l'utilisateur         |
 | `ct_foodOverrides`    | Surcharges de valeurs pour des aliments intégrés      |
 | `ct_favorites`        | IDs des aliments favoris                              |
-| `ct_weight`           | Historique de pesées (poids, masse grasse %, muscle **en kg** — anciennement en %, migration automatique une seule fois via `ct_muscleUnitMigrated`, eau) |
-| `ct_profile`          | Profil (sexe, âge, taille, activité, objectif, rythme)|
+| `ct_weight`           | Historique de pesées (poids, masse grasse %, muscle en kg, eau) |
+| `ct_profile`          | Profil (sexe, âge, taille, activité, objectif de poids, rythme) |
 | `ct_wpresets`         | Préréglages de séances                                |
+| `ct_favSports`        | Sports/types de séance mis en favori (blocs dédiés)   |
 | `ct_log`              | Journal principal : repas + séances + notes           |
 | `ct_todos`            | Tâches à faire                                        |
+| `ct_shoppingList`     | Liste de courses                                      |
+| `ct_recipes`          | Recettes importées                                    |
+| `ct_recipeBooks`      | "Livres" de recettes créés par l'utilisateur           |
+| `ct_insightsSeen`     | Dernière date d'affichage de chaque Insight (cooldown) |
+| `ct_calibrationSeen`  | Banner Calibration déjà vu (one-shot)                  |
+| `ct_portionRevealSeen`| Message "portion apprise" déjà vu (one-shot, tous aliments confondus) |
 | `ct_theme`            | Thème clair/sombre                                    |
 
-Aucune base de données externe, aucun compte utilisateur, aucune synchronisation entre appareils — tout est local à l'appareil/navigateur utilisé. L'export/import JSON (onglet Réglages) est le seul moyen de transférer les données. (Ce point est justement l'objet du chantier en cours décrit plus bas.)
+Aucune base de données externe, aucun compte utilisateur, aucune synchronisation entre appareils — tout est local à l'appareil/navigateur utilisé. L'export/import JSON (Réglages) est le seul moyen de transférer les données (voir §5 pour le chantier Supabase, non fusionné à ce jour).
 
 ### Base d'aliments intégrée
 
-`RAW_FOODS`/`BUILTIN_FOODS` dans `js/core.js` (grosse array littérale en ligne 4, à ne pas lire d'un coup avec un outil de lecture classique — préférer `grep`/scripts ciblés). Chaque entrée a une `category` (fruits/vegetables/legumes/grains/meat_fish/eggs_dairy/nuts_seeds/oils_fats/beverages/supplements) et un champ `state` (raw/cooked/baked/dry/boiled/canned/liquid/solid/processed/powder), utilisé notamment par le filtre "comestible tel quel" du bloc Conseils. Les entrées fast-food (ex. McDonald's) ont été retirées volontairement de cette base — la saisie libre via l'IA (Mammouth) reste le moyen de logger ce type de repas. Note connue non corrigée : certains caractères accentués sont corrompus dans les données sources (ex. "sè·®che", "Pâ·®tes") — probablement un artefact de double encodage ; à contourner, pas à "corriger" au cas par cas sans vérifier l'étendue du problème.
+`RAW_FOODS`/`BUILTIN_FOODS` dans `js/core.js` (grosse array littérale en ligne 4, à ne pas lire d'un coup avec un outil de lecture classique — préférer `grep`/scripts ciblés). Chaque entrée a une `category` et un champ `state` (raw/cooked/baked/dry/...), utilisé notamment par le filtre "comestible tel quel". Les entrées fast-food (McDonald's, Burger King, KFC...) ont été ajoutées pour améliorer la reconnaissance côté saisie IA. Note connue non corrigée : certains caractères accentués sont corrompus dans les données sources (artefact de double encodage) — à contourner, pas à "corriger" au cas par cas sans vérifier l'étendue du problème.
 
-## La fonctionnalité IA (`api/parse-meal.js`)
+## Les fonctionnalités IA (`api/parse-meal.js`, `api/parse-recipe.js`, `api/parse-workout.js`)
 
 C'est le point le plus piégeux du repo, à lire avant d'y toucher.
 
-- La variable d'environnement s'appelle **`CARNET_API_KEY`** (nom historique) mais **c'est en réalité une clé de l'abonnement Mammouth AI** de l'utilisateur (API compatible OpenAI, `https://api.mammouth.ai/v1/chat/completions`), **pas** une clé Anthropic. Une version antérieure du code utilisait le SDK Anthropic directement — ça ne fonctionnait pas car la clé n'était pas de ce type. Ne pas réintroduire le SDK Anthropic ici sans vérifier d'abord quelle clé l'utilisateur possède réellement.
-- Modèle utilisé : **`gpt-5.4-mini`** — un identifiant **propre au catalogue Mammouth**, pas un nom OpenAI officiel. Les noms de modèles Mammouth changent avec le temps ; avant de changer le modèle, vérifier la liste à jour et les tarifs sur `https://info.mammouth.ai/fr/docs/api-quick-start/` (section "Modèles et tarifs"). Il existe aussi un raccourci `mammouth-recommended` qui pointe vers "le meilleur rapport qualité/prix du moment" (mais coûte généralement plus cher qu'un modèle mini/nano dédié).
-- La fonction doit impérativement garder ses en-têtes **CORS** (`Access-Control-Allow-Origin: *` + gestion de `OPTIONS`), car l'appli est ouverte depuis un domaine différent (GitHub Pages) de celui qui héberge la fonction (Vercel).
-- Côté client, `js/mealparser.js` définit `VERCEL_API_BASE` (actuellement `https://carnet-self.vercel.app`) : c'est l'URL absolue utilisée quand l'appli tourne sur un domaine autre que `*.vercel.app`. **Si le domaine de prod Vercel change un jour (renommage de projet, domaine perso, etc.), il faut mettre cette constante à jour**, sinon l'IA cesse de fonctionner depuis GitHub Pages silencieusement (erreur "Failed to fetch" côté utilisateur).
-- Format de retour attendu par le front (`openAIResultModal` dans `mealparser.js`) :
-  ```json
-  {
-    "success": true,
-    "data": {
-      "name": "string",
-      "calories": 0,
-      "protein": 0,
-      "carbs": 0,
-      "fat": 0,
-      "fiber": 0,
-      "ingredients": ["string", "..."]
-    }
-  }
-  ```
+- La variable d'environnement s'appelle **`CARNET_API_KEY`** (nom historique) mais **c'est en réalité une clé de l'abonnement Mammouth AI** de l'utilisateur (API compatible OpenAI, `https://api.mammouth.ai/v1/chat/completions`), **pas** une clé Anthropic. Partagée par les trois fonctions.
+- **Modèle actuellement utilisé : `claude-haiku-4-5`** — un identifiant propre au catalogue Mammouth, pas un nom Anthropic officiel malgré son apparence. C'est un **fallback temporaire** : les modèles GPT de Mammouth sont indisponibles depuis un incident confirmé par leur support le 16/09/2026 ; le modèle "normal" avant l'incident était `gpt-5.4-mini`. Avant de changer de modèle, vérifier l'état de l'incident et la liste à jour sur `https://info.mammouth.ai/fr/docs/api-quick-start/`.
+- Les trois fonctions doivent garder leurs en-têtes **CORS** (`Access-Control-Allow-Origin: *` + gestion de `OPTIONS`), car l'appli est ouverte depuis un domaine différent (GitHub Pages) de celui qui héberge les fonctions (Vercel).
+- Côté client, `VERCEL_API_BASE` (actuellement `https://carnet-self.vercel.app`) est défini dans chacun des trois fichiers JS correspondants (`mealparser.js`, `recipeimport.js`, `workoutparser.js`) : URL absolue utilisée quand l'appli tourne sur un domaine autre que `*.vercel.app`. **Si le domaine de prod Vercel change, mettre à jour les trois**, sinon les features IA cessent de fonctionner silencieusement depuis GitHub Pages.
+- `api/parse-recipe.js` récupère d'abord la légende d'une vidéo TikTok publique via l'API oEmbed officielle (pas d'authentification), puis la structure en recette via Mammouth AI.
+- `api/parse-workout.js` structure un programme de sport en texte libre (blocks/EMOM/tempo/repos, formats variés) ; la durée totale estimée est recalculée côté code à partir de la structure renvoyée, jamais demandée directement au modèle (l'arithmétique est plus fiable en déterministe qu'en LLM).
 
 ## Déploiement
 
-- **GitHub Pages** : automatique via `.github/workflows/static.yml` à chaque push sur `main`. Sert tout le contenu du repo tel quel (site statique).
+- **GitHub Pages** : automatique via `.github/workflows/static.yml` à chaque push sur `main`. Sert tout le contenu du repo tel quel (site statique) — ce workflow ne lance aucun test et ne touche pas à Vercel.
 - **Vercel** : automatique via l'intégration GitHub native de Vercel (pas un workflow dans ce repo). Le projet s'appelle `carnet` sous le compte `daft31`.
-  - Il existait auparavant deux workflows GitHub Actions redondants et cassés (`deploy-to-vercel.yml` référençant une action GitHub inexistante, `mammouth-api.yml` essayant d'exécuter la fonction serverless comme un script Node autonome) — **ils ont été supprimés**. Ne pas les recréer sans corriger le problème sous-jacent (le déploiement Vercel réel n'en a de toute façon pas besoin).
-  - **Vercel → Settings → Deployment Protection → "Vercel Authentication"** doit rester **désactivé** en Production. S'il est réactivé, toutes les requêtes (y compris vers `/api/parse-meal`) sont bloquées avant même d'atteindre le code, ce qui se manifeste par un "Failed to fetch" générique côté client.
-  - La variable d'environnement `CARNET_API_KEY` (clé Mammouth, voir plus haut) doit être configurée dans **Vercel → Settings → Environment Variables**, en valeur directe (pas via l'ancienne syntaxe `@secret` de `vercel.json`, qui référence un système de Secrets legacy différent des variables d'environnement classiques).
+  - Il existait auparavant deux workflows GitHub Actions redondants et cassés (`deploy-to-vercel.yml`, `mammouth-api.yml`) — **supprimés**, ne pas les recréer.
+  - **Vercel → Settings → Deployment Protection → "Vercel Authentication"** doit rester **désactivé** en Production, sinon toutes les routes `/api/parse-*` sont bloquées avant même d'atteindre le code.
+  - La variable d'environnement `CARNET_API_KEY` (clé Mammouth) doit être configurée dans **Vercel → Settings → Environment Variables**, en valeur directe.
 
 ### Cache-busting
 
-Les balises `<script>`/`<link>` dans `index.html` portent un paramètre `?v=...`. **Penser à l'incrémenter à chaque modification d'un fichier JS/CSS** (surtout `core.js`, gros et souvent modifié), sinon les navigateurs (en particulier sur GitHub Pages, servi avec un cache HTTP standard) peuvent continuer à charger une version obsolète après déploiement.
+Les balises `<script>`/`<link>` dans `index.html` portent un paramètre `?v=...`. **Penser à l'incrémenter à chaque modification d'un fichier JS/CSS** (`git hash-object <fichier> | cut -c1-7`), sinon les navigateurs (en particulier sur GitHub Pages) peuvent continuer à charger une version obsolète après déploiement.
 
 ### PWA (installation sur l'écran d'accueil)
 
-Kalo est une PWA installable depuis `manifest.json` + `sw.js` (service worker minimal, stratégie réseau-prioritaire avec secours cache, uniquement sur les requêtes GET same-origin — n'intercepte jamais les appels vers l'API Mammouth, Open Food Facts ou les CDN externes).
+Kalo est une PWA installable depuis `manifest.json` + `sw.js` (service worker minimal, stratégie réseau-prioritaire avec secours cache, uniquement sur les requêtes GET same-origin — n'intercepte jamais les appels vers les fonctions Mammouth, Open Food Facts, TikTok oEmbed ou les CDN externes).
 
-- **Android/Chrome** : un bandeau/menu "Installer l'application" apparaît automatiquement une fois les critères d'installabilité remplis (manifest valide + service worker avec un handler `fetch` + icônes 192/512 — déjà en place). Vérifiable manuellement via Chrome DevTools → onglet Application → Manifest.
-- **iOS/Safari** : pas de prompt d'installation automatique (limitation d'Apple, pas de notre code) — l'utilisateur doit passer par Partager → "Sur l'écran d'accueil" manuellement. Les balises `apple-touch-icon`/`apple-mobile-web-app-*` dans `index.html` améliorent ce cas sans le rendre automatique.
-- Le service worker cache une **copie de secours** de chaque page/asset same-origin visité, ce qui permet de rouvrir l'appli hors-ligne après une première visite — mais ne précharge rien à l'avance (pas de liste figée à maintenir manuellement).
-- Pour changer les icônes : régénérer les PNG dans `icons/` (192, 512, et une variante `maskable-512` avec le fond qui va jusqu'aux bords, sans marge transparente, pour les icônes adaptatives Android) et mettre à jour `manifest.json` si les noms de fichiers changent.
-- Le nom `CACHE` en tête de `sw.js` (`kalo-shell-v1`) n'a besoin d'être incrémenté que si on veut forcer une purge totale du cache installé chez les utilisateurs ; sinon la stratégie réseau-prioritaire suffit à servir les versions à jour (cohérent avec le cache-busting `?v=` existant).
-
-## Chantier en cours : migration vers un backend multi-utilisateur (Supabase)
-
-L'appli est utilisée en pratique par plusieurs personnes en parallèle (propriétaire + au moins un ami), chacune avec ses données isolées dans son propre `localStorage`. Pour permettre une vraie synchronisation entre appareils et éviter la perte de données au vidage de cache, un chantier de migration vers **Supabase** (Postgres + authentification par lien magique email + Row Level Security pour l'isolation par utilisateur) est en cours.
-
-Points importants pour tout agent qui reprend ce chantier :
-- **Développement exclusivement sur une branche dédiée** (ex. `claude/supabase-migration`), **jamais** de push direct sur `main` pour cette partie — voir la section workflow git de `CLAUDE.md`. Merge sur `main` uniquement via Pull Request, une fois testé en profondeur (y compris avec plusieurs comptes réels).
-- La couche `LS.get`/`LS.set` (synchrone, utilisée dans tout `core.js`) devra devenir asynchrone — c'est un changement structurel large, pas un patch ponctuel.
-- Une migration one-shot doit uploader automatiquement les données `localStorage` existantes d'un utilisateur vers son compte Supabase à son premier login, sans perte.
-- Si un schéma SQL / plan de migration existe déjà sur une branche de ce chantier, le lire avant de repartir de zéro plutôt que de reconcevoir le schéma en double.
-- Ce n'est pas un projet SaaS avec facturation : juste un multi-utilisateur basique, quelques comptes.
+- **Android/Chrome** : prompt d'installation automatique une fois les critères d'installabilité remplis.
+- **iOS/Safari** : pas de prompt automatique (limitation Apple) — passer par Partager → "Sur l'écran d'accueil".
+- Le service worker cache une copie de secours de chaque page/asset same-origin visité (usage hors-ligne basique après une première visite), sans liste de préchargement figée.
 
 ## Historique utile
 
-- Le repo a connu un refactor important qui a **fusionné une ancienne interface monolithique** (une unique page HTML avec CSS/JS inline, plus riche en fonctionnalités : poids, historique, notes, todos, réglages) avec une **infrastructure plus récente** mais alors incomplète (scanner code-barres + IA, chemins de fichiers cassés, CSS manquant). L'UI/UX actuelle vient de cette fusion : ne pas repartir d'une version antérieure sans vérifier d'abord ce qui a été consolidé.
+- Le repo a connu un refactor important qui a **fusionné une ancienne interface monolithique** (une unique page HTML avec CSS/JS inline, plus riche en fonctionnalités : poids, historique, notes, todos, réglages) avec une **infrastructure plus récente** mais alors incomplète (scanner code-barres + IA). L'UI/UX actuelle vient de cette fusion, puis d'une refonte ultérieure vers une navigation dashboard-first (cartes cliquables plutôt que barre d'onglets) — ne pas repartir d'une version antérieure sans vérifier d'abord ce qui a été consolidé depuis.
 - Avant ce refactor, le repo contenait des fichiers JS orphelins à la racine (`app.js`, `core.js`, `food.js`, `scanner.js`, `ui.js`, `workout.js`) qui ne correspondaient plus au HTML servi. Ils ont été supprimés ; tout le JS vit maintenant exclusivement dans `js/`.
