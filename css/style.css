@@ -157,6 +157,20 @@
   .insight-figure-row{display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:13px; color:var(--ink-soft); margin:0 0 10px; padding-bottom:8px; border-bottom:1px solid var(--line);}
   .insight-block > *:last-child{margin-bottom:0; border-bottom:none; padding-bottom:0;}
 
+  /* Kalo Calibration — message d'entrée (une seule fois, dismissible). Reprend
+     le même liseré --green que insights-card (même famille visuelle "Kalo
+     parle"), mais reste une card à part : ce n'est pas une observation issue
+     de données, c'est un message produit. */
+  section.card.calibration-banner{border-left:3px solid var(--green);}
+  .calibration-title{margin:0 0 4px; font-size:14px; font-weight:700; color:var(--ink);}
+  .calibration-text{margin:0 0 10px; font-size:13.5px; line-height:1.45; color:var(--ink-soft);}
+  .calibration-banner .btn{margin-top:0;}
+
+  /* "Portion reveal" (brique Calibration) : ligne discrète sous le champ de
+     quantité, uniquement la 1re fois qu'une portion réellement personnalisée
+     est proposée — voir openQtyModal(). */
+  .portion-reveal{margin-top:8px; font-size:12.5px; line-height:1.4; color:var(--green);}
+
   /* Raccourci "Repas fréquent" dans le flow d'ajout (brique 9B) — distinct des
      Insights dashboard (pas de cooldown, pas de plafond, recalculé à chaque
      rendu) : un bloc discret, pas une carte, juste sous le sélecteur de

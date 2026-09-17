@@ -32,6 +32,15 @@ let shoppingList = LS.get('ct_shoppingList', []); // {id,name,checked,qty,source
 let recipes = LS.get('ct_recipes', []); // {id,name,ingredients:[{name,qty}],steps,servings,sourceUrl,savedAt,bookId} — recettes importées, rangées par livre (voir recipeBooks)
 let recipeBooks = LS.get('ct_recipeBooks', []); // {id,name} — "livres de cuisine" créés librement par l'utilisateur, chaque recette appartient à un seul livre
 let insightsSeen = LS.get('ct_insightsSeen', {}); // {insightId: dernière date d'affichage} — cooldown des Kalo Insights (voir kaloInsights(), architecture minimale volontaire : à terme, doit devenir cooldown + détection de nouveauté/amplitude du signal, pas juste un délai fixe)
+// Kalo Calibration (voir calibrationBanner()/openQtyModal()) : deux flags d'état
+// UI indépendants, même catégorie que insightsSeen (cache d'affichage "vu ou
+// pas", jamais une connaissance dérivée des données) — chacun un booléen
+// simple, montré une fois puis jamais réaffiché. Volontairement DEUX flags
+// séparés (pas un système générique de "capability unlock") : rien n'indique
+// aujourd'hui qu'on aura besoin d'un 3e cas, donc pas de généralisation
+// prématurée — voir note dans le commit/discussion produit.
+let calibrationSeen = LS.get('ct_calibrationSeen', false);
+let portionRevealSeen = LS.get('ct_portionRevealSeen', false);
 let currentDate = todayStr();
 let activeTab = 'today';
 
@@ -63,6 +72,8 @@ function save(){
   LS.set('ct_recipeBooks',recipeBooks);
   LS.set('ct_insightsSeen',insightsSeen);
   LS.set('ct_favSports',favSports);
+  LS.set('ct_calibrationSeen',calibrationSeen);
+  LS.set('ct_portionRevealSeen',portionRevealSeen);
 }
 function isFavorite(id){ return favorites.includes(id); }
 function toggleFavorite(id){
@@ -1416,6 +1427,19 @@ function kaloInsightsCard(){
   </section>`;
 }
 
+// Kalo Calibration — message d'entrée unique (voir discussion produit) :
+// répond à "pourquoi renseigner mes repas maintenant", jamais un système de
+// progression. Un simple banner dismissible, état UI pur (calibrationSeen),
+// aucune donnée de connaissance, aucun compteur, aucune promesse de délai.
+function calibrationBanner(){
+  if(calibrationSeen) return '';
+  return `<section class="card calibration-banner" data-calibration>
+    <p class="calibration-title">Kalo apprend de tes habitudes.</p>
+    <p class="calibration-text">Plus tu renseignes tes repas au début, plus Kalo pourra progressivement te faire gagner du temps et personnaliser ses analyses.</p>
+    <button class="btn small ghost" data-dismiss-calibration type="button">Compris</button>
+  </section>`;
+}
+
 function viewToday(){
   const t = dayTotals(currentDate);
   // Le budget restant ignore volontairement les séances de sport : brûler des
@@ -1457,6 +1481,7 @@ function viewToday(){
 
   return `
   ${dateStrip()}
+  ${calibrationBanner()}
   <section class="card">
     <div class="kcal-ring-wrap">
       <svg class="kcal-ring ${over?'over':''}" viewBox="0 0 120 120">

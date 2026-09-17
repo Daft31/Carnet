@@ -98,12 +98,21 @@ function openQtyModal(food){
   // n'en fait pas une "vérité" différente d'une saisie manuelle normale.
   const typical = typicalGramsFor(food.id);
   const defaultGrams = typical!=null ? Math.round(typical) : 100;
+  // Kalo Calibration — "portion reveal" (voir discussion produit) : la toute
+  // première fois qu'une portion RÉELLEMENT personnalisée est proposée (jamais
+  // sur le repli 100g), un mot explicite. Une seule fois pour cette capacité,
+  // tous aliments confondus (pas par aliment) — marqué vu dès l'affichage, pas
+  // à la confirmation, pour ne jamais le réafficher même si l'utilisateur
+  // ferme sans valider.
+  const showPortionReveal = typical!=null && !portionRevealSeen;
+  if(showPortionReveal){ portionRevealSeen = true; save(); }
   openModal(`
     <h3>${escapeHtml(food.name)}</h3>
     <div class="hint">Valeurs pour 100 g : ${food.kcal} kcal · P${food.protein} G${food.carbs} L${food.fat}</div>
     <label>Quantité</label>
     <div class="seg"><button type="button" id="qtyGrams" class="active">Grammes</button><button type="button" id="qtyPortions">Portions (${escapeHtml(food.serving_label||((food.serving_g||100)+" g"))})</button></div>
     <input id="qtyInput" type="number" inputmode="numeric" value="${defaultGrams}" autofocus>
+    ${showPortionReveal ? `<div class="portion-reveal">Kalo a appris ta quantité habituelle.<br>${defaultGrams} g proposés à partir de tes précédentes saisies.</div>` : ''}
     <div class="qty-preview" id="qtyPreview"></div>
     <button class="btn" id="qtyConfirm">Ajouter à ${mealSlot}</button>
   `);
@@ -369,6 +378,8 @@ function bindTabEvents(){
     if(!draft){ toast('Plus assez de données pour ce repas'); return; }
     openQuickAddModal(draft);
   });
+  const dismissCalibration = document.querySelector('[data-dismiss-calibration]');
+  if(dismissCalibration) dismissCalibration.onclick = ()=>{ calibrationSeen = true; save(); render(); };
 
   if(activeTab==='meals'){
     const search = document.getElementById('foodsearch');
@@ -794,6 +805,7 @@ function bindTabEvents(){
         logEntries = []; todos = []; shoppingList = []; recipes = []; recipeBooks = [];
         favSports = [{type:'tapis'}, {type:'velo'}];
         insightsSeen = {};
+        calibrationSeen = false; portionRevealSeen = false;
         save(); render(); toast('Données réinitialisées');
       }
     };
