@@ -1537,11 +1537,26 @@ function viewToday(){
   // une fois le profil Day 0 complété, tant que l'objectif de poids ne l'est
   // pas — voir viewOnboarding() pour le même distinguo sur la carte Day 0.
   const latestWeightEntry = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date))[0];
-  const hasPersonalizedProfile = !!(latestWeightEntry && computeGoals(profile, latestWeightEntry.weight));
-  const hasWeightGoal = hasPersonalizedProfile && !!parseFloat(profile.goalWeight);
+  const dashGoals = latestWeightEntry ? computeGoals(profile, latestWeightEntry.weight) : null;
+  const hasPersonalizedProfile = !!dashGoals;
+  // goalState (loss/gain/maintain/null) vient de computeGoals() — pas de
+  // nouvelle comparaison goalWeight/weight ici, on réutilise directement sa
+  // décision (Brique 11).
+  const hasWeightGoal = hasPersonalizedProfile && dashGoals.goalState !== null;
   let goalBadge = '';
   if(!hasPersonalizedProfile) goalBadge = 'Objectif provisoire · complète ton profil pour le personnaliser';
-  else if(!hasWeightGoal) goalBadge = 'Point de départ · définis un objectif de poids pour l\'affiner';
+  else if(!hasWeightGoal) goalBadge = 'Point de départ · ajoute un objectif de poids si tu veux aller plus loin';
+  // Libellé d'état une fois l'objectif de poids défini (Brique 11) : le signe
+  // affiché suit goalState (déjà décidé par computeGoals()), pas le signe brut
+  // de profile.rate — un rythme mal orienté (cas du warning dans la carte
+  // Poids) ne doit pas produire un "-X" sur une prise ou inversement ici.
+  let goalStateLabel = '';
+  if(hasWeightGoal){
+    const rateAbs = Math.abs(parseFloat(profile.rate));
+    if(dashGoals.goalState === 'maintain') goalStateLabel = 'Objectif : maintien';
+    else if(dashGoals.goalState === 'loss') goalStateLabel = `Objectif : perte · -${rateAbs} kg/semaine`;
+    else if(dashGoals.goalState === 'gain') goalStateLabel = `Objectif : prise · +${rateAbs} kg/semaine`;
+  }
   // Le budget restant ignore volontairement les séances de sport : brûler des
   // calories ne doit pas "rembourser" de la marge pour manger plus.
   const remaining = settings.calorieGoal - t.kcalIn;
@@ -1597,7 +1612,8 @@ function viewToday(){
         <div class="big ${remaining<0?'neg':''}">${over?'+'+Math.round(-remaining):Math.round(remaining)} <span style="font-size:13px;color:var(--ink-soft);font-family:var(--font-sans);font-weight:600;">kcal</span></div>
         <div class="sub">${summaryText}</div>
         <span class="pill">${Math.round(pctRaw*100)}% de l'objectif</span>
-        ${goalBadge ? `<span class="pill" data-provisional-goal>${goalBadge}</span>` : ''}
+        ${goalBadge ? `<span class="pill${!hasWeightGoal && hasPersonalizedProfile ? ' clickable' : ''}" data-provisional-goal${!hasWeightGoal && hasPersonalizedProfile ? ' data-goal-badge-link' : ''}>${goalBadge}</span>` : ''}
+        ${goalStateLabel ? `<span class="pill" data-goal-state>${goalStateLabel}</span>` : ''}
       </div>
     </div>
     <div class="trio">
@@ -2375,19 +2391,28 @@ function computeGoals(p, weight){
   const actMap = {sedentaire:1.2, leger:1.375, modere:1.55, intense:1.725};
   const tdee = bmr * (actMap[p.activity]||1.55);
   const goalWeight = parseFloat(p.goalWeight), rate = parseFloat(p.rate);
-  let targetKcal = tdee, weeksToGoal = null, warning = null;
+  let targetKcal = tdee, weeksToGoal = null, warning = null, goalState = null;
   if(goalWeight && rate){
-    targetKcal = tdee + (rate*7700/7);
-    weeksToGoal = Math.abs((goalWeight-weight)/rate);
     const needsLoss = goalWeight < weight, needsGain = goalWeight > weight;
-    if((needsLoss && rate>0) || (needsGain && rate<0)) warning = "Le rythme indiqué va dans le sens opposé à ton objectif de poids.";
+    goalState = needsLoss ? 'loss' : needsGain ? 'gain' : 'maintain';
+    // goalWeight === weight (poids objectif déjà atteint) : ni needsLoss ni
+    // needsGain, donc pas d'avertissement de sens — mais sans ce garde-fou,
+    // targetKcal recevait quand même l'ajustement rate*7700/7, créant un
+    // déficit/surplus fantôme alors qu'il n'y a plus rien à perdre/prendre.
+    // weeksToGoal reste 0 dans ce cas (goalWeight-weight = 0), déjà correct
+    // sans changement.
+    if(goalState !== 'maintain'){
+      targetKcal = tdee + (rate*7700/7);
+      if((needsLoss && rate>0) || (needsGain && rate<0)) warning = "Le rythme indiqué va dans le sens opposé à ton objectif de poids.";
+    }
+    weeksToGoal = Math.abs((goalWeight-weight)/rate);
   }
   targetKcal = Math.max(1200, Math.round(targetKcal));
   const proteinG = Math.round(weight*2);
   let fatG = Math.round(targetKcal*0.25/9);
   let carbG = Math.round((targetKcal - proteinG*4 - fatG*9)/4);
   if(carbG < 50){ carbG = 50; fatG = Math.max(20, Math.round((targetKcal - proteinG*4 - carbG*4)/9)); }
-  return {bmr:Math.round(bmr), tdee:Math.round(tdee), targetKcal, proteinG, carbG, fatG, weeksToGoal, warning};
+  return {bmr:Math.round(bmr), tdee:Math.round(tdee), targetKcal, proteinG, carbG, fatG, weeksToGoal, warning, goalState};
 }
 
 // Interprétation en langage simple d'une série de pesées (pas juste la dernière valeur isolée).
@@ -2513,7 +2538,7 @@ function viewWeight(){
         <button class="del" data-delw="${e.id}">✕</button>
       </div>`).join('')}
   </section>
-  <section class="card">
+  <section class="card" id="weightGoalCard">
     <h2>Objectif de poids</h2>
     <div class="row2">
       <div><label>Poids objectif (kg)</label><input id="pGoalWeight" type="number" step="0.1" value="${profile.goalWeight}"></div>

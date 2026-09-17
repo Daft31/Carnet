@@ -381,6 +381,17 @@ function bindTabEvents(){
   const dismissCalibration = document.querySelector('[data-dismiss-calibration]');
   if(dismissCalibration) dismissCalibration.onclick = ()=>{ calibrationSeen = true; save(); render(); };
 
+  // Badge "Point de départ" du dashboard (Brique 11) : va sur l'onglet Poids
+  // et scrolle jusqu'à la carte "Objectif de poids" existante, sans nouvelle
+  // modale ni formulaire dupliqué. setTimeout(0) après switchTab() car
+  // switchTab() remet toujours le scroll à 0 juste après son propre render()
+  // (voir commentaire sur switchTab) — même pattern que obGoToMeal ci-dessus.
+  const goalBadgeLink = document.querySelector('[data-goal-badge-link]');
+  if(goalBadgeLink) goalBadgeLink.onclick = ()=>{
+    switchTab('weight');
+    setTimeout(()=>document.getElementById('weightGoalCard')?.scrollIntoView({behavior:'smooth', block:'start'}), 0);
+  };
+
   // Day 0 — onboarding minimal. Le toggle sexe ne déclenche PAS render() (contrairement
   // à son équivalent dans l'onglet Poids) : un render() ici regénérerait le formulaire
   // depuis viewOnboarding() et effacerait poids/âge/taille déjà tapés, qui ne sont pas
@@ -633,6 +644,14 @@ function bindTabEvents(){
     ]);
     document.querySelectorAll('#pSexSeg button').forEach(b=>b.onclick=()=>{ profile.sex=b.dataset.sex; render(); });
     document.querySelectorAll('#pActSeg button').forEach(b=>b.onclick=()=>{ profile.activity=b.dataset.act; render(); });
+    // Connue et acceptée (Brique 11, audit) : "Enregistrer" écrit profile.*
+    // mais ne touche jamais settings.calorieGoal/proteinGoal/carbGoal/fatGoal
+    // (seul "Appliquer" ci-dessous le fait). Retirer un objectif de poids ici
+    // ne fait donc pas revenir automatiquement les objectifs quotidiens à la
+    // maintenance : ils restent sur la dernière valeur appliquée jusqu'à un
+    // nouveau clic sur "Appliquer". Volontaire — protège des objectifs
+    // ajustés à la main contre un écrasement silencieux — donc ne pas fusionner
+    // les deux boutons. Couvert par test_goalrefinement.js (t6_removingGoal_*).
     const saveProfile = document.getElementById('saveProfile');
     if(saveProfile) saveProfile.onclick = ()=>{
       profile.age = document.getElementById('pAge').value;

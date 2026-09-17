@@ -646,6 +646,7 @@
   .kcal-summary .big.neg{ color:var(--rust); }
   .kcal-summary .sub{ font-size:13px; color:var(--ink-soft); margin-top:2px; line-height:1.45; }
   .kcal-summary .pill{ display:inline-block; padding:2px 8px; border-radius:20px; background:var(--surface-2); color:var(--ink-soft); font-size:11px; font-weight:600; margin-top:6px; }
+  .kcal-summary .pill.clickable{ cursor:pointer; }
 
   /* ---- Mini bar chart 7 days calories ---- */
   .mini-bars{ margin-top:10px; padding:4px 0; }
