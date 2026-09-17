@@ -101,11 +101,23 @@ function openAIResultModal(data, sourceText) {
   // (aucune nouvelle classe), apparaît uniquement si une valeur diffère
   // effectivement de la proposition initiale.
   const editedNotice = document.getElementById('aiEditedNotice');
-  const checkEdited = () => {
-    const changed = kcalInput.value != kcal || proteinInput.value != proteinDisplay ||
-      carbsInput.value != carbsDisplay || fatInput.value != fatDisplay;
-    editedNotice.style.display = changed ? 'block' : 'none';
-  };
+  // Un seul prédicat, utilisé à la fois par le repère visuel ci-dessous ET par
+  // la provenance enregistrée à la confirmation (voir aiConfirmBtn) — jamais
+  // deux logiques séparées qui pourraient diverger. Comparaison de la valeur
+  // ACTUELLE à la proposition d'origine, réévaluée à chaque appel : si
+  // l'utilisateur modifie puis revient exactement à la valeur catalogue
+  // initiale, `matchesOriginal()` redevient vrai. Choix délibéré, pas un
+  // drapeau "modifié pendant la session" : `source:'catalog'` affirme un fait
+  // sur le NOMBRE effectivement enregistré ("cette valeur vient d'une donnée
+  // vérifiée"), pas sur l'historique de la saisie — si le nombre final est
+  // identique à la valeur vérifiée, l'affirmation reste vraie. Différent de
+  // `quantitySource` (brique 12A), qui répond à une question distincte
+  // ("cette suggestion était-elle personnalisée ?") et reste donc 'habitual'
+  // même après modification — pas le même genre d'affirmation, pas le même
+  // critère, volontairement pas copié ici.
+  const matchesOriginal = () => kcalInput.value == kcal && proteinInput.value == proteinDisplay &&
+    carbsInput.value == carbsDisplay && fatInput.value == fatDisplay;
+  const checkEdited = () => { editedNotice.style.display = matchesOriginal() ? 'none' : 'block'; };
   [kcalInput, proteinInput, carbsInput, fatInput].forEach(el => el.addEventListener('input', checkEdited));
   document.getElementById('aiConfirmBtn').onclick = () => {
     const kcalRaw = parseFloat(kcalInput.value);
@@ -124,12 +136,21 @@ function openAIResultModal(data, sourceText) {
     const carbsVal = parseMacro(carbsInput);
     const fatVal = parseMacro(fatInput);
     if (proteinVal === null || carbsVal === null || fatVal === null) { toast('Entre des valeurs de macros valides'); return; }
+    // 'catalog' n'est conservé que si la valeur réellement enregistrée est
+    // encore celle vérifiée par le catalogue (voir matchesOriginal ci-dessus) —
+    // sinon 'ai' : pas une nouvelle catégorie de provenance, seulement le
+    // même repli déjà utilisé pour 'mixed' et pour une estimation pure.
+    // 'officiel' ne doit jamais s'afficher (mealProvenanceLabel) sur un
+    // nombre que l'utilisateur vient de taper lui-même. 'mixed'/'ai' restent
+    // inchangés dans tous les cas (déjà 'ai' avant et après, ce correctif ne
+    // les concerne pas).
+    const source = (data.confidence === 'catalog' && matchesOriginal()) ? 'catalog' : 'ai';
     logEntries.push({
       id: uid(), date: currentDate, type: 'meal', mealSlot,
       foodName: data.name || 'Repas (IA)', grams: null,
       kcal: Math.round(kcalRaw), protein: proteinVal, carbs: carbsVal, fat: fatVal,
       time: new Date().toTimeString().slice(0, 5),
-      source: data.confidence === 'catalog' ? 'catalog' : 'ai'
+      source
     });
     save(); closeModal(); render(); toast('Ajouté ✓');
   };
