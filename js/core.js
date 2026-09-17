@@ -466,12 +466,33 @@ const RAW_UNSAFE_CATEGORIES = new Set(['grains','legumes','meat_fish','eggs_dair
 function isEdibleAsIs(f){
   return !(RAW_UNSAFE_CATEGORIES.has(f.category) && (f.state==='raw' || f.state==='dry'));
 }
-// Nb de fois où chaque aliment a été loggué en repas, tout historique confondu —
-// seule mesure de fréquence utilisée pour personnaliser topFoodsFor() ci-dessous
-// (pas de ML, pas d'IA : un simple comptage déterministe et lisible).
+// Fenêtre de "fréquence récente" (brique 9C) : un paramètre produit pragmatique,
+// pas une constante physiologique ni une valeur "scientifiquement optimale" —
+// volontairement simple (comptage entier borné dans le temps, pas de
+// pondération/décroissance), et révisable avec l'usage réel. Choisie plus
+// longue que FREQUENT_MEAL_WINDOW_DAYS (30j) pour ne pas pénaliser un aliment
+// mangé une fois par semaine (30j ne lui laisserait que 4-5 occurrences),
+// et plus courte que 90j pour vraiment exclure ce que l'utilisateur ne mange
+// plus. Vise à faire refléter au scoring les habitudes RÉCENTES plutôt que
+// tout l'historique depuis toujours — voir personalFoodFrequency() ci-dessous.
+const PERSONAL_FREQUENCY_WINDOW_DAYS = 60;
+
+// Nb de fois où chaque aliment a été loggué en repas, sur les
+// PERSONAL_FREQUENCY_WINDOW_DAYS derniers jours — seule mesure de fréquence
+// utilisée pour personnaliser topFoodsFor() ci-dessous (pas de ML, pas d'IA :
+// un simple comptage déterministe et lisible, juste borné dans le temps).
+// Volontairement PAS de repli sur tout l'historique si la fenêtre est vide
+// (contrairement à typicalGramsFor()) : typicalGramsFor() cherche une portion
+// représentative, où une vieille donnée reste mieux que rien ; ici on cherche
+// une fréquence ACTUELLE, où une occurrence vieille de 6 mois ne doit
+// justement plus compter comme "habituel" — les deux concepts ne se mélangent
+// pas. Un aliment hors fenêtre retombe simplement à freq=0, et topFoodsFor()
+// dégrade déjà proprement vers le score nutritionnel seul dans ce cas (bonus
+// additif, pas de branche spéciale nécessaire).
 function personalFoodFrequency(){
+  const cutoff = shiftDate(todayStr(), -PERSONAL_FREQUENCY_WINDOW_DAYS);
   const freq = {};
-  logEntries.forEach(e=>{ if(e.type==='meal' && e.foodId) freq[e.foodId] = (freq[e.foodId]||0)+1; });
+  logEntries.forEach(e=>{ if(e.type==='meal' && e.foodId && e.date>=cutoff) freq[e.foodId] = (freq[e.foodId]||0)+1; });
   return freq;
 }
 // Suggestions "à privilégier/éviter" des conseils macro : toujours triées d'abord
