@@ -2320,7 +2320,7 @@ function viewWorkouts(){
       <label>Durée (min)</label><input id="wkDuree" type="number" value="${wkDuration}">
     ` : ''}
 
-    ${wkType!=='ia' ? `<button class="btn rust" id="saveWorkout">Enregistrer la séance</button>
+    ${wkType!=='ia' ? `<button class="btn" id="saveWorkout">Enregistrer la séance</button>
     <button class="btn ghost" id="savePresetBtn">★ Enregistrer ces réglages comme préréglage</button>` : ''}
     <div class="wk-estimate" id="wkEstimate">
       <div class="num" id="wkEstimateNum">—</div>
@@ -2639,7 +2639,7 @@ function viewWeight(){
       ${goals.warning? `<div class="hint" style="color:var(--rust); margin-top:10px;">${goals.warning}</div>` : ''}
       ${goals.weeksToGoal!=null && isFinite(goals.weeksToGoal) ? `<div class="hint" style="margin-top:10px;">À ce rythme, ~${Math.round(goals.weeksToGoal)} semaines pour atteindre ${profile.goalWeight} kg.</div>` : ''}
       <div class="hint" style="margin-top:10px;">Estimation basée sur la formule de Mifflin-St Jeor + 7700 kcal/kg. À ajuster si tu vois que ça ne correspond pas à ta réalité après 2-3 semaines.</div>
-      <button class="btn rust" id="applyGoals">Appliquer à mes objectifs quotidiens</button>
+      <button class="btn" id="applyGoals">Appliquer à mes objectifs quotidiens</button>
     </section>`}
   `;
 }
