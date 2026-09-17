@@ -290,7 +290,14 @@ function openCustomFoodModal(){
       kcal*=ratio; protein*=ratio; carbs*=ratio; fat*=ratio;
     }
     const f = { id:'c'+uid(), name, kcal:Math.round(kcal*10)/10, protein:Math.round(protein*10)/10, carbs:Math.round(carbs*10)/10, fat:Math.round(fat*10)/10 };
-    customFoods.unshift(f); save(); closeModal(); render(); toast('Aliment ajouté ✓');
+    // Ce flux crée une DÉFINITION réutilisable dans customFoods, jamais une
+    // entrée logEntries (audit Tâche 14, P2) — contrairement à "Ajouté ✓"/
+    // "Repas ajouté ✓" utilisés partout ailleurs pour signaler qu'un repas
+    // vient d'être inscrit au journal du jour. Reprend le même gabarit
+    // "X enregistré ✓ — [étape suivante]" déjà utilisé par openPresetNameModal
+    // ("Préréglage chargé — confirme la durée"), plutôt que "ajouté" qui
+    // laisserait croire que la consommation est déjà tracée.
+    customFoods.unshift(f); save(); closeModal(); render(); toast('Aliment enregistré ✓ — disponible dans ta recherche');
   };
 }
 
