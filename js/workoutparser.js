@@ -112,9 +112,14 @@ function workoutBlockHtml(block) {
   const typeLbl = workoutBlockTypeLabel(block.type);
   const durLbl = block.durationMin ? ` · ${block.durationMin} min` : '';
   const roundsLbl = block.rounds ? ` · ${block.rounds} tour${block.rounds > 1 ? 's' : ''}` : '';
+  // Array.isArray() (P2-6, audit Phase 2.2) : block.exercises.length plantait le
+  // rendu de la modale de résultat (avant toute sauvegarde) si l'IA renvoyait un
+  // bloc sans tableau exercises — contrairement à blocksToText()/workoutSummary()
+  // (core.js), déjà défensifs sur ce même champ.
+  const exercises = Array.isArray(block.exercises) ? block.exercises : [];
   return `<div class="list-entry" style="display:block;">
     <div class="title">${escapeHtml(block.name)} <span class="hint" style="display:inline;">(${typeLbl}${durLbl}${roundsLbl})</span></div>
-    ${block.exercises.length ? `<ul class="recipe-ing">${block.exercises.map(exerciseLineHtml).join('')}</ul>` : '<div class="empty">Aucun exercice détaillé.</div>'}
+    ${exercises.length ? `<ul class="recipe-ing">${exercises.map(exerciseLineHtml).join('')}</ul>` : '<div class="empty">Aucun exercice détaillé.</div>'}
   </div>`;
 }
 
@@ -190,7 +195,7 @@ function openWorkoutResultModal(data) {
       duration, text: synthText, estimation,
       kcalBurned: estimation.kcal,
     });
-    save(); closeModal(); render(); toast('Séance enregistrée ✓');
+    save('Séance enregistrée ✓'); closeModal(); render();
   };
   document.getElementById('wiRedoBtn').onclick = openWorkoutImportModal;
 }

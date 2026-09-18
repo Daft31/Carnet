@@ -156,7 +156,7 @@ function openAIResultModal(data, sourceText) {
       time: new Date().toTimeString().slice(0, 5),
       source
     });
-    save(); closeModal(); render(); toast('Ajouté ✓');
+    save('Ajouté ✓'); closeModal(); render();
   };
   // Repasse la description d'origine (paramètre `sourceText`, jamais `data`) —
   // voir le commentaire sur `prefillText` dans openAIDescribeModal() : incohérence

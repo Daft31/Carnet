@@ -17,6 +17,39 @@ const LS = {
     catch(e){ console.error('LS.set a échoué pour', k, e); return false; }
   }
 };
+// Objet "simple" (ni tableau, ni null, ni valeur scalaire) — utilisé par
+// l'import JSON (js/ui.js) pour valider settings/profile/foodOverrides avant de
+// remplacer l'état courant : un simple test de vérité (`if(data.settings)`)
+// laissait passer une chaîne ou un nombre, remplaçant l'objet attendu par une
+// valeur incompatible avec le reste du code (P2-2, audit Phase 2.2).
+function isPlainObject(v){ return v!==null && typeof v==='object' && !Array.isArray(v); }
+// Assainit les entrées de logEntries importées (P2-1, audit Phase 2.2). L'import
+// JSON (js/ui.js) ne validait jusque-là que le type tableau de `logEntries`,
+// jamais la forme de ses éléments : une valeur numérique corrompue (chaîne non
+// numérique, champ absent, ou un nombre débordant en Infinity via un littéral
+// JSON valide comme 1e400) contaminait ensuite silencieusement dayTotals()/
+// weeklyDeficit() (`kcalIn+=e.kcal`, `kcalOut+=e.kcalBurned`, sans coercition —
+// NaN ou concaténation de chaîne selon le cas). Chaque champ numérique invalide
+// est normalisé à 0 (l'entrée reste visible, rien n'est perdu) plutôt que
+// rejeté en bloc. Ne touche à rien d'autre que les 5 champs concernés — pas de
+// validation générale de schéma.
+const LOGENTRY_NUMERIC_FIELDS = {meal:['kcal','protein','carbs','fat'], workout:['kcalBurned']};
+function sanitizeImportedLogEntries(arr){
+  let sanitizedCount = 0;
+  const entries = arr.map(e=>{
+    if(!e || typeof e!=='object' || Array.isArray(e)) return e;
+    const fields = LOGENTRY_NUMERIC_FIELDS[e.type];
+    if(!fields) return e;
+    let touched = false;
+    const clean = {...e};
+    fields.forEach(f=>{
+      if(!Number.isFinite(clean[f])){ clean[f] = 0; touched = true; }
+    });
+    if(touched) sanitizedCount++;
+    return touched ? clean : e;
+  });
+  return {entries, sanitizedCount};
+}
 let settings = LS.get('ct_settings', {calorieGoal:2200, proteinGoal:150, carbGoal:220, fatGoal:70});
 let customFoods = LS.get('ct_customFoods', []);
 let foodOverrides = LS.get('ct_foodOverrides', {}); // {builtinId: {name,kcal,protein,carbs,fat}}
@@ -55,7 +88,17 @@ function allFoods(){
   return [...customFoods, ...builtin];
 }
 function todayStr(){ return fmtDate(new Date()); }
-function fmtDate(d){ return d.toISOString().slice(0,10); }
+// Composants LOCAUX (getFullYear/getMonth/getDate), jamais toISOString() (qui
+// convertit en UTC avant de tronquer) : pour un utilisateur à l'est de UTC (ex.
+// France, UTC+1/+2), toISOString() renvoyait la veille pendant les 1-2h suivant
+// minuit local, décalant silencieusement currentDate/streak/repas/pesées/todos
+// d'un jour (P1-1, audit Phase 2.2). Les appelants qui ancrent déjà à midi local
+// (shiftDate, daysBetween, dateLabel — via `new Date(dateStr+'T12:00:00')`) ne
+// sont pas affectés par ce changement : ce format était déjà correct pour eux,
+// getFullYear/Month/Date renvoie simplement le même jour qu'avant.
+function fmtDate(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function shiftDate(dateStr, delta){ const d=new Date(dateStr+'T12:00:00'); d.setDate(d.getDate()+delta); return fmtDate(d); }
 function daysBetween(a,b){ return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000); }
 function dateLabel(dateStr){
@@ -74,7 +117,19 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 // disponible ici, pas une vraie atomicité). Si au moins une échoue, on le
 // signale explicitement à l'utilisateur au lieu de laisser croire que tout a
 // été sauvegardé (BUG-001, audit Phase 2.1).
-function save(){
+//
+// `successMsg`/`successKind` (optionnels, P2-7, audit Phase 2.2) : la quasi-
+// totalité des appelants faisaient `save(); render(); toast('X enregistré ✓');`
+// — ce toast de succès, synchrone et immédiat, écrasait silencieusement (même
+// élément DOM unique, voir toast()) le toast d'erreur ci-dessous avant qu'il ne
+// soit jamais visible, si `save()` venait d'échouer. L'utilisateur voyait alors
+// "X enregistré ✓" alors que la sauvegarde était en réalité partielle — donnant
+// l'illusion d'un état entièrement persisté qui ne l'était pas. En laissant
+// save() elle-même décider quel toast (échec OU succès, jamais les deux)
+// afficher, un seul toast est émis par opération, donc jamais clobbering
+// possible. Omettre `successMsg` conserve le comportement historique (aucun
+// toast si tout s'est bien passé) pour les sauvegardes internes silencieuses.
+function save(successMsg, successKind){
   const writes = [
     ['ct_settings',settings], ['ct_customFoods',customFoods], ['ct_foodOverrides',foodOverrides],
     ['ct_favorites',favorites], ['ct_weight',weightEntries], ['ct_profile',profile],
@@ -92,6 +147,8 @@ function save(){
   const failedKeys = writes.filter(([k,v]) => !LS.set(k,v)).map(([k])=>k);
   if(failedKeys.length){
     toast('Sauvegarde incomplète (stockage plein ?) : '+failedKeys.join(', '), 'error');
+  } else if(successMsg){
+    toast(successMsg, successKind);
   }
   return failedKeys.length===0;
 }
@@ -205,9 +262,12 @@ function normalizeTodos(){
 
 // Migration une seule fois : d'anciennes recettes importées avant l'introduction
 // des "livres" n'ont pas de bookId. Si aucun livre n'existe encore, on en crée un
-// par défaut et on y range les recettes orphelines — pas de bucket "Sans livre"
-// permanent dans l'UI, juste un rattrapage au premier chargement après la mise à
-// jour. N'agit qu'une fois : dès qu'un livre existe, on ne retouche plus rien ici.
+// par défaut et on y range les recettes orphelines — rattrapage au premier
+// chargement après la mise à jour. N'agit qu'une fois pour CE cas précis (dès
+// qu'un livre existe, on ne retouche plus rien ici) — voir orphanRecipes()
+// ci-dessous pour le filet de sécurité permanent qui couvre tous les autres cas
+// (bookId invalide apparu après import, livre supprimé entretemps, etc.),
+// P1-2, audit Phase 2.2.
 function normalizeRecipeBooks(){
   recipeBooks = Array.isArray(recipeBooks) ? recipeBooks : [];
   recipes = Array.isArray(recipes) ? recipes : [];
@@ -218,6 +278,29 @@ function normalizeRecipeBooks(){
     orphans.forEach(r=>{ r.bookId = defaultBook.id; });
     save();
   }
+}
+// Recettes dont le bookId ne pointe vers AUCUN livre existant (absent, ou livre
+// supprimé/jamais migré) — recalculé à chaque appel depuis recipes/recipeBooks,
+// jamais persisté séparément (cohérent avec "raw history = source de vérité").
+// Contrairement à normalizeRecipeBooks() (rattrapage ponctuel du seul cas
+// "aucun livre n'existe encore"), ceci couvre en permanence tous les autres cas
+// (import partiel après que des livres existent déjà, etc.) — voir viewRecipes()
+// pour le bucket "Recettes sans livre" qui les rend visibles et récupérables
+// (jamais supprimées ni masquées silencieusement), P1-2, audit Phase 2.2.
+function orphanRecipes(){
+  const bookIds = new Set(recipeBooks.map(b=>b.id));
+  return recipes.filter(r=>!r.bookId || !bookIds.has(r.bookId));
+}
+// Réassigne une recette (orpheline ou non) vers un livre existant — ne touche
+// que la référence bookId, jamais l'id/le nom/les ingrédients/les étapes de la
+// recette (P1-2, audit Phase 2.2).
+function assignRecipeToBook(recipeId, bookId){
+  const r = recipes.find(x=>x.id===recipeId);
+  const book = recipeBooks.find(b=>b.id===bookId);
+  if(!r || !book) return false;
+  r.bookId = bookId;
+  save();
+  return true;
 }
 
 // ===================== LIVRES DE RECETTES : opérations de données =====================
@@ -242,10 +325,17 @@ function renameRecipeBook(id, name){
 // Ne supprime jamais un livre non-vide directement : voir moveBookRecipesAndDelete()
 // pour le cas avec recettes, appelé depuis une modale de choix de livre cible
 // (ui.js/recipeimport.js) plutôt que de perdre des recettes silencieusement.
+// Auto-protection (P1-2, audit Phase 2.2) : vérifie elle-même qu'aucune recette
+// ne référence encore ce livre, plutôt que de dépendre uniquement du garde-fou
+// de son appelant ui.js — un appel futur (bug ou nouveau call site) qui
+// oublierait cette vérification ne peut plus orpheliner de recettes. Renvoie
+// false sans rien supprimer si le livre n'est pas vide.
 function deleteRecipeBookEmpty(id){
+  if(recipes.some(r=>r.bookId===id)) return false;
   recipeBooks = recipeBooks.filter(b=>b.id!==id);
   if(openRecipeBookId===id) openRecipeBookId = null;
   save();
+  return true;
 }
 function moveBookRecipesAndDelete(fromId, toId){
   recipes.forEach(r=>{ if(r.bookId===fromId) r.bookId = toId; });
@@ -299,7 +389,12 @@ function viewTodos(){
 // livres/page dédiée) + détail
 // ingrédients/étapes/lien source + bouton "Ajouter aux courses" propre à CETTE
 // recette (contrairement à l'import, où l'ajout se fait avant même d'enregistrer).
-function recipeRow(r){
+// `showMoveButton` (booléen explicite, jamais passé via .map(recipeRow) qui
+// injecterait l'index du tableau à la place — voir call sites) : n'affiche le
+// bouton "Ranger dans un livre" que pour le bucket "Recettes sans livre"
+// (viewRecipes(), P1-2 audit Phase 2.2), jamais dans le détail d'un livre où la
+// recette est déjà rangée.
+function recipeRow(r, showMoveButton){
   const open = openRecipeId===r.id;
   return `<div class="list-entry">
     <div class="main recipe-head" data-recipe-toggle="${r.id}">
@@ -313,6 +408,7 @@ function recipeRow(r){
     ${r.steps&&r.steps.length?`<ol class="recipe-steps">${r.steps.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ol>`:'<div class="empty">Étapes non précisées dans la légende.</div>'}
     ${r.sourceUrl?`<div class="hint"><a href="${escapeHtml(r.sourceUrl)}" target="_blank" rel="noopener noreferrer">Voir la vidéo source ↗</a></div>`:''}
     <button class="btn ghost small" data-recipe-addshop="${r.id}" type="button" style="margin-top:10px;">Ajouter aux courses</button>
+    ${showMoveButton===true && recipeBooks.length?`<button class="btn ghost small" data-recipe-movebook="${r.id}" type="button" style="margin-top:10px;">Ranger dans un livre</button>`:''}
   </div>`:''}`;
 }
 
@@ -332,7 +428,7 @@ function recipeBookCard(book){
         <button class="btn ghost small" data-book-rename="${book.id}" type="button">Renommer</button>
         <button class="btn ghost small" data-book-delete="${book.id}" type="button" style="color:var(--rust);">Supprimer</button>
       </div>
-      ${bookRecipes.length ? `<div class="recipe-list" style="margin-top:10px;">${bookRecipes.map(recipeRow).join('')}</div>` : '<div class="empty">Ce livre est vide pour l\'instant.</div>'}
+      ${bookRecipes.length ? `<div class="recipe-list" style="margin-top:10px;">${bookRecipes.map(r=>recipeRow(r)).join('')}</div>` : '<div class="empty">Ce livre est vide pour l\'instant.</div>'}
     </div>
   </div>`;
 }
@@ -343,6 +439,11 @@ function recipeBookCard(book){
 // tout moment (pas seulement pendant un import, cf. openSaveRecipeModal dans
 // js/recipeimport.js).
 function viewRecipes(){
+  // Bucket "Recettes sans livre" (P1-2, audit Phase 2.2) : toute recette dont le
+  // bookId est absent ou ne correspond plus à aucun livre reste visible et
+  // récupérable ici — jamais masquée/perdue silencieusement, quelle que soit la
+  // façon dont elle est devenue orpheline (import partiel, livre supprimé…).
+  const orphans = orphanRecipes();
   return `<h1 class="page-title">Recettes</h1>
   <section class="card">
     <h2>Nouveau livre</h2>
@@ -351,6 +452,11 @@ function viewRecipes(){
       <button class="btn primary" id="addBookBtn" type="button">Créer le livre</button>
     </div>
   </section>
+  ${orphans.length?`<section class="card">
+    <h2>Recettes sans livre (${orphans.length})</h2>
+    <div class="hint">Ces recettes existent toujours mais ne sont rangées dans aucun livre — range-les ou supprime-les.</div>
+    <div class="recipe-list" style="margin-top:10px;">${orphans.map(r=>recipeRow(r, true)).join('')}</div>
+  </section>`:''}
   <section class="card">
     <h2>Mes livres (${recipeBooks.length})</h2>
     ${recipeBooks.length

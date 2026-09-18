@@ -178,7 +178,7 @@ function openQtyModal(food){
       // produit : ne pas perdre l'info que la proposition initiale était personnalisée).
       quantitySource: typical!=null ? 'habitual' : 'user'
     });
-    save(); closeModal(); mealSearchQ=''; render(); toast('Ajouté ✓');
+    save('Ajouté ✓'); closeModal(); mealSearchQ=''; render();
   });
 }
 
@@ -242,7 +242,7 @@ function openQuickAddModal(draft){
     });
     if(!added){ toast('Entre au moins une quantité valide'); return; }
     confirmed = true;
-    save(); closeModal(); render(); toast('Repas ajouté ✓');
+    save('Repas ajouté ✓'); closeModal(); render();
   });
 }
 
@@ -297,7 +297,7 @@ function openCustomFoodModal(){
     // "X enregistré ✓ — [étape suivante]" déjà utilisé par openPresetNameModal
     // ("Préréglage chargé — confirme la durée"), plutôt que "ajouté" qui
     // laisserait croire que la consommation est déjà tracée.
-    customFoods.unshift(f); save(); closeModal(); render(); toast('Aliment enregistré ✓ — disponible dans ta recherche');
+    customFoods.unshift(f); save('Aliment enregistré ✓ — disponible dans ta recherche'); closeModal(); render();
   };
 }
 
@@ -321,7 +321,7 @@ function openPresetNameModal(){
       defaultDurationMin: wkDuration || null,
       notes: null
     });
-    save(); closeModal(); render(); toast('Préréglage enregistré ✓');
+    save('Préréglage enregistré ✓'); closeModal(); render();
   };
 }
 
@@ -356,11 +356,11 @@ function openEditFoodModal(food){
       const idx = customFoods.findIndex(x=>x.id===food.id);
       if(idx>-1) customFoods[idx] = {...customFoods[idx], ...updated};
     }
-    save(); closeModal(); render(); toast('Valeurs mises à jour ✓');
+    save('Valeurs mises à jour ✓'); closeModal(); render();
   };
   if(isBuiltin){
     document.getElementById('efReset').onclick = ()=>{
-      delete foodOverrides[food.id]; save(); closeModal(); render(); toast('Valeurs par défaut restaurées');
+      delete foodOverrides[food.id]; save('Valeurs par défaut restaurées'); closeModal(); render();
     };
   }
 }
@@ -671,7 +671,7 @@ function bindTabEvents(){
       entry.duration = Math.round(duration);
       entry.kcalBurned = computeWorkoutKcal(wkType, params, duration, weight);
       logEntries.push(entry);
-      save(); render(); toast('Séance enregistrée ✓');
+      save('Séance enregistrée ✓'); render();
     };
   }
 
@@ -688,7 +688,7 @@ function bindTabEvents(){
         water: parseFloat(document.getElementById('wWater').value)||null,
         note: document.getElementById('wNote').value.trim()||null
       });
-      save(); render(); toast('Pesée enregistrée ✓');
+      save('Pesée enregistrée ✓'); render();
     };
     document.querySelectorAll('[data-delw]').forEach(b=>b.onclick=()=>{
       weightEntries = weightEntries.filter(e=>e.id!==b.dataset.delw); save(); render();
@@ -719,7 +719,7 @@ function bindTabEvents(){
       profile.height = document.getElementById('pHeight').value;
       profile.goalWeight = document.getElementById('pGoalWeight').value;
       profile.rate = document.getElementById('pRate').value;
-      save(); render(); toast('Profil et objectif enregistrés ✓');
+      save('Profil et objectif enregistrés ✓'); render();
     };
     const applyBtn = document.getElementById('applyGoals');
     if(applyBtn) applyBtn.onclick = ()=>{
@@ -730,7 +730,7 @@ function bindTabEvents(){
       settings.proteinGoal = goals.proteinG;
       settings.carbGoal = goals.carbG;
       settings.fatGoal = goals.fatG;
-      save(); render(); toast('Objectifs quotidiens mis à jour ✓');
+      save('Objectifs quotidiens mis à jour ✓'); render();
     };
   }
 
@@ -740,7 +740,7 @@ function bindTabEvents(){
       const text = document.getElementById('noteText').value.trim();
       if(!text){ toast('Écris quelque chose d\'abord'); return; }
       logEntries.push({id:uid(), date:currentDate, type:'note', text, time:new Date().toTimeString().slice(0,5)});
-      save(); render(); toast('Note ajoutée ✓');
+      save('Note ajoutée ✓'); render();
     };
   }
 
@@ -749,7 +749,7 @@ function bindTabEvents(){
       const input=document.getElementById('todoInput'); const text=input?.value.trim();
       if(!text){toast('Écris une tâche d’abord'); return;}
       todos.push({id:uid(), text, daily:!!document.getElementById('todoDaily')?.checked, done:false, completedDate:null});
-      save(); render(); toast('Tâche ajoutée ✓');
+      save('Tâche ajoutée ✓'); render();
     };
     document.getElementById('todoAdd')?.addEventListener('click',addTodo);
     document.getElementById('todoInput')?.addEventListener('keydown',e=>{if(e.key==='Enter') addTodo();});
@@ -757,7 +757,7 @@ function bindTabEvents(){
       const t=todos.find(x=>x.id===b.dataset.todoToggle); if(!t)return;
       t.done=b.checked; t.completedDate=t.done?todayStr():null; save(); render();
     });
-    document.querySelectorAll('[data-todo-delete]').forEach(b=>b.onclick=()=>{todos=todos.filter(t=>t.id!==b.dataset.todoDelete);save();render();toast('Tâche supprimée');});
+    document.querySelectorAll('[data-todo-delete]').forEach(b=>b.onclick=()=>{todos=todos.filter(t=>t.id!==b.dataset.todoDelete);save('Tâche supprimée');render();});
     document.querySelectorAll('[data-todo-edit]').forEach(b=>b.onclick=()=>{
       const t=todos.find(x=>x.id===b.dataset.todoEdit); if(!t)return;
       const text=prompt('Modifier la tâche',t.text); if(text===null)return;
@@ -772,7 +772,7 @@ function bindTabEvents(){
       const name = nameInput?.value.trim();
       if(!name){ toast('Donne un nom à l\'article'); return; }
       shoppingList.push({id:uid(), name, qty:(qtyInput?.value||'').trim()||null, checked:false, source:null});
-      save(); render(); toast('Article ajouté ✓');
+      save('Article ajouté ✓'); render();
     };
     document.getElementById('shopAdd')?.addEventListener('click', addShopItem);
     ['shopName','shopQty'].forEach(id=>{
@@ -787,7 +787,7 @@ function bindTabEvents(){
     });
     const clearCheckedBtn = document.getElementById('shopClearChecked');
     if(clearCheckedBtn) clearCheckedBtn.onclick = ()=>{
-      shoppingList = shoppingList.filter(x=>!x.checked); save(); render(); toast('Articles cochés supprimés ✓');
+      shoppingList = shoppingList.filter(x=>!x.checked); save('Articles cochés supprimés ✓'); render();
     };
   }
 
@@ -842,12 +842,18 @@ function bindTabEvents(){
       const id = b.dataset.recipeDelete;
       recipes = recipes.filter(r=>r.id!==id);
       if(openRecipeId===id) openRecipeId = null;
-      save(); render(); toast('Recette supprimée');
+      save('Recette supprimée'); render();
     });
     document.querySelectorAll('[data-recipe-addshop]').forEach(b=>b.onclick=()=>{
       const r = recipes.find(x=>x.id===b.dataset.recipeAddshop); if(!r) return;
       const count = addIngredientsToShoppingList(r.ingredients, r.name);
       toast(count ? 'Ingrédients ajoutés à la liste de courses ✓' : 'Aucun ingrédient à ajouter');
+    });
+    // Bucket "Recettes sans livre" (P1-2, audit Phase 2.2) : recipeRow() n'ajoute
+    // ce bouton que là (showMoveButton=true), voir core.js.
+    document.querySelectorAll('[data-recipe-movebook]').forEach(b=>b.onclick=()=>{
+      const r = recipes.find(x=>x.id===b.dataset.recipeMovebook); if(!r) return;
+      openAssignRecipeBookModal(r);
     });
   }
 
@@ -879,7 +885,7 @@ function bindTabEvents(){
       settings.proteinGoal = parseGoal('goalP', 0);
       settings.carbGoal = parseGoal('goalC', 0);
       settings.fatGoal = parseGoal('goalF', 0);
-      save(); toast('Objectifs enregistrés ✓');
+      save('Objectifs enregistrés ✓');
     };
     const addBtn2 = document.getElementById('addCustomFoodBtn2');
     if(addBtn2) addBtn2.onclick = openCustomFoodModal;
@@ -917,22 +923,45 @@ function bindTabEvents(){
           // est ignoré et signalé, le reste de l'import continue normalement.
           const arrayFields = ['customFoods','favorites','weightEntries','workoutPresets','logEntries','todos','shoppingList','recipes','recipeBooks','favSports'];
           const invalidFields = arrayFields.filter(k => data[k]!==undefined && !Array.isArray(data[k]));
+          // Champs objet (settings/profile/foodOverrides) : un simple test de vérité
+          // acceptait n'importe quelle valeur non-falsy (ex. une chaîne), remplaçant
+          // l'objet attendu par une structure incompatible avec le reste du code
+          // (P2-2, audit Phase 2.2). isPlainObject() exclut aussi les tableaux.
+          const objectFields = ['settings','profile','foodOverrides'];
+          invalidFields.push(...objectFields.filter(k => data[k]!==undefined && !isPlainObject(data[k])));
 
-          if(data.settings) settings = data.settings;
+          if(isPlainObject(data.settings)) settings = data.settings;
           if(Array.isArray(data.customFoods)) customFoods = data.customFoods;
-          if(data.foodOverrides) foodOverrides = data.foodOverrides;
+          if(isPlainObject(data.foodOverrides)) foodOverrides = data.foodOverrides;
           if(Array.isArray(data.favorites)) favorites = data.favorites;
           if(Array.isArray(data.weightEntries)) weightEntries = data.weightEntries;
-          if(data.profile) profile = data.profile;
+          if(isPlainObject(data.profile)) profile = data.profile;
           if(Array.isArray(data.workoutPresets)) workoutPresets = data.workoutPresets;
-          if(Array.isArray(data.logEntries)) logEntries = data.logEntries;
+          // logEntries : au-delà du type tableau, chaque élément est assaini (P2-1,
+          // audit Phase 2.2) avant d'entrer dans logEntries — voir
+          // sanitizeImportedLogEntries() dans core.js.
+          let sanitizedLogCount = 0;
+          if(Array.isArray(data.logEntries)){
+            const {entries, sanitizedCount} = sanitizeImportedLogEntries(data.logEntries);
+            logEntries = entries;
+            sanitizedLogCount = sanitizedCount;
+          }
           if(Array.isArray(data.todos)) todos = data.todos;
           if(Array.isArray(data.shoppingList)) shoppingList = data.shoppingList;
           if(Array.isArray(data.recipes)) recipes = data.recipes;
           if(Array.isArray(data.recipeBooks)) recipeBooks = data.recipeBooks;
           if(Array.isArray(data.favSports)) favSports = data.favSports;
+          // Répare immédiatement les recettes sans bookId du tout (cas "aucun livre
+          // n'existe encore") plutôt que d'attendre un futur rechargement — les
+          // recettes avec un bookId invalide mais recipeBooks non vide restent
+          // couvertes en permanence par le bucket "Recettes sans livre" de
+          // viewRecipes() (orphanRecipes(), P1-2, audit Phase 2.2).
+          normalizeRecipeBooks();
           save(); render();
-          toast(invalidFields.length ? `Import partiel : ${invalidFields.join(', ')} invalide(s), ignoré(s)` : 'Import réussi ✓', invalidFields.length ? 'warn' : 'success');
+          const parts = [];
+          if(invalidFields.length) parts.push(`${invalidFields.join(', ')} invalide(s), ignoré(s)`);
+          if(sanitizedLogCount) parts.push(`${sanitizedLogCount} entrée(s) de journal avec une valeur numérique corrigée`);
+          toast(parts.length ? `Import partiel : ${parts.join(' · ')}` : 'Import réussi ✓', parts.length ? 'warn' : 'success');
         }catch(err){ toast('Fichier invalide'); }
       };
       reader.readAsText(file);
@@ -947,7 +976,7 @@ function bindTabEvents(){
         favSports = [{type:'tapis'}, {type:'velo'}];
         insightsSeen = {};
         calibrationSeen = false; portionRevealSeen = false;
-        save(); render(); toast('Données réinitialisées');
+        save('Données réinitialisées'); render();
       }
     };
   }

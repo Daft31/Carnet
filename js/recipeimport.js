@@ -128,6 +128,42 @@ function openSaveRecipeModal(draft) {
   };
 }
 
+// Ranger une recette déjà existante (typiquement orpheline, bucket "Recettes
+// sans livre" de viewRecipes()) dans un livre — même choix livre existant/nouveau
+// livre que openSaveRecipeModal() ci-dessus, mais réassigne assignRecipeToBook()
+// au lieu de recréer une recette (P1-2, audit Phase 2.2) : id/ingrédients/étapes
+// inchangés, seule la référence bookId change.
+function openAssignRecipeBookModal(recipe) {
+  const bookButtons = recipeBooks.map(b => {
+    const count = recipes.filter(r => r.bookId === b.id).length;
+    return `<button class="btn ghost" data-pickassignbook="${b.id}" type="button" style="margin-top:8px;">${escapeHtml(b.name)} <span class="hint" style="margin:0;display:inline;">(${count})</span></button>`;
+  }).join('');
+  openModal(`
+    <h3>Dans quel livre ranger "${escapeHtml(recipe.name)}" ?</h3>
+    <div class="hint">Choisis un livre existant, ou crée-en un nouveau ci-dessous.</div>
+    ${recipeBooks.length ? bookButtons : '<div class="empty">Aucun livre pour l\'instant — crée-en un ci-dessous.</div>'}
+    <label>Nouveau livre</label>
+    <input id="newBookNameAssignModal" type="text" maxlength="60" placeholder="Ex. Desserts, Plats rapides…" autofocus>
+    <button class="btn" id="assignRecipeCreateBookBtn" type="button">Créer ce livre et ranger la recette</button>
+  `);
+  const moveInto = (bookId, bookName) => {
+    if (!assignRecipeToBook(recipe.id, bookId)) { toast('Impossible de ranger cette recette'); return; }
+    closeModal();
+    render();
+    toast(bookName ? `Recette rangée dans "${bookName}" ✓` : 'Recette rangée ✓');
+  };
+  document.querySelectorAll('[data-pickassignbook]').forEach(b => b.onclick = () => {
+    const book = recipeBooks.find(x => x.id === b.dataset.pickassignbook);
+    moveInto(b.dataset.pickassignbook, book && book.name);
+  });
+  document.getElementById('assignRecipeCreateBookBtn').onclick = () => {
+    const bookName = document.getElementById('newBookNameAssignModal').value.trim();
+    if (!bookName) { toast('Donne un nom au livre'); return; }
+    const book = createRecipeBook(bookName);
+    moveInto(book.id, book.name);
+  };
+}
+
 // Suppression d'un livre non-vide : jamais de perte silencieuse de recettes — on
 // force le choix d'un livre de destination avant de vraiment supprimer. Le cas
 // "livre vide" (suppression directe après confirm()) est géré dans ui.js, qui

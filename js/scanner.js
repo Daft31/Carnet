@@ -120,6 +120,6 @@ function openScannedProductModal(product) {
       kcal: product.kcal * f, protein: product.protein * f, carbs: product.carbs * f, fat: product.fat * f,
       time: new Date().toTimeString().slice(0, 5), source: 'scan'
     });
-    save(); closeModal(); render(); toast('Ajouté ✓');
+    save('Ajouté ✓'); closeModal(); render();
   };
 }
