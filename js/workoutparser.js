@@ -165,11 +165,20 @@ function openWorkoutResultModal(data) {
   };
   document.getElementById('wiDuration').addEventListener('input', updateWiEstimate);
   updateWiEstimate();
+  // Garde anti-double-confirmation (même pattern que qtyConfirm/qaConfirm/
+  // scanQtyConfirm/aiConfirmBtn, js/ui.js — BUG-006, audit Phase 2.1) : booléen
+  // local à cette ouverture de modale, jamais une variable globale, vérifié en
+  // premier et posé seulement APRÈS que la validation ait réussi. Nécessaire car
+  // closeModal() laisse ce bouton cliquable pendant ~180ms d'animation de
+  // fermeture — un double-tap physique pouvait créer deux séances identiques.
+  let confirmed = false;
   document.getElementById('wiSaveBtn').onclick = () => {
+    if (confirmed) return;
     const name = document.getElementById('wiName').value.trim() || defaultName;
     const date = document.getElementById('wiDate').value || currentDate;
     const duration = Number(document.getElementById('wiDuration').value) || 0;
     if (duration <= 0) { toast('Indique la durée'); return; }
+    confirmed = true;
     // Poids par défaut 70kg si aucune pesée enregistrée, pour ne jamais bloquer la
     // sauvegarde faute de pesée (contrairement aux séances tapis/vélo/sport/club qui,
     // elles, l'exigent).

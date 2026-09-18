@@ -9,7 +9,13 @@ const EXERCISES = [{"id":"pull_up","English":"Pull-Up","Français":"Traction pro
 /* ===================== ÉTAT / STOCKAGE ===================== */
 const LS = {
   get(k,d){try{const v=localStorage.getItem(k); return v?JSON.parse(v):d;}catch(e){return d;}},
-  set(k,v){localStorage.setItem(k, JSON.stringify(v));}
+  // Retourne false plutôt que de laisser l'exception (quota dépassé, storage
+  // désactivé...) remonter et interrompre le reste de save() en silence — voir
+  // save() ci-dessous pour le traitement de cet échec (BUG-001, audit Phase 2.1).
+  set(k,v){
+    try{ localStorage.setItem(k, JSON.stringify(v)); return true; }
+    catch(e){ console.error('LS.set a échoué pour', k, e); return false; }
+  }
 };
 let settings = LS.get('ct_settings', {calorieGoal:2200, proteinGoal:150, carbGoal:220, fatGoal:70});
 let customFoods = LS.get('ct_customFoods', []);
@@ -61,19 +67,33 @@ function dateLabel(dateStr){
   return d.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
 }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+// localStorage n'offrant aucune notion de transaction, on ne peut pas garantir
+// que les 14 clés soient écrites "toutes ou rien" : chaque LS.set() est donc
+// tenté indépendamment (une écriture qui échoue, ex. quota dépassé, n'empêche
+// pas les suivantes d'être tentées — c'est le comportement le plus cohérent
+// disponible ici, pas une vraie atomicité). Si au moins une échoue, on le
+// signale explicitement à l'utilisateur au lieu de laisser croire que tout a
+// été sauvegardé (BUG-001, audit Phase 2.1).
 function save(){
-  LS.set('ct_settings',settings); LS.set('ct_customFoods',customFoods); LS.set('ct_foodOverrides',foodOverrides);
-  LS.set('ct_favorites',favorites); LS.set('ct_weight',weightEntries); LS.set('ct_profile',profile);
-  LS.set('ct_wpresets',workoutPresets);
-  LS.set('ct_log',logEntries);
-  LS.set('ct_todos',todos);
-  LS.set('ct_shoppingList',shoppingList);
-  LS.set('ct_recipes',recipes);
-  LS.set('ct_recipeBooks',recipeBooks);
-  LS.set('ct_insightsSeen',insightsSeen);
-  LS.set('ct_favSports',favSports);
-  LS.set('ct_calibrationSeen',calibrationSeen);
-  LS.set('ct_portionRevealSeen',portionRevealSeen);
+  const writes = [
+    ['ct_settings',settings], ['ct_customFoods',customFoods], ['ct_foodOverrides',foodOverrides],
+    ['ct_favorites',favorites], ['ct_weight',weightEntries], ['ct_profile',profile],
+    ['ct_wpresets',workoutPresets],
+    ['ct_log',logEntries],
+    ['ct_todos',todos],
+    ['ct_shoppingList',shoppingList],
+    ['ct_recipes',recipes],
+    ['ct_recipeBooks',recipeBooks],
+    ['ct_insightsSeen',insightsSeen],
+    ['ct_favSports',favSports],
+    ['ct_calibrationSeen',calibrationSeen],
+    ['ct_portionRevealSeen',portionRevealSeen],
+  ];
+  const failedKeys = writes.filter(([k,v]) => !LS.set(k,v)).map(([k])=>k);
+  if(failedKeys.length){
+    toast('Sauvegarde incomplète (stockage plein ?) : '+failedKeys.join(', '), 'error');
+  }
+  return failedKeys.length===0;
 }
 function isFavorite(id){ return favorites.includes(id); }
 function toggleFavorite(id){
@@ -89,7 +109,12 @@ const TOAST_ICONS = {
 function toast(msg, kind='info'){
   const t=document.getElementById('toast');
   t.className = 'toast ' + kind;
-  t.innerHTML = (TOAST_ICONS[kind]||TOAST_ICONS.info) + '<span>'+msg+'</span>';
+  // msg peut contenir une valeur dynamique (ex. nom de livre de recettes, liste de
+  // champs d'import invalides) : jamais interpolée brute dans ce sink innerHTML
+  // (BUG-005, audit Phase 2.1). Aucun appelant n'embarque volontairement de
+  // balises HTML dans msg — centraliser l'échappement ici ne casse aucun usage
+  // existant et évite de devoir corriger chaque call-site séparément.
+  t.innerHTML = (TOAST_ICONS[kind]||TOAST_ICONS.info) + '<span>'+escapeHtml(String(msg))+'</span>';
   // restart animation
   requestAnimationFrame(()=>t.classList.add('show'));
   clearTimeout(window.__toastT);
@@ -2102,7 +2127,10 @@ function workoutSummary(e){
   if(Array.isArray(e.blocks) && e.blocks.length){
     const totalExercises = e.blocks.reduce((n,b)=> n + (Array.isArray(b.exercises)?b.exercises.length:0), 0);
     const exNames = e.blocks.flatMap(b=>(b.exercises||[]).map(x=>x.name)).filter(Boolean);
-    const title = e.name || 'Séance (programme IA)';
+    // e.name est un champ texte librement modifiable par l'utilisateur (wiName,
+    // js/workoutparser.js) avant sauvegarde — jamais interpolé sans échappement
+    // dans ce titre affiché à chaque rendu (BUG-003, audit Phase 2.1).
+    const title = escapeHtml(e.name || 'Séance (programme IA)');
     const parts = [
       `${e.blocks.length} block${e.blocks.length>1?'s':''}`,
       `${totalExercises} exercice${totalExercises>1?'s':''}`,
@@ -2133,7 +2161,18 @@ function workoutSummary(e){
     const intLbl = e.params?.enduranceIntensity ? ` · Allure ${({leger:'légère',modere:'modérée',intense:'intense'})[e.params.enduranceIntensity]||e.params.enduranceIntensity}` : '';
     return {title:sportById(e.params?.sport).label+' (club)', sub:`${lvlLbl} · ${modeLbl}${intLbl} · ${e.duration} min · ${e.time}`};
   }
-  const d=e.estimation; const detail=d ? ` · reconnus: ${d.recognized.map(x=>x.name).join(', ')||'aucun'}${d.unrecognized.length?' · non reconnus: '+d.unrecognized.join(', '):''} · kcal/min médiane: ${d.kcalPerMin==null?'valeur manquante':d.kcalPerMin}` : '';
+  // d.unrecognized vient directement des tokens du texte tapé par l'utilisateur
+  // (exerciseDetails(), plus haut dans ce fichier) ; d.recognized.name vient du
+  // catalogue interne EXERCISES (jamais modifiable par l'utilisateur ou l'IA) —
+  // échappés ici par cohérence et défense en profondeur, jamais interpolés bruts
+  // dans ce sink HTML (BUG-004, audit Phase 2.1).
+  const d=e.estimation;
+  let detail='';
+  if(d){
+    const recognizedLabel = d.recognized.map(x=>escapeHtml(x.name)).join(', ')||'aucun';
+    const unrecognizedLabel = d.unrecognized.length ? d.unrecognized.map(escapeHtml).join(', ') : '';
+    detail = ` · reconnus: ${recognizedLabel}${unrecognizedLabel? ' · non reconnus: '+unrecognizedLabel : ''} · kcal/min médiane: ${d.kcalPerMin==null?'valeur manquante':d.kcalPerMin}`;
+  }
   return {title:'Séance', sub:`${escapeHtml(e.text||'')}${e.duration? ' · '+e.duration+' min':''} · ${e.time}${detail}`};
 }
 function normalizeSearch(s){

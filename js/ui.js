@@ -424,6 +424,11 @@ function bindTabEvents(){
   }
 
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    // Confirmation avant suppression (BUG-007, audit Phase 2.1) — même pattern
+    // que la suppression d'un livre de recettes/le reset complet plus bas dans ce
+    // fichier : un mis-tap sur ce petit bouton "✕" ne doit pas effacer une entrée
+    // du journal sans recours.
+    if(!confirm('Supprimer cette entrée ?')) return;
     logEntries = logEntries.filter(e=>e.id!==b.dataset.del); save(); render();
   });
   document.querySelectorAll('[data-quickadd]').forEach(b=>b.onclick=()=>{
@@ -861,15 +866,26 @@ function bindTabEvents(){
 
   if(activeTab==='settings'){
     document.getElementById('saveGoals').onclick=()=>{
-      settings.calorieGoal = parseFloat(document.getElementById('goalKcal').value)||settings.calorieGoal;
-      settings.proteinGoal = parseFloat(document.getElementById('goalP').value)||0;
-      settings.carbGoal = parseFloat(document.getElementById('goalC').value)||0;
-      settings.fatGoal = parseFloat(document.getElementById('goalF').value)||0;
+      // `v>0` plutôt que `v||fallback` (BUG-008, audit Phase 2.1) : préserve exactement le
+      // comportement existant pour une saisie vide/non-numérique/à 0 (repli sur fallback,
+      // inchangé — aucune nouvelle règle métier), mais rejette aussi désormais une valeur
+      // négative, qui passait à travers `||` car "truthy" au sens JS. Le HTML seul
+      // (min="0" sur ces <input>) ne suffit pas : un navigateur peut l'ignorer.
+      const parseGoal = (id, fallback) => {
+        const v = parseFloat(document.getElementById(id).value);
+        return v>0 ? v : fallback;
+      };
+      settings.calorieGoal = parseGoal('goalKcal', settings.calorieGoal);
+      settings.proteinGoal = parseGoal('goalP', 0);
+      settings.carbGoal = parseGoal('goalC', 0);
+      settings.fatGoal = parseGoal('goalF', 0);
       save(); toast('Objectifs enregistrés ✓');
     };
     const addBtn2 = document.getElementById('addCustomFoodBtn2');
     if(addBtn2) addBtn2.onclick = openCustomFoodModal;
     document.querySelectorAll('[data-delfood]').forEach(b=>b.onclick=()=>{
+      // BUG-007, audit Phase 2.1 — voir commentaire sur [data-del] plus haut.
+      if(!confirm('Supprimer cet aliment personnalisé ?')) return;
       customFoods = customFoods.filter(f=>f.id!==b.dataset.delfood); save(); render();
     });
     document.querySelectorAll('[data-editfood]').forEach(b=>b.onclick=()=>{
@@ -878,6 +894,8 @@ function bindTabEvents(){
     const customFoodsToggle = document.querySelector('[data-toggle="customFoods"]');
     if(customFoodsToggle) customFoodsToggle.onclick = ()=>{ openCustomFoods = !openCustomFoods; render(); };
     document.querySelectorAll('[data-delpreset]').forEach(b=>b.onclick=()=>{
+      // BUG-007, audit Phase 2.1 — voir commentaire sur [data-del] plus haut.
+      if(!confirm('Supprimer ce préréglage de séance ?')) return;
       workoutPresets = workoutPresets.filter(p=>p.id!==b.dataset.delpreset); save(); render();
     });
     document.getElementById('exportBtn').onclick = ()=>{
@@ -892,20 +910,29 @@ function bindTabEvents(){
       reader.onload = ()=>{
         try{
           const data = JSON.parse(reader.result);
+          // Champs qui doivent être des tableaux : un fichier corrompu ou édité à la
+          // main où l'un d'eux a un mauvais type ne doit jamais remplacer l'état
+          // actuel par une structure incompatible — ça rendrait l'app inutilisable
+          // au rendu suivant (BUG-002, audit Phase 2.1). Le champ invalide précis
+          // est ignoré et signalé, le reste de l'import continue normalement.
+          const arrayFields = ['customFoods','favorites','weightEntries','workoutPresets','logEntries','todos','shoppingList','recipes','recipeBooks','favSports'];
+          const invalidFields = arrayFields.filter(k => data[k]!==undefined && !Array.isArray(data[k]));
+
           if(data.settings) settings = data.settings;
-          if(data.customFoods) customFoods = data.customFoods;
+          if(Array.isArray(data.customFoods)) customFoods = data.customFoods;
           if(data.foodOverrides) foodOverrides = data.foodOverrides;
-          if(data.favorites) favorites = data.favorites;
-          if(data.weightEntries) weightEntries = data.weightEntries;
+          if(Array.isArray(data.favorites)) favorites = data.favorites;
+          if(Array.isArray(data.weightEntries)) weightEntries = data.weightEntries;
           if(data.profile) profile = data.profile;
-          if(data.workoutPresets) workoutPresets = data.workoutPresets;
-          if(data.logEntries) logEntries = data.logEntries;
-          if(data.todos) todos = data.todos;
-          if(data.shoppingList) shoppingList = data.shoppingList;
-          if(data.recipes) recipes = data.recipes;
-          if(data.recipeBooks) recipeBooks = data.recipeBooks;
-          if(data.favSports) favSports = data.favSports;
-          save(); render(); toast('Import réussi ✓');
+          if(Array.isArray(data.workoutPresets)) workoutPresets = data.workoutPresets;
+          if(Array.isArray(data.logEntries)) logEntries = data.logEntries;
+          if(Array.isArray(data.todos)) todos = data.todos;
+          if(Array.isArray(data.shoppingList)) shoppingList = data.shoppingList;
+          if(Array.isArray(data.recipes)) recipes = data.recipes;
+          if(Array.isArray(data.recipeBooks)) recipeBooks = data.recipeBooks;
+          if(Array.isArray(data.favSports)) favSports = data.favSports;
+          save(); render();
+          toast(invalidFields.length ? `Import partiel : ${invalidFields.join(', ')} invalide(s), ignoré(s)` : 'Import réussi ✓', invalidFields.length ? 'warn' : 'success');
         }catch(err){ toast('Fichier invalide'); }
       };
       reader.readAsText(file);

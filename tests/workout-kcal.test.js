@@ -194,5 +194,83 @@ test('Cas 8 — intégration dans dayTotals() : kcalOut reflète la séance, jam
   assert.ok(deficit.burned >= estimation.kcal, 'les kcal brûlées restent exposées séparément, à titre informatif');
 });
 
+// ----- BUG-006 (audit Phase 2.1) : garde anti-double-confirmation sur wiSaveBtn -----
+// closeModal() (js/ui.js, non chargé ici) laisse le bouton cliquable pendant ~180ms
+// d'animation de fermeture — un double-tap physique pouvait pousser deux séances
+// identiques dans logEntries avant que le bouton ne disparaisse. On simule ce
+// double-tap en appelant `.onclick()` deux fois de suite sur le vrai
+// openWorkoutResultModal(), sans jamais réinitialiser `confirmed` entre les deux
+// appels (exactement ce qui se passe avec deux taps rapprochés sur le même bouton).
+function loadWorkoutModalSandbox() {
+  const store = new Map();
+  const localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
+  const elements = {};
+  function fakeEl(id, value) {
+    return elements[id] = { id, value, onclick: null, textContent: '', className: '', innerHTML: '', addEventListener(){}, classList: { add(){}, remove(){}, toggle(){} } };
+  }
+  const sandbox = {
+    localStorage, console, window: {}, navigator: { userAgent: 'node-test' },
+    currentDate: '2026-09-18',
+    openModal: () => {},
+    closeModal: () => {},
+    document: { getElementById: (id) => elements[id] || fakeEl(id, '') },
+    requestAnimationFrame: (fn) => fn(),
+    setTimeout, clearTimeout,
+  };
+  vm.createContext(sandbox);
+  vm.runInContext('var VERCEL_API_BASE = ""; function escapeHtml(s){ return String(s); }', sandbox);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'core.js'), 'utf8'), sandbox, { filename: 'js/core.js' });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'workoutparser.js'), 'utf8'), sandbox, { filename: 'js/workoutparser.js' });
+  // render() (core.js) appelle bindTabEvents(), défini dans js/ui.js — non chargé ici
+  // (hors périmètre de ce test, qui porte sur la garde anti-double-tap, pas le rendu).
+  // On neutralise render() après coup : une réaffectation d'une fonction déclarée par
+  // `function` au global du contexte fonctionne normalement.
+  vm.runInContext('render = function(){};', sandbox);
+  vm.runInContext('this.__bindings = { logEntries, currentDate };', sandbox);
+  Object.assign(sandbox, sandbox.__bindings);
+  fakeEl('wiName', 'Séance test');
+  fakeEl('wiDate', '2026-09-18');
+  fakeEl('wiDuration', '20');
+  fakeEl('wiEstimateNum', '');
+  fakeEl('wiSaveBtn', '');
+  fakeEl('wiRedoBtn', '');
+  return { sandbox, elements };
+}
+
+test('BUG-006 — double-tap sur "Enregistrer la séance" (programme IA) : une seule entrée créée', () => {
+  const { sandbox, elements } = loadWorkoutModalSandbox();
+  const data = {
+    blocks: [{ name: 'Bloc 1', type: 'emom', durationMin: 20, exercises: [{ name: 'Squats', reps: 10 }] }],
+    estimatedDurationMin: 20,
+    warnings: [],
+  };
+  vm.runInContext(`openWorkoutResultModal(${JSON.stringify(data)})`, sandbox);
+  assert.strictEqual(typeof elements.wiSaveBtn.onclick, 'function', 'openWorkoutResultModal doit avoir lié wiSaveBtn.onclick');
+  // Double-tap : deux appels rapprochés, sans que closeModal() n'ait eu le temps de
+  // retirer le bouton du DOM (simulateur du vrai cas signalé par l'audit).
+  elements.wiSaveBtn.onclick();
+  elements.wiSaveBtn.onclick();
+  vm.runInContext('this.__le = logEntries;', sandbox);
+  assert.strictEqual(sandbox.__le.length, 1, 'un double-tap ne doit créer qu\'une seule séance, pas deux');
+});
+
+test('BUG-006 — régression : un clic unique fonctionne normalement (comportement inchangé)', () => {
+  const { sandbox, elements } = loadWorkoutModalSandbox();
+  const data = {
+    blocks: [{ name: 'Bloc 1', type: 'circuit', exercises: [{ name: 'Bird dog', reps: 7 }] }],
+    estimatedDurationMin: 10,
+    warnings: [],
+  };
+  vm.runInContext(`openWorkoutResultModal(${JSON.stringify(data)})`, sandbox);
+  elements.wiSaveBtn.onclick();
+  vm.runInContext('this.__le = logEntries;', sandbox);
+  assert.strictEqual(sandbox.__le.length, 1);
+  assert.strictEqual(sandbox.__le[0].wtype, 'ia');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
