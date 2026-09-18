@@ -135,6 +135,22 @@ function workoutBlockHtml(block) {
   </div>`;
 }
 
+// AI-ROB-2 (audit Phase 2.3.3) : seuil de vraisemblance UX sur la durée totale d'une
+// séance Workout AI — PAS un plafond métier, jamais un rejet dur, jamais une modification
+// silencieuse de la valeur saisie. Même principe que MEAL_AI_REASONABLE_MAX
+// (js/mealparser.js, AI-P2-3) : au-delà du seuil, un premier clic sur "Enregistrer"
+// affiche un avertissement et attend un second clic explicite ("Confirmer quand même")
+// avant de persister quoi que ce soit — la durée effectivement enregistrée reste
+// exactement celle confirmée par l'utilisateur.
+// 300 minutes (5h) : borne haute de la fourchette 4-5h retenue par l'audit. Une séance
+// réelle chez un utilisateur Kalo (musculation/fitness/crossfit, saisie via "Coller un
+// programme (IA)") dépasse très rarement 2h, y compris pour un programme dense multi-
+// blocks ; 5h couvre largement même une session d'endurance longue ou un programme mal
+// segmenté par l'IA (plusieurs séances collées par erreur en une seule), sans jamais
+// gêner un usage normal — seul un cas manifestement aberrant (ex. faute de frappe,
+// valeur IA délirante) déclenche l'avertissement.
+const WORKOUT_DURATION_REASONABLE_MAX_MIN = 300;
+
 // Le résultat reste éditable avant sauvegarde (nom de séance + date), comme
 // demandé : l'utilisateur relit/ajuste avant de confirmer, l'IA ne pousse
 // jamais directement dans le suivi.
@@ -159,6 +175,7 @@ function openWorkoutResultModal(data) {
     <div class="hint" style="margin-top:12px;">⚠️ Durée estimée automatiquement à partir des séries/reps/tempo/repos — ajuste-la si besoin, elle sert directement au calcul des calories ci-dessous.</div>
     <label>Durée totale (min)</label>
     <input id="wiDuration" type="number" min="1" value="${Number(data.estimatedDurationMin) || 0}">
+    <div class="hint" id="wiExtremeDurationWarning" style="display:none;">⚠️ Cette durée semble très élevée. Vérifie-la avant d'enregistrer.</div>
     <button class="btn rust" id="wiSaveBtn" type="button">Enregistrer la séance</button>
     <button class="btn ghost" id="wiRedoBtn" type="button">Recommencer</button>
     <div class="wk-estimate" id="wiEstimate">
@@ -174,13 +191,28 @@ function openWorkoutResultModal(data) {
   // deux formules différentes.
   const weight = getCurrentWeight() || 70;
   const synthText = blocksToText(blocks);
+  const durationInput = document.getElementById('wiDuration');
+  const extremeWarning = document.getElementById('wiExtremeDurationWarning');
+  const saveBtn = document.getElementById('wiSaveBtn');
+  const SAVE_BTN_LABEL = saveBtn.textContent;
+  // AI-ROB-2 : même mécanisme que pendingExtremeConfirm dans js/mealparser.js
+  // (openAIResultModal, AI-P2-3) — retombe à false dès que la durée change, pour qu'un
+  // "quand même" en attente ne s'applique jamais à une valeur différente de celle
+  // avertie. resetExtremeDurationConfirm() est appelé à chaque frappe (même écouteur
+  // que le recalcul des calories ci-dessous), pas seulement au clic.
+  let pendingExtremeDurationConfirm = false;
+  const resetExtremeDurationConfirm = () => {
+    pendingExtremeDurationConfirm = false;
+    extremeWarning.style.display = 'none';
+    saveBtn.textContent = SAVE_BTN_LABEL;
+  };
   const updateWiEstimate = () => {
-    const duration = Number(document.getElementById('wiDuration').value) || 0;
+    const duration = Number(durationInput.value) || 0;
     const num = document.getElementById('wiEstimateNum');
     const kcal = duration > 0 ? estimateManualSession(synthText, duration, weight).kcal : 0;
     num.textContent = kcal > 0 ? Math.round(kcal) + ' kcal' : '—';
   };
-  document.getElementById('wiDuration').addEventListener('input', updateWiEstimate);
+  durationInput.addEventListener('input', () => { updateWiEstimate(); resetExtremeDurationConfirm(); });
   updateWiEstimate();
   // Garde anti-double-confirmation (même pattern que qtyConfirm/qaConfirm/
   // scanQtyConfirm/aiConfirmBtn, js/ui.js — BUG-006, audit Phase 2.1) : booléen
@@ -193,8 +225,21 @@ function openWorkoutResultModal(data) {
     if (confirmed) return;
     const name = document.getElementById('wiName').value.trim() || defaultName;
     const date = document.getElementById('wiDate').value || currentDate;
-    const duration = Number(document.getElementById('wiDuration').value) || 0;
-    if (duration <= 0) { toast('Indique la durée'); return; }
+    // Validations de base (numérique/finie/positive) INCHANGÉES et toujours prioritaires
+    // sur le seuil de vraisemblance ci-dessous — Number.isFinite exclut explicitement
+    // Infinity (qui passait silencieusement la seule vérification `duration<=0`
+    // précédente, AI-ROB-2 audit Phase 2.3.3) en plus de NaN, déjà couvert par `||0`.
+    const duration = Number(durationInput.value);
+    if (!Number.isFinite(duration) || duration <= 0) { toast('Indique la durée'); return; }
+    // AI-ROB-2 : une durée manifestement aberrante n'est jamais rejetée ni modifiée —
+    // seulement signalée, avec un second clic explicite obligatoire avant d'enregistrer.
+    // Le premier clic sur une durée extrême s'arrête ici (aucun save, aucun toast).
+    if (duration > WORKOUT_DURATION_REASONABLE_MAX_MIN && !pendingExtremeDurationConfirm) {
+      pendingExtremeDurationConfirm = true;
+      extremeWarning.style.display = 'block';
+      saveBtn.textContent = 'Confirmer quand même';
+      return;
+    }
     confirmed = true;
     // Poids par défaut 70kg si aucune pesée enregistrée, pour ne jamais bloquer la
     // sauvegarde faute de pesée (contrairement aux séances tapis/vélo/sport/club qui,
