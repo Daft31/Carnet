@@ -33,6 +33,13 @@ function openRecipeImportModal() {
     <div id="riStatus" class="hint" style="display:none;"></div>
     <button class="btn" id="riSubmitBtn" type="button">Extraire</button>
   `);
+  // AI-P2-1 (audit Phase 2.3.1) : voir le commentaire équivalent dans js/mealparser.js
+  // (openAIDescribeModal) — même mécanisme local à ce flux, closeModal() (js/ui.js) reste
+  // inchangé.
+  let controller = null;
+  const cancelInFlightRequest = () => { if (controller) { controller.abort(); controller = null; } };
+  document.getElementById('modalClose').addEventListener('click', cancelInFlightRequest);
+  document.getElementById('modalBg').addEventListener('click', e => { if (e.target.id === 'modalBg') cancelInFlightRequest(); });
   const submit = async () => {
     const url = document.getElementById('riUrl').value.trim();
     if (!url) { toast("Colle un lien TikTok d'abord"); return; }
@@ -41,16 +48,21 @@ function openRecipeImportModal() {
     statusEl.style.display = 'block';
     statusEl.textContent = '🎬 Récupération de la vidéo puis analyse…';
     btn.disabled = true;
+    controller = new AbortController();
     try {
       const res = await fetch(recipeApiUrl(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tiktokUrl: url })
+        body: JSON.stringify({ tiktokUrl: url }),
+        signal: controller.signal,
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.details || json.error || 'Erreur inconnue');
       openRecipeResultModal(json.data, url);
     } catch (e) {
+      // Annulation volontaire (voir js/mealparser.js) : jamais de message d'erreur, jamais
+      // de manipulation de statusEl/btn (la modale peut déjà être fermée).
+      if (e.name === 'AbortError') return;
       statusEl.textContent = '❌ ' + (e.message || "Erreur lors de l'extraction");
       btn.disabled = false;
     }

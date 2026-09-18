@@ -31,10 +31,12 @@ function loadKaloSandbox() {
     location: { hostname: 'localhost' },
     openModal: (html) => { lastModalHtml = html; },
     // openAIDescribeModal() lit le HTML qu'elle vient de passer à openModal() pour construire
-    // la modale, puis lie #aiSubmitBtn.onclick — un stub d'élément générique suffit, on
-    // n'exerce pas le clic "Analyser" lui-même (appel réseau), seulement la construction de
-    // la modale qui est l'étape qui plantait avant l'ouverture (voir root cause ci-dessus).
-    document: { getElementById: () => ({ onclick: null, value: '', style: {} }) },
+    // la modale, puis lie #aiSubmitBtn.onclick et (AI-P2-1, audit Phase 2.3.1) les listeners
+    // d'annulation sur #modalClose/#modalBg — un stub d'élément générique avec addEventListener
+    // no-op suffit, on n'exerce pas le clic "Analyser" lui-même (appel réseau), seulement la
+    // construction de la modale qui est l'étape qui plantait avant l'ouverture (voir root cause
+    // ci-dessus).
+    document: { getElementById: () => ({ onclick: null, value: '', style: {}, addEventListener: () => {} }) },
   };
   vm.createContext(sandbox);
   const coreSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'core.js'), 'utf8');

@@ -29,6 +29,13 @@ function openWorkoutImportModal() {
     <div id="wiStatus" class="hint" style="display:none;"></div>
     <button class="btn" id="wiSubmitBtn" type="button">Analyser avec l'IA</button>
   `);
+  // AI-P2-1 (audit Phase 2.3.1) : voir le commentaire équivalent dans js/mealparser.js
+  // (openAIDescribeModal) — même mécanisme local à ce flux, closeModal() (js/ui.js) reste
+  // inchangé.
+  let controller = null;
+  const cancelInFlightRequest = () => { if (controller) { controller.abort(); controller = null; } };
+  document.getElementById('modalClose').addEventListener('click', cancelInFlightRequest);
+  document.getElementById('modalBg').addEventListener('click', e => { if (e.target.id === 'modalBg') cancelInFlightRequest(); });
   document.getElementById('wiSubmitBtn').onclick = async () => {
     const text = document.getElementById('wiText').value.trim();
     if (!text) { toast("Colle un programme d'abord"); return; }
@@ -37,16 +44,21 @@ function openWorkoutImportModal() {
     statusEl.style.display = 'block';
     statusEl.textContent = '🤖 Analyse du programme…';
     btn.disabled = true;
+    controller = new AbortController();
     try {
       const res = await fetch(workoutApiUrl(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ programText: text })
+        body: JSON.stringify({ programText: text }),
+        signal: controller.signal,
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.details || json.error || 'Erreur inconnue');
       openWorkoutResultModal(json.data);
     } catch (e) {
+      // Annulation volontaire (voir js/mealparser.js) : jamais de message d'erreur, jamais
+      // de manipulation de statusEl/btn (la modale peut déjà être fermée).
+      if (e.name === 'AbortError') return;
       statusEl.textContent = '❌ ' + (e.message || "Erreur lors de l'analyse");
       btn.disabled = false;
     }

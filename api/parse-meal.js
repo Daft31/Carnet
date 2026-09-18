@@ -8,11 +8,40 @@ const MAMMOUTH_API_URL = 'https://api.mammouth.ai/v1/chat/completions';
 // attendant. Revenir à gpt-5.4-mini une fois l'incident résolu si souhaité.
 const MAMMOUTH_MODEL = 'claude-haiku-4-5';
 
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+// AI-P2-2 (audit Phase 2.3.1) : liste blanche d'origines plutôt qu'un `Access-Control-
+// Allow-Origin: *` inconditionnel. Domaines réels de prod (voir CLAUDE.md/README.md) :
+// GitHub Pages (`daft31.github.io`) et tout sous-domaine Vercel `*.vercel.app` (preview
+// deployments compris, pas seulement `carnet-self.vercel.app`). `*` reste nécessaire en
+// principe (app servie depuis un domaine différent de celui des fonctions), mais rien
+// n'imposait de le laisser illimité : cette liste couvre exactement les domaines déjà
+// documentés comme légitimes, sans en deviner de nouveaux.
+//
+// Limite assumée, à ne jamais présenter comme plus qu'elle n'est : l'en-tête CORS
+// n'est vérifié et appliqué QUE par les navigateurs. Un script/curl/serveur qui appelle
+// directement cette fonction Vercel n'envoie pas forcément d'en-tête Origin, et rien ici
+// ne peut l'en empêcher — ce n'est PAS un rate limiting serveur, seulement une protection
+// contre un site tiers qui ferait exécuter cet appel depuis le navigateur d'un visiteur.
+const ALLOWED_ORIGINS = [/^https:\/\/daft31\.github\.io$/, /^https:\/\/[a-z0-9-]+\.vercel\.app$/];
+
+function isAllowedOrigin(origin) {
+  // Pas d'en-tête Origin du tout = requête non-navigateur (curl, serveur à serveur) ou
+  // navigation same-origin sans Origin (GET simple) : on ne peut structurellement pas la
+  // filtrer ici (voir commentaire ci-dessus) — elle n'est donc pas bloquée par ce contrôle.
+  if (!origin) return true;
+  return ALLOWED_ORIGINS.some(re => re.test(origin));
+}
+
+function setCors(res, origin) {
+  if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
+
+// AI-P2-2 : limite de longueur du texte utilisateur envoyé au prompt — réduit le coût
+// (tokens) et la surface d'abus d'un appel direct au endpoint avec un payload démesuré,
+// sans jamais affecter un repas décrit normalement (une description de repas réelle, même
+// détaillée, tient très largement sous ce seuil).
+const MAX_MEAL_DESCRIPTION_LENGTH = 2000;
 
 // Message système : cadre le persona, le format de sortie strict et la
 // gestion des quantités imprécises. Les exemples few-shot (voir plus bas)
@@ -369,7 +398,14 @@ function sumMatched(matched) {
 }
 
 export default async function handler(req, res) {
-  setCors(res);
+  const origin = req.headers && req.headers.origin;
+  // AI-P2-2 : requête refusée AVANT tout traitement (donc avant tout appel Mammouth) si
+  // une origine de navigateur non autorisée est explicitement présente — voir la limite
+  // assumée dans le commentaire d'isAllowedOrigin ci-dessus.
+  if (!isAllowedOrigin(origin)) {
+    return res.status(403).json({ error: 'Origine non autorisée' });
+  }
+  setCors(res, origin);
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
@@ -384,6 +420,10 @@ export default async function handler(req, res) {
 
     if (!mealDescription) {
       return res.status(400).json({ error: 'Meal description is required' });
+    }
+
+    if (typeof mealDescription !== 'string' || mealDescription.length > MAX_MEAL_DESCRIPTION_LENGTH) {
+      return res.status(400).json({ error: `Description trop longue (max ${MAX_MEAL_DESCRIPTION_LENGTH} caractères)` });
     }
 
     // Étape 1 : matching contre le catalogue fast-food (FASTFOOD_ITEMS, portion fixe) et les

@@ -20,11 +20,26 @@ const MAMMOUTH_API_URL = 'https://api.mammouth.ai/v1/chat/completions';
 // attendant. Revenir à gpt-5.4-mini une fois l'incident résolu si souhaité.
 const MAMMOUTH_MODEL = 'claude-haiku-4-5';
 
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+// AI-P2-2 (audit Phase 2.3.1) : voir le commentaire équivalent (plus détaillé) dans
+// api/parse-meal.js — même liste blanche, même limite assumée (CORS = navigateurs
+// uniquement, pas un rate limiting serveur contre un appel direct).
+const ALLOWED_ORIGINS = [/^https:\/\/daft31\.github\.io$/, /^https:\/\/[a-z0-9-]+\.vercel\.app$/];
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  return ALLOWED_ORIGINS.some(re => re.test(origin));
+}
+
+function setCors(res, origin) {
+  if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
+
+// AI-P2-2 : limite de longueur du texte de programme soumis — un programme collé réel
+// (même long, plusieurs blocks) tient très largement sous ce seuil ; réduit la surface
+// d'abus d'un appel direct avec un payload démesuré.
+const MAX_PROGRAM_TEXT_LENGTH = 6000;
 
 // Message système : cadre le persona, le domaine (programmes de musculation/
 // fitness/crossfit, français ET anglais), les formats variés rencontrés en
@@ -154,7 +169,11 @@ function hasAtLeastOneExercise(data) {
 }
 
 export default async function handler(req, res) {
-  setCors(res);
+  const origin = req.headers && req.headers.origin;
+  if (!isAllowedOrigin(origin)) {
+    return res.status(403).json({ error: 'Origine non autorisée' });
+  }
+  setCors(res, origin);
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
@@ -169,6 +188,9 @@ export default async function handler(req, res) {
 
     if (!programText || typeof programText !== 'string' || !programText.trim()) {
       return res.status(400).json({ error: 'Texte du programme manquant' });
+    }
+    if (programText.length > MAX_PROGRAM_TEXT_LENGTH) {
+      return res.status(400).json({ error: `Programme trop long (max ${MAX_PROGRAM_TEXT_LENGTH} caractères)` });
     }
 
     if (!process.env.CARNET_API_KEY) {
