@@ -13,7 +13,10 @@
 <meta name="apple-mobile-web-app-title" content="Kalo">
 <link rel="stylesheet" href="css/style.css?v=b90593d">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+<!-- Quagga2 n'est plus chargé ici (audit Phase 2.5, correctif LOAD-1) : il bloquait
+     le parsing initial sur CHAQUE page alors qu'il ne sert qu'au scanner de
+     code-barres, ouvert occasionnellement. Chargé à la demande par
+     loadQuaggaScript() (js/scanner.js), à la première ouverture réelle du scanner. -->
 </head>
 <body>
 <div id="app">
@@ -39,9 +42,9 @@
 <div id="modal-root"></div>
 
 <!-- SCRIPTS -->
-<script src="js/core.js?v=8303404"></script>
+<script src="js/core.js?v=747e03b"></script>
 <script src="js/ui.js?v=543fc92"></script>
-<script src="js/scanner.js?v=5a24cd1"></script>
+<script src="js/scanner.js?v=8f88d5f"></script>
 <script src="js/mealparser.js?v=be8e5b0"></script>
 <script src="js/recipeimport.js?v=76484c3"></script>
 <script src="js/workoutparser.js?v=7850ca1"></script>

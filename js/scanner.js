@@ -26,16 +26,54 @@ function stopQuagga() {
   try { if (window.Quagga) Quagga.stop(); } catch (e) { /* noop */ }
 }
 
+// Chargement paresseux de Quagga2 (audit Phase 2.5, correctif LOAD-1) : la librairie
+// pesait sur CHAQUE chargement de page (bloquante dans <head>, index.html) alors
+// qu'elle ne sert qu'au scanner de code-barres, utilisé occasionnellement. Chargée
+// ici uniquement à la première ouverture réelle du scanner, puis mise en cache (la
+// promesse elle-même, pas juste `window.Quagga`) pour que les ouvertures suivantes
+// ne retéléchargent jamais le script. `quaggaLoadPromise` est réinitialisée à `null`
+// en cas d'échec réseau, pour qu'une réouverture ultérieure retente un chargement
+// frais plutôt que de rester bloquée sur un rejet définitif.
+//
+// JsBarcode (index.html) n'est pas concerné par ce correctif : la review l'a
+// identifié comme inutilisé dans le code JS, mais sa suppression est une décision
+// séparée, non traitée ici (voir rapport de correction Phase 2.5).
+let quaggaLoadPromise = null;
+function loadQuaggaScript() {
+  if (window.Quagga) return Promise.resolve();
+  if (quaggaLoadPromise) return quaggaLoadPromise;
+  quaggaLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js';
+    script.onload = () => resolve();
+    script.onerror = () => { quaggaLoadPromise = null; reject(new Error('Échec du chargement de Quagga2')); };
+    document.head.appendChild(script);
+  });
+  return quaggaLoadPromise;
+}
+
 function openScannerModal() {
   openModal(`
     <h3>Scanner un code-barres</h3>
     <div class="hint">Vise le code-barres du produit avec la caméra.</div>
     <div class="scanner-video-wrap" id="scannerVideoWrap"><div class="scanner-frame"></div></div>
-    <div id="scannerStatus" class="hint" style="margin-top:10px;">Initialisation de la caméra…</div>
+    <div id="scannerStatus" class="hint" style="margin-top:10px;">Chargement du scanner…</div>
     <button class="btn ghost" id="scannerCancelBtn" type="button">Annuler</button>
   `);
+  const statusEl = document.getElementById('scannerStatus');
   document.getElementById('scannerCancelBtn').onclick = () => { stopQuagga(); closeModal(); };
-  startQuagga(document.getElementById('scannerStatus'));
+  // Garde (même raison que l'abandon des requêtes IA en vol, js/mealparser.js) :
+  // si la modale a été fermée (ou remplacée par une réouverture du scanner) pendant
+  // le chargement du script, `statusEl` n'est alors plus dans le DOM — ne jamais
+  // agir sur une modale déjà quittée par l'utilisateur.
+  loadQuaggaScript().then(() => {
+    if (!document.body.contains(statusEl)) return;
+    statusEl.textContent = 'Initialisation de la caméra…';
+    startQuagga(statusEl);
+  }).catch(() => {
+    if (!document.body.contains(statusEl)) return;
+    statusEl.textContent = 'Scanner indisponible (échec du chargement de la librairie).';
+  });
 }
 
 function startQuagga(statusEl) {

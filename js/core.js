@@ -272,6 +272,27 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 // afficher, un seul toast est émis par opération, donc jamais clobbering
 // possible. Omettre `successMsg` conserve le comportement historique (aucun
 // toast si tout s'est bien passé) pour les sauvegardes internes silencieuses.
+//
+// `lastSavedJSON` (Phase 2.5, correctif LS-1) : save() réécrivait les 16 clés à
+// CHAQUE appel, même quand une seule avait changé (ex. cocher une tâche
+// réécrivait aussi `ct_log`, `ct_recipes`... avec un contenu strictement
+// identique). Chaque clé est TOUJOURS resérialisée et comparée à la dernière
+// version réellement écrite avec succès — jamais "supposée" inchangée sans
+// preuve (une clé dont la sérialisation JSON diffère, même d'un octet, est
+// toujours réécrite). Seule l'écriture `localStorage.setItem()` elle-même
+// (via `LS.set()`, inchangée) est évitée quand elle serait un pur no-op.
+// `lastSavedJSON` n'est mise à jour QUE pour les clés réellement écrites avec
+// succès : une clé en échec (quota dépassé...) reste "non confirmée" et sera
+// retentée au prochain appel, quel que soit son contenu — la détection
+// d'échec, `failedKeys` et le toast d'erreur (BUG-001) sont inchangés à
+// l'identique. Limite assumée : si le contenu de `localStorage` est modifié en
+// dehors de cette page (autre onglet, DevTools) pendant que l'app reste
+// ouverte, une clé dont la valeur en mémoire n'a ensuite pas changé ne sera
+// pas réécrite tant qu'aucune modification réelle ne la concerne — cas jugé
+// marginal pour un usage mono-onglet perso (voir CLAUDE.md), et le
+// comportement précédent ne s'en protégeait déjà pas mieux entre deux
+// modifications identiques.
+const lastSavedJSON = new Map();
 function save(successMsg, successKind){
   const writes = [
     ['ct_settings',settings], ['ct_customFoods',customFoods], ['ct_foodOverrides',foodOverrides],
@@ -287,7 +308,13 @@ function save(successMsg, successKind){
     ['ct_calibrationSeen',calibrationSeen],
     ['ct_portionRevealSeen',portionRevealSeen],
   ];
-  const failedKeys = writes.filter(([k,v]) => !LS.set(k,v)).map(([k])=>k);
+  const failedKeys = [];
+  for(const [k,v] of writes){
+    const json = JSON.stringify(v);
+    if(lastSavedJSON.get(k) === json) continue; // déjà persistée à l'identique — écriture réellement inutile
+    if(LS.set(k,v)) lastSavedJSON.set(k, json);
+    else failedKeys.push(k);
+  }
   if(failedKeys.length){
     toast('Sauvegarde incomplète (stockage plein ?) : '+failedKeys.join(', '), 'error');
   } else if(successMsg){
@@ -347,17 +374,50 @@ function weekStart(dateStr){
   return fmtDate(d);
 }
 function weekEnd(startStr){ return shiftDate(startStr, 6); }
-function weeklyDeficit(startStr){
+// Index jour->{kcalIn,burned,hasMeal} construit en UNE seule passe sur logEntries
+// (audit Phase 2.5, correctif CPU-1) : weeklyDeficit()/weeklyDeficits() refaisaient
+// chacun plusieurs `logEntries.filter(...)` complets (repas du jour x2 par jour via
+// dayTotals(), séances de la semaine, jours de la semaine), répété pour chaque
+// semaine affichée — coût mesuré ~O(nb_semaines × taille historique), perceptible
+// (~250ms) dès quelques milliers de repas. `dayTotals()`/`entriesFor()` restent
+// inchangées (utilisées ailleurs dans l'app avec des besoins différents, ex. détail
+// jour par jour d'une semaine dépliée) : cet index est un détail interne local à
+// weeklyDeficit()/weeklyDeficits(), jamais persisté, jamais exposé.
+function buildDailyDeficitIndex(){
+  const map = new Map();
+  for(const e of logEntries){
+    if(e.type!=='meal' && e.type!=='workout') continue;
+    let d = map.get(e.date);
+    if(!d){ d = {kcalIn:0, burned:0, hasMeal:false}; map.set(e.date, d); }
+    if(e.type==='meal'){ d.kcalIn += e.kcal; d.hasMeal = true; }
+    else { d.burned += e.kcalBurned; }
+  }
+  return map;
+}
+// `dailyIndex` optionnel : fourni par weeklyDeficits() (index partagé, construit une
+// seule fois pour toutes les semaines) pour éviter de rescanner logEntries à chaque
+// semaine. Omis, la fonction reste appelable seule (inchangé pour les appelants
+// existants, ex. tests/workout-kcal.test.js) : elle construit alors son propre index
+// local — toujours au moins 3x moins de scans qu'avant (un seul passage au lieu de
+// plusieurs filters + dayTotals() appelée deux fois par jour), et un résultat
+// rigoureusement identique dans tous les cas.
+function weeklyDeficit(startStr, dailyIndex){
+  const idx = dailyIndex || buildDailyDeficitIndex();
   const endStr = weekEnd(startStr);
-  const days = [...new Set(logEntries.filter(e=>e.type==='meal' && e.date>=startStr && e.date<=endStr).map(e=>e.date))].sort();
-  const dayValues = days.map(date=>({date, calories:dayTotals(date).kcalIn, deficit:settings.calorieGoal-dayTotals(date).kcalIn}));
+  const days = [...idx.keys()].filter(d=>idx.get(d).hasMeal && d>=startStr && d<=endStr).sort();
+  const dayValues = days.map(date=>{
+    const calories = idx.get(date).kcalIn;
+    return {date, calories, deficit:settings.calorieGoal-calories};
+  });
   // Brûlées affichées à titre informatif uniquement : ne participe pas à `total`.
-  const burned = logEntries.filter(e=>e.type==='workout' && e.date>=startStr && e.date<=endStr).reduce((sum,e)=>sum+e.kcalBurned,0);
+  let burned = 0;
+  for(const d of idx.keys()){ if(d>=startStr && d<=endStr) burned += idx.get(d).burned; }
   return {start:startStr, end:endStr, days:dayValues, total:dayValues.reduce((sum,d)=>sum+d.deficit,0), burned};
 }
 function weeklyDeficits(){
-  const starts = [...new Set(logEntries.filter(e=>e.type==='meal').map(e=>weekStart(e.date)))].sort((a,b)=>b.localeCompare(a));
-  return starts.map(weeklyDeficit);
+  const idx = buildDailyDeficitIndex();
+  const starts = [...new Set([...idx.entries()].filter(([,d])=>d.hasMeal).map(([date])=>weekStart(date)))].sort((a,b)=>b.localeCompare(a));
+  return starts.map(start=>weeklyDeficit(start, idx));
 }
 function weeklyRangeLabel(startStr,endStr){
   const fmt = d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
