@@ -934,23 +934,54 @@ function bindTabEvents(){
           if(Array.isArray(data.customFoods)) customFoods = data.customFoods;
           if(isPlainObject(data.foodOverrides)) foodOverrides = data.foodOverrides;
           if(Array.isArray(data.favorites)) favorites = data.favorites;
-          if(Array.isArray(data.weightEntries)) weightEntries = data.weightEntries;
+          // weightEntries : au-delà du type tableau, chaque élément est validé (date
+          // exploitable + poids fini strictement positif) avant d'entrer dans
+          // weightEntries — voir sanitizeImportedWeightEntries() dans core.js
+          // (P2.4-01, audit Phase 2.4). Entrées invalides rejetées, jamais persistées.
+          let rejectedWeightCount = 0;
+          if(Array.isArray(data.weightEntries)){
+            const {entries, rejectedCount} = sanitizeImportedWeightEntries(data.weightEntries);
+            weightEntries = entries;
+            rejectedWeightCount = rejectedCount;
+          }
           if(isPlainObject(data.profile)) profile = data.profile;
-          if(Array.isArray(data.workoutPresets)) workoutPresets = data.workoutPresets;
+          // workoutPresets : élément sans `params` objet exploitable rejeté (P2.4-03,
+          // audit Phase 2.4) — voir sanitizeImportedWorkoutPresets() dans core.js.
+          let rejectedPresetCount = 0;
+          if(Array.isArray(data.workoutPresets)){
+            const {entries, rejectedCount} = sanitizeImportedWorkoutPresets(data.workoutPresets);
+            workoutPresets = entries;
+            rejectedPresetCount = rejectedCount;
+          }
           // logEntries : au-delà du type tableau, chaque élément est assaini (P2-1,
-          // audit Phase 2.2) avant d'entrer dans logEntries — voir
-          // sanitizeImportedLogEntries() dans core.js.
-          let sanitizedLogCount = 0;
+          // audit Phase 2.2 ; date/type validés depuis P2.4-02, audit Phase 2.4) avant
+          // d'entrer dans logEntries — voir sanitizeImportedLogEntries() dans core.js.
+          let sanitizedLogCount = 0, rejectedLogCount = 0;
           if(Array.isArray(data.logEntries)){
-            const {entries, sanitizedCount} = sanitizeImportedLogEntries(data.logEntries);
+            const {entries, sanitizedCount, rejectedCount} = sanitizeImportedLogEntries(data.logEntries);
             logEntries = entries;
             sanitizedLogCount = sanitizedCount;
+            rejectedLogCount = rejectedCount;
           }
           if(Array.isArray(data.todos)) todos = data.todos;
           if(Array.isArray(data.shoppingList)) shoppingList = data.shoppingList;
-          if(Array.isArray(data.recipes)) recipes = data.recipes;
+          // recipes : élément sans `ingredients` tableau rejeté (P2.4-03, audit Phase
+          // 2.4) — voir sanitizeImportedRecipes() dans core.js.
+          let rejectedRecipeCount = 0;
+          if(Array.isArray(data.recipes)){
+            const {entries, rejectedCount} = sanitizeImportedRecipes(data.recipes);
+            recipes = entries;
+            rejectedRecipeCount = rejectedCount;
+          }
           if(Array.isArray(data.recipeBooks)) recipeBooks = data.recipeBooks;
-          if(Array.isArray(data.favSports)) favSports = data.favSports;
+          // favSports : élément non-objet rejeté (P2.4-03, audit Phase 2.4) — voir
+          // sanitizeImportedFavSports() dans core.js.
+          let rejectedFavSportCount = 0;
+          if(Array.isArray(data.favSports)){
+            const {entries, rejectedCount} = sanitizeImportedFavSports(data.favSports);
+            favSports = entries;
+            rejectedFavSportCount = rejectedCount;
+          }
           // Répare immédiatement les recettes sans bookId du tout (cas "aucun livre
           // n'existe encore") plutôt que d'attendre un futur rechargement — les
           // recettes avec un bookId invalide mais recipeBooks non vide restent
@@ -960,7 +991,12 @@ function bindTabEvents(){
           save(); render();
           const parts = [];
           if(invalidFields.length) parts.push(`${invalidFields.join(', ')} invalide(s), ignoré(s)`);
+          if(rejectedWeightCount) parts.push(`${rejectedWeightCount} pesée(s) invalide(s) ignorée(s)`);
           if(sanitizedLogCount) parts.push(`${sanitizedLogCount} entrée(s) de journal avec une valeur numérique corrigée`);
+          if(rejectedLogCount) parts.push(`${rejectedLogCount} entrée(s) de journal invalide(s) ignorée(s)`);
+          if(rejectedPresetCount) parts.push(`${rejectedPresetCount} préréglage(s) de séance invalide(s) ignoré(s)`);
+          if(rejectedRecipeCount) parts.push(`${rejectedRecipeCount} recette(s) invalide(s) ignorée(s)`);
+          if(rejectedFavSportCount) parts.push(`${rejectedFavSportCount} favori(s) de séance invalide(s) ignoré(s)`);
           toast(parts.length ? `Import partiel : ${parts.join(' · ')}` : 'Import réussi ✓', parts.length ? 'warn' : 'success');
         }catch(err){ toast('Fichier invalide'); }
       };

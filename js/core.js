@@ -23,32 +23,132 @@ const LS = {
 // laissait passer une chaîne ou un nombre, remplaçant l'objet attendu par une
 // valeur incompatible avec le reste du code (P2-2, audit Phase 2.2).
 function isPlainObject(v){ return v!==null && typeof v==='object' && !Array.isArray(v); }
-// Assainit les entrées de logEntries importées (P2-1, audit Phase 2.2). L'import
-// JSON (js/ui.js) ne validait jusque-là que le type tableau de `logEntries`,
-// jamais la forme de ses éléments : une valeur numérique corrompue (chaîne non
-// numérique, champ absent, ou un nombre débordant en Infinity via un littéral
-// JSON valide comme 1e400) contaminait ensuite silencieusement dayTotals()/
-// weeklyDeficit() (`kcalIn+=e.kcal`, `kcalOut+=e.kcalBurned`, sans coercition —
-// NaN ou concaténation de chaîne selon le cas). Chaque champ numérique invalide
-// est normalisé à 0 (l'entrée reste visible, rien n'est perdu) plutôt que
-// rejeté en bloc. Ne touche à rien d'autre que les 5 champs concernés — pas de
-// validation générale de schéma.
+// Format de date utilisé partout dans Kalo (todayStr()/fmtDate() : YYYY-MM-DD) —
+// vérifié à la fois dans sa forme (regex) et sa validité réelle. Partagé entre
+// sanitizeImportedLogEntries() et sanitizeImportedWeightEntries() (P2.4-01/02,
+// audit Phase 2.4) : ce n'est pas un validateur de schéma générique, seulement
+// le format de date déjà utilisé par tout le reste du code (shiftDate(),
+// weekStart(), etc., qui parsent tous `dateStr+'T12:00:00'` de la même façon).
+// `new Date(...)` ne suffit pas seule : un calendrier impossible mais bien
+// formé (ex. "2026-02-30") n'est PAS `Invalid Date`, il déborde silencieusement
+// sur le mois suivant (2 mars) — on revérifie donc que reformater la Date
+// obtenue redonne exactement la chaîne d'origine.
+function isValidDateStr(s){
+  if(typeof s!=='string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s+'T12:00:00');
+  return !isNaN(d.getTime()) && fmtDate(d)===s;
+}
+// Types de logEntries réellement produits ailleurs dans le code (voir les
+// literals `type:'...'` dans js/ui.js, js/mealparser.js, js/scanner.js,
+// js/workoutparser.js) — inclut 'note' (bloc Notes du dashboard), pas seulement
+// meal/workout.
+const LOGENTRY_VALID_TYPES = ['meal','workout','note'];
+// Assainit les entrées de logEntries importées (P2-1, audit Phase 2.2 ; étendu
+// P2.4-02, audit Phase 2.4). L'import JSON (js/ui.js) ne validait jusque-là que
+// le type tableau de `logEntries`, jamais la forme de ses éléments :
+// - une valeur numérique corrompue (chaîne non numérique, champ absent, ou un
+//   nombre débordant en Infinity via un littéral JSON valide comme 1e400)
+//   contaminait ensuite silencieusement dayTotals()/weeklyDeficit()
+//   (`kcalIn+=e.kcal`, `kcalOut+=e.kcalBurned`, sans coercition — NaN ou
+//   concaténation de chaîne selon le cas). Chaque champ numérique invalide est
+//   normalisé à 0 (l'entrée reste visible, rien n'est perdu) plutôt que rejetée.
+// - une `date` invalide (absente, malformée) ou un `type` non reconnu ne
+//   provoquaient aucun crash immédiat, mais rendaient l'entrée silencieusement
+//   invisible : aucun jour ne la retrouve jamais via entriesFor() (qui compare
+//   `e.date===date`), donc elle restait importée en permanence dans ct_log sans
+//   jamais apparaître nulle part — pire qu'un rejet signalé. Ces entrées sont
+//   désormais rejetées explicitement (comptées, jamais silencieuses).
+// Ne touche à rien d'autre que ces champs — pas de validation générale de schéma.
 const LOGENTRY_NUMERIC_FIELDS = {meal:['kcal','protein','carbs','fat'], workout:['kcalBurned']};
 function sanitizeImportedLogEntries(arr){
-  let sanitizedCount = 0;
-  const entries = arr.map(e=>{
-    if(!e || typeof e!=='object' || Array.isArray(e)) return e;
+  let sanitizedCount = 0, rejectedCount = 0;
+  const entries = [];
+  arr.forEach(e=>{
+    if(!isPlainObject(e) || !LOGENTRY_VALID_TYPES.includes(e.type) || !isValidDateStr(e.date)){
+      rejectedCount++;
+      return;
+    }
     const fields = LOGENTRY_NUMERIC_FIELDS[e.type];
-    if(!fields) return e;
+    if(!fields){ entries.push(e); return; }
     let touched = false;
     const clean = {...e};
     fields.forEach(f=>{
       if(!Number.isFinite(clean[f])){ clean[f] = 0; touched = true; }
     });
     if(touched) sanitizedCount++;
-    return touched ? clean : e;
+    entries.push(touched ? clean : e);
   });
-  return {entries, sanitizedCount};
+  return {entries, sanitizedCount, rejectedCount};
+}
+// P2.4-01 (audit Phase 2.4) : validation dédiée aux weightEntries importés,
+// jusque-là seulement vérifiés comme tableau (jamais la forme de leurs
+// éléments). Plusieurs vues trient `weightEntries` avec
+// `b.date.localeCompare(a.date)` (dashboard, onglet Poids...) : une entrée sans
+// `date` (ou avec une date non-chaîne) y provoque un TypeError immédiat au
+// rendu suivant, donc potentiellement dès le prochain chargement du dashboard.
+// Contrairement à logEntries, une pesée sans date exploitable ou avec un poids
+// non positif n'a pas de valeur "réparée" sensée (on ne peut pas deviner quand
+// elle a eu lieu, ni traiter un poids <= 0 comme une vraie mesure) : l'entrée
+// entière est rejetée plutôt que partiellement corrigée. Seuls `date` et
+// `weight` sont vérifiés — pas de validation générale des champs optionnels
+// (bodyFat/muscleMass/water/note).
+function sanitizeImportedWeightEntries(arr){
+  let rejectedCount = 0;
+  const entries = arr.filter(e=>{
+    const valid = isPlainObject(e) && isValidDateStr(e.date) && Number.isFinite(e.weight) && e.weight>0;
+    if(!valid) rejectedCount++;
+    return valid;
+  });
+  return {entries, rejectedCount};
+}
+// P2.4-03 (audit Phase 2.4) : sur les 7 tableaux inspectés (customFoods,
+// workoutPresets, recipes, recipeBooks, shoppingList, favSports, favorites),
+// seuls workoutPresets/recipes/favSports montrent un risque de CRASH démontré
+// par lecture du code de rendu ci-dessous — les 4 autres sont laissés tels
+// quels (voir rapport pour le détail par structure, pas de validation
+// symétrique ajoutée sans risque concret).
+//
+// workoutPresets : viewSettings() (plus bas dans ce fichier) accède
+// `p.params.vitesse/pente/effort/intensite/sport` sans garde dès que
+// `p.type` est un des 5 types reconnus (tapis/velo/renfo/sport/club) — un
+// preset de ce type sans `params` objet plante le rendu de tout l'onglet
+// Réglages. Un `type` non reconnu ne plante rien (aucune des branches
+// `if(p.type===...)` ne matche), donc n'est pas rejeté ici.
+const WORKOUT_PRESET_TYPES = ['tapis','velo','renfo','sport','club'];
+function sanitizeImportedWorkoutPresets(arr){
+  let rejectedCount = 0;
+  const entries = arr.filter(p=>{
+    const valid = isPlainObject(p) && (!WORKOUT_PRESET_TYPES.includes(p.type) || isPlainObject(p.params));
+    if(!valid) rejectedCount++;
+    return valid;
+  });
+  return {entries, rejectedCount};
+}
+// recipes : recipeRow() (plus bas dans ce fichier) accède `r.ingredients.length`
+// sans garde (contrairement à `r.steps&&r.steps.length`, déjà défensif juste à
+// côté) — une recette sans `ingredients` tableau plante le rendu de tout
+// l'onglet Recettes.
+function sanitizeImportedRecipes(arr){
+  let rejectedCount = 0;
+  const entries = arr.filter(r=>{
+    const valid = isPlainObject(r) && Array.isArray(r.ingredients);
+    if(!valid) rejectedCount++;
+    return valid;
+  });
+  return {entries, rejectedCount};
+}
+// favSports : favSportKey() (plus bas dans ce fichier) accède `fav.type`
+// directement, appelée depuis `.some()`/`.map()` sur favSports à plusieurs
+// endroits (dont le rendu des cartes de favoris dans l'onglet Séances) — un
+// élément non-objet (null, chaîne...) y plante le rendu.
+function sanitizeImportedFavSports(arr){
+  let rejectedCount = 0;
+  const entries = arr.filter(f=>{
+    const valid = isPlainObject(f);
+    if(!valid) rejectedCount++;
+    return valid;
+  });
+  return {entries, rejectedCount};
 }
 let settings = LS.get('ct_settings', {calorieGoal:2200, proteinGoal:150, carbGoal:220, fatGoal:70});
 let customFoods = LS.get('ct_customFoods', []);
@@ -852,7 +952,11 @@ function dashboardGrid(t){
   const recipesSub = recipeBooks.length ? `${recipeBooks.length} livre${recipeBooks.length>1?'s':''}` : 'Crée un livre';
   const recipesCard = dashCard('recipes', 'Recettes', recipesValue, recipesSub);
 
-  const sortedW = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date));
+  // `|| ''` défensif (P2.4-01, audit Phase 2.4) : filet de sécurité minimal en plus
+  // de la validation à l'import (sanitizeImportedWeightEntries()), pas un
+  // remplacement — repris identique sur les autres tris de weightEntries plus bas
+  // dans ce fichier, jamais généralisé au-delà de ce seul champ.
+  const sortedW = [...weightEntries].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const latestW = sortedW[0];
   let weightValue = '—', weightSub = 'Aucune pesée';
   if(latestW){
@@ -1669,7 +1773,7 @@ let showOnboardingConfirm = false;
 // quel, à l'identique de son usage existant dans viewWeight().
 function viewOnboarding(){
   if(showOnboardingConfirm){
-    const latest = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date))[0];
+    const latest = [...weightEntries].sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
     const goals = computeGoals(profile, latest.weight);
     // "Ton point de départ", pas "objectifs personnalisés" : à ce stade,
     // goalWeight n'a jamais été demandé, donc dans computeGoals() la condition
@@ -1742,7 +1846,7 @@ function viewToday(){
   // Le badge doit donc pouvoir rester affiché (sous un texte différent) même
   // une fois le profil Day 0 complété, tant que l'objectif de poids ne l'est
   // pas — voir viewOnboarding() pour le même distinguo sur la carte Day 0.
-  const latestWeightEntry = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const latestWeightEntry = [...weightEntries].sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
   const dashGoals = latestWeightEntry ? computeGoals(profile, latestWeightEntry.weight) : null;
   const hasPersonalizedProfile = !!dashGoals;
   // goalState (loss/gain/maintain/null) vient de computeGoals() — pas de
@@ -1923,7 +2027,7 @@ let wkParams = {vitesse:'', pente:'', effort:'modere', intensite:'moderee', spor
 let wkDuration = '';
 let wkSteps = '';
 function getCurrentWeight(){
-  const sorted = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date));
+  const sorted = [...weightEntries].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   return sorted.length ? sorted[0].weight : null;
 }
 function metTapis(vKmh, pentePct){
@@ -2744,7 +2848,7 @@ function weighInSummary(sortedAsc, profile){
 }
 
 function viewWeight(){
-  const sorted = [...weightEntries].sort((a,b)=>b.date.localeCompare(a.date));
+  const sorted = [...weightEntries].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const latest = sorted[0];
   const goals = latest ? computeGoals(profile, latest.weight) : null;
   const summaryLines = latest ? weighInSummary([...sorted].reverse(), profile) : null;
