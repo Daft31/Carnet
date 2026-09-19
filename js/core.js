@@ -150,6 +150,49 @@ function sanitizeImportedFavSports(arr){
   });
   return {entries, rejectedCount};
 }
+// Seconde passe P2.4-03 (review Archiviste) : trois structures supplémentaires
+// avec le même risque de crash (élément non-objet dans un tableau parcouru sans
+// garde) — même validateur minimal (isPlainObject) que favSports ci-dessus, pas
+// de champ additionnel requis : dans les 3 cas, un champ manquant sur un objet
+// par ailleurs valide ne plante rien (escapeHtml()/interpolation en template
+// tolèrent déjà `undefined`), seul un élément NON-OBJET (null, chaîne, nombre)
+// fait planter l'accès direct à sa propriété (`f.name`, `book.id`, `x.checked`).
+//
+// customFoods : viewSettings() accède `f.name`/`f.kcal`/`f.protein`/`f.carbs`/
+// `f.fat` sans garde sur chaque élément de customFoods.map(...).
+function sanitizeImportedCustomFoods(arr){
+  let rejectedCount = 0;
+  const entries = arr.filter(f=>{
+    const valid = isPlainObject(f);
+    if(!valid) rejectedCount++;
+    return valid;
+  });
+  return {entries, rejectedCount};
+}
+// recipeBooks : orphanRecipes() accède `b.id` (recipeBooks.map(b=>b.id)) et
+// recipeBookCard() accède `book.id`/`book.name` sans garde.
+function sanitizeImportedRecipeBooks(arr){
+  let rejectedCount = 0;
+  const entries = arr.filter(b=>{
+    const valid = isPlainObject(b);
+    if(!valid) rejectedCount++;
+    return valid;
+  });
+  return {entries, rejectedCount};
+}
+// shoppingList : dashboardGrid() et viewShoppingList() accèdent `x.checked`
+// sans garde (`shoppingList.filter(x=>!x.checked)`) — le dashboard étant la vue
+// par défaut au démarrage, un élément non-objet y plante le premier rendu après
+// un import corrompu, pas seulement l'onglet Courses.
+function sanitizeImportedShoppingList(arr){
+  let rejectedCount = 0;
+  const entries = arr.filter(x=>{
+    const valid = isPlainObject(x);
+    if(!valid) rejectedCount++;
+    return valid;
+  });
+  return {entries, rejectedCount};
+}
 let settings = LS.get('ct_settings', {calorieGoal:2200, proteinGoal:150, carbGoal:220, fatGoal:70});
 let customFoods = LS.get('ct_customFoods', []);
 let foodOverrides = LS.get('ct_foodOverrides', {}); // {builtinId: {name,kcal,protein,carbs,fat}}

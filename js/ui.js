@@ -931,7 +931,14 @@ function bindTabEvents(){
           invalidFields.push(...objectFields.filter(k => data[k]!==undefined && !isPlainObject(data[k])));
 
           if(isPlainObject(data.settings)) settings = data.settings;
-          if(Array.isArray(data.customFoods)) customFoods = data.customFoods;
+          // customFoods : élément non-objet rejeté (P2.4-03 seconde passe, audit Phase
+          // 2.4) — voir sanitizeImportedCustomFoods() dans core.js.
+          let rejectedCustomFoodCount = 0;
+          if(Array.isArray(data.customFoods)){
+            const {entries, rejectedCount} = sanitizeImportedCustomFoods(data.customFoods);
+            customFoods = entries;
+            rejectedCustomFoodCount = rejectedCount;
+          }
           if(isPlainObject(data.foodOverrides)) foodOverrides = data.foodOverrides;
           if(Array.isArray(data.favorites)) favorites = data.favorites;
           // weightEntries : au-delà du type tableau, chaque élément est validé (date
@@ -964,7 +971,16 @@ function bindTabEvents(){
             rejectedLogCount = rejectedCount;
           }
           if(Array.isArray(data.todos)) todos = data.todos;
-          if(Array.isArray(data.shoppingList)) shoppingList = data.shoppingList;
+          // shoppingList : élément non-objet rejeté (P2.4-03 seconde passe, audit Phase
+          // 2.4) — voir sanitizeImportedShoppingList() dans core.js. Le dashboard (vue
+          // par défaut) lit shoppingList dès le premier rendu après reload, d'où
+          // l'importance de ne jamais persister un élément qui le ferait planter.
+          let rejectedShoppingCount = 0;
+          if(Array.isArray(data.shoppingList)){
+            const {entries, rejectedCount} = sanitizeImportedShoppingList(data.shoppingList);
+            shoppingList = entries;
+            rejectedShoppingCount = rejectedCount;
+          }
           // recipes : élément sans `ingredients` tableau rejeté (P2.4-03, audit Phase
           // 2.4) — voir sanitizeImportedRecipes() dans core.js.
           let rejectedRecipeCount = 0;
@@ -973,7 +989,16 @@ function bindTabEvents(){
             recipes = entries;
             rejectedRecipeCount = rejectedCount;
           }
-          if(Array.isArray(data.recipeBooks)) recipeBooks = data.recipeBooks;
+          // recipeBooks : élément non-objet rejeté (P2.4-03 seconde passe, audit Phase
+          // 2.4) — voir sanitizeImportedRecipeBooks() dans core.js. Compatible avec
+          // normalizeRecipeBooks()/orphanRecipes() (Phase 2.2), qui ne s'appuient que
+          // sur recipeBooks une fois déjà assaini ici.
+          let rejectedRecipeBookCount = 0;
+          if(Array.isArray(data.recipeBooks)){
+            const {entries, rejectedCount} = sanitizeImportedRecipeBooks(data.recipeBooks);
+            recipeBooks = entries;
+            rejectedRecipeBookCount = rejectedCount;
+          }
           // favSports : élément non-objet rejeté (P2.4-03, audit Phase 2.4) — voir
           // sanitizeImportedFavSports() dans core.js.
           let rejectedFavSportCount = 0;
@@ -997,6 +1022,9 @@ function bindTabEvents(){
           if(rejectedPresetCount) parts.push(`${rejectedPresetCount} préréglage(s) de séance invalide(s) ignoré(s)`);
           if(rejectedRecipeCount) parts.push(`${rejectedRecipeCount} recette(s) invalide(s) ignorée(s)`);
           if(rejectedFavSportCount) parts.push(`${rejectedFavSportCount} favori(s) de séance invalide(s) ignoré(s)`);
+          if(rejectedCustomFoodCount) parts.push(`${rejectedCustomFoodCount} aliment(s) personnalisé(s) invalide(s) ignoré(s)`);
+          if(rejectedRecipeBookCount) parts.push(`${rejectedRecipeBookCount} livre(s) de recettes invalide(s) ignoré(s)`);
+          if(rejectedShoppingCount) parts.push(`${rejectedShoppingCount} article(s) de courses invalide(s) ignoré(s)`);
           toast(parts.length ? `Import partiel : ${parts.join(' · ')}` : 'Import réussi ✓', parts.length ? 'warn' : 'success');
         }catch(err){ toast('Fichier invalide'); }
       };
