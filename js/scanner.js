@@ -9,17 +9,52 @@ async function lookupBarcode(barcode) {
   if (data.status === 0 || !data.product) return null;
   const p = data.product;
   const n = p.nutriments || {};
+  // Side quest P0 (auto-ajout catalogue) : `kcalKnown` distingue "kcal absente
+  // d'Open Food Facts" de "kcal réellement à 0" — `parseFloat(...)||0` juste en
+  // dessous masquerait cette différence si on ne la capturait pas avant. Sert
+  // uniquement à décider si ce produit est assez fiable pour un ajout automatique
+  // au catalogue (voir Quagga.onDetected) ; n'affecte pas l'affichage existant
+  // de la modale de quantité, qui continue d'utiliser `kcal` (0 si inconnue,
+  // comportement inchangé pour ce chemin).
+  const kcalRaw = n['energy-kcal_100g'] ?? n['energy-kcal'];
   const product = {
     barcode,
     name: p.product_name || p.generic_name || 'Produit inconnu',
     brand: p.brands || '',
-    kcal: parseFloat(n['energy-kcal_100g'] ?? n['energy-kcal'] ?? 0) || 0,
+    kcal: parseFloat(kcalRaw ?? 0) || 0,
     protein: parseFloat(n['proteins_100g'] ?? n.proteins ?? 0) || 0,
     carbs: parseFloat(n['carbohydrates_100g'] ?? n.carbohydrates ?? 0) || 0,
     fat: parseFloat(n['fat_100g'] ?? n.fat ?? 0) || 0,
+    kcalKnown: kcalRaw != null,
   };
   offCache.set(barcode, product);
   return product;
+}
+
+// Side quest P0 (auto-ajout catalogue) : trouve l'aliment déjà catalogué pour ce
+// `barcode` (customFoods, js/core.js) ou en crée un. Déduplication STRICTE sur
+// `barcode` uniquement (identifiant GS1/EAN déjà normalisé par Open Food Facts)
+// — jamais de rapprochement approximatif par nom, même règle que
+// frequentMealFor()/typicalGramsFor() (correspondance exacte, zéro fuzzy
+// matching). Ne pose volontairement aucun champ source/confidence sur l'objet
+// customFoods créé : ce modèle ne couvre aujourd'hui que les entrées logEntries
+// (voir CLAUDE.md), l'étendre aux définitions catalogue est une décision
+// produit séparée, pas traitée dans cette P0.
+function findOrAddScannedFood(product) {
+  const existing = customFoods.find(f => f.barcode === product.barcode);
+  if (existing) return existing;
+  const food = {
+    id: 'c' + uid(),
+    name: product.name,
+    kcal: product.kcal,
+    protein: product.protein,
+    carbs: product.carbs,
+    fat: product.fat,
+    barcode: String(product.barcode),
+  };
+  customFoods.unshift(food);
+  save();
+  return food;
 }
 
 function stopQuagga() {
@@ -100,12 +135,23 @@ function startQuagga(statusEl) {
   });
 
   let lastCode = null, lastTime = 0;
+  // Side quest P0 : garde anti-détections concurrentes. Quagga continue de tourner
+  // pendant l'appel réseau lookupBarcode() (stopQuagga() n'est appelé qu'une fois la
+  // réponse revenue) — sans cette garde, une seconde détection (même code ou non)
+  // pendant que la première est encore en vol pourrait déclencher un second passage
+  // dans findOrAddScannedFood() en parallèle et créer un doublon avant que le premier
+  // n'ait fini d'écrire dans customFoods. `processing` bloque toute nouvelle détection
+  // tant qu'un lookup est en cours ; remis à false uniquement sur le chemin d'erreur
+  // réseau (le seul cas où le scanner reste actif pour permettre une nouvelle tentative
+  // — tous les autres chemins appellent déjà stopQuagga()/closeModal()).
+  let processing = false;
   Quagga.onDetected(async (result) => {
     const code = result?.codeResult?.code;
-    if (!code) return;
+    if (!code || processing) return;
     const now = Date.now();
     if (code === lastCode && now - lastTime < 2000) return;
     lastCode = code; lastTime = now;
+    processing = true;
     statusEl.textContent = `Code détecté : ${code} — recherche…`;
     try {
       const product = await lookupBarcode(code);
@@ -116,19 +162,38 @@ function startQuagga(statusEl) {
         openCustomFoodModal();
         return;
       }
+      // Cas C (side quest P0) : produit identifié mais données nutritionnelles
+      // insuffisantes (kcal absente d'Open Food Facts) — ne jamais ajouter
+      // automatiquement un aliment à kcal:0 fabriquée par défaut. Message distinct
+      // de "Produit introuvable" : la situation réelle n'est pas la même (le
+      // produit a été trouvé), donc le message doit le refléter. Repli sur le
+      // même flux de création manuelle existant que le cas "introuvable" — pas de
+      // nouveau formulaire pour cette P0.
+      if (!product.kcalKnown) {
+        closeModal();
+        toast('Produit trouvé mais données nutritionnelles insuffisantes, ajoute-le manuellement.', 'warn');
+        openCustomFoodModal();
+        return;
+      }
+      const food = findOrAddScannedFood(product);
       closeModal();
-      openScannedProductModal(product);
+      openScannedProductModal(food, product.brand);
     } catch (e) {
       console.error(e);
       statusEl.textContent = 'Erreur réseau, réessaie.';
+      processing = false;
     }
   });
 }
 
-function openScannedProductModal(product) {
+// `food` : entrée customFoods (existante ou tout juste créée par findOrAddScannedFood,
+// voir js/core.js pour la forme de customFoods) — plus le `product` OFF éphémère
+// d'avant cette P0. `brand` reste un simple texte d'affichage (Open Food Facts),
+// jamais persisté dans customFoods (hors du modèle minimal demandé pour cette P0).
+function openScannedProductModal(food, brand) {
   openModal(`
-    <h3>${escapeHtml(product.name)}</h3>
-    <div class="hint">${product.brand ? escapeHtml(product.brand) + ' · ' : ''}Valeurs pour 100 g : ${Math.round(product.kcal)} kcal · P${product.protein.toFixed(1)} G${product.carbs.toFixed(1)} L${product.fat.toFixed(1)}</div>
+    <h3>${escapeHtml(food.name)}</h3>
+    <div class="hint">${brand ? escapeHtml(brand) + ' · ' : ''}Valeurs pour 100 g : ${Math.round(food.kcal)} kcal · P${food.protein.toFixed(1)} G${food.carbs.toFixed(1)} L${food.fat.toFixed(1)}</div>
     <label>Quantité (g)</label>
     <input id="scanQtyInput" type="number" inputmode="numeric" value="100" autofocus>
     <div class="qty-preview" id="scanQtyPreview"></div>
@@ -138,10 +203,10 @@ function openScannedProductModal(product) {
     const g = parseFloat(document.getElementById('scanQtyInput').value) || 0;
     const f = g / 100;
     document.getElementById('scanQtyPreview').innerHTML = `
-      <div class="item"><div class="n">${Math.round(product.kcal * f)}</div><div class="l">kcal</div></div>
-      <div class="item"><div class="n">${Math.round(product.protein * f)}</div><div class="l">prot g</div></div>
-      <div class="item"><div class="n">${Math.round(product.carbs * f)}</div><div class="l">gluc g</div></div>
-      <div class="item"><div class="n">${Math.round(product.fat * f)}</div><div class="l">lip g</div></div>`;
+      <div class="item"><div class="n">${Math.round(food.kcal * f)}</div><div class="l">kcal</div></div>
+      <div class="item"><div class="n">${Math.round(food.protein * f)}</div><div class="l">prot g</div></div>
+      <div class="item"><div class="n">${Math.round(food.carbs * f)}</div><div class="l">gluc g</div></div>
+      <div class="item"><div class="n">${Math.round(food.fat * f)}</div><div class="l">lip g</div></div>`;
   };
   document.getElementById('scanQtyInput').addEventListener('input', update);
   update();
@@ -153,9 +218,13 @@ function openScannedProductModal(product) {
     if (g <= 0) { toast('Entre une quantité valide'); return; }
     confirmed = true;
     const f = g / 100;
+    // foodId posé (side quest P0) : le repas scanné référence désormais réellement
+    // l'aliment catalogue, comme le flux recherche catalogue (js/ui.js openQtyModal)
+    // — débloque typicalGramsFor()/frequentMealFor() pour les repas scannés, jusqu'ici
+    // structurellement impossible (voir CLAUDE.md/README, limite connue).
     logEntries.push({
-      id: uid(), date: currentDate, type: 'meal', mealSlot, foodName: product.name, grams: g,
-      kcal: product.kcal * f, protein: product.protein * f, carbs: product.carbs * f, fat: product.fat * f,
+      id: uid(), date: currentDate, type: 'meal', mealSlot, foodId: food.id, foodName: food.name, grams: g,
+      kcal: food.kcal * f, protein: food.protein * f, carbs: food.carbs * f, fat: food.fat * f,
       time: new Date().toTimeString().slice(0, 5), source: 'scan'
     });
     save('Ajouté ✓'); closeModal(); render();
