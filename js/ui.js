@@ -246,7 +246,19 @@ function openQuickAddModal(draft){
   });
 }
 
-function openCustomFoodModal(){
+// `logAfterSave` (Phase 3, Lot B) : par défaut (false), comportement historique
+// inchangé — crée une définition dans `customFoods`, toast, fermeture, render()
+// (c'est le chemin utilisé depuis Réglages). `true` (contexte Repas uniquement,
+// voir l'appel dans bindTabEvents()) enchaîne directement sur `openQtyModal(f)`
+// avec l'aliment tout juste créé, sans repasser par une recherche manuelle : le
+// scénario "créer un aliment perso" → "en ajouter une quantité au repas du jour"
+// n'a plus besoin de deux étapes séparées. La création catalogue (customFoods,
+// save()) a lieu AVANT l'ouverture de la modale quantité, donc si l'utilisateur
+// annule ensuite cette dernière, l'aliment reste dans customFoods (voir cadrage
+// Lot B, "Annulation de la quantité") — volontairement pas de rollback : c'est
+// une définition catalogue valide indépendamment du fait qu'elle serve ou non à
+// journaliser un repas dans la foulée.
+function openCustomFoodModal(logAfterSave = false){
   let mode = '100';
   openModal(`
     <h3>Aliment personnalisé</h3>
@@ -276,7 +288,13 @@ function openCustomFoodModal(){
     document.querySelectorAll('#cfModeSeg button').forEach(x=>x.classList.toggle('active', x===b));
     document.getElementById('cfPortionWrap').style.display = mode==='portion' ? 'block' : 'none';
   });
+  // Garde anti-double-confirmation (même pattern que les 4 chemins d'ajout déjà
+  // couverts — openQtyModal/openQuickAddModal/openAIResultModal/scanner — repérée
+  // manquante ici au cadrage Lot B). Booléen local à cette ouverture, posé
+  // uniquement après validation réussie, jamais avant.
+  let confirmed = false;
   document.getElementById('cfSave').onclick = ()=>{
+    if(confirmed) return;
     const name = document.getElementById('cfName').value.trim();
     if(!name){ toast('Donne un nom à l\'aliment'); return; }
     let kcal = parseFloat(document.getElementById('cfKcal').value)||0;
@@ -290,14 +308,28 @@ function openCustomFoodModal(){
       kcal*=ratio; protein*=ratio; carbs*=ratio; fat*=ratio;
     }
     const f = { id:'c'+uid(), name, kcal:Math.round(kcal*10)/10, protein:Math.round(protein*10)/10, carbs:Math.round(carbs*10)/10, fat:Math.round(fat*10)/10 };
-    // Ce flux crée une DÉFINITION réutilisable dans customFoods, jamais une
-    // entrée logEntries (audit Tâche 14, P2) — contrairement à "Ajouté ✓"/
-    // "Repas ajouté ✓" utilisés partout ailleurs pour signaler qu'un repas
-    // vient d'être inscrit au journal du jour. Reprend le même gabarit
-    // "X enregistré ✓ — [étape suivante]" déjà utilisé par openPresetNameModal
-    // ("Préréglage chargé — confirme la durée"), plutôt que "ajouté" qui
-    // laisserait croire que la consommation est déjà tracée.
-    customFoods.unshift(f); save('Aliment enregistré ✓ — disponible dans ta recherche'); closeModal(); render();
+    confirmed = true;
+    customFoods.unshift(f);
+    if(logAfterSave){
+      // Pas de toast intermédiaire ("Aliment enregistré ✓") : l'étape suivante
+      // (openQtyModal -> "Ajouté ✓") est le vrai signal de fin de parcours pour ce
+      // chemin ; un toast ici serait un feedback jetable, aussitôt recouvert par
+      // la modale quantité qui s'ouvre dans la foulée.
+      save();
+      closeModal();
+      openQtyModal(f);
+    } else {
+      // Ce flux crée une DÉFINITION réutilisable dans customFoods, jamais une
+      // entrée logEntries (audit Tâche 14, P2) — contrairement à "Ajouté ✓"/
+      // "Repas ajouté ✓" utilisés partout ailleurs pour signaler qu'un repas
+      // vient d'être inscrit au journal du jour. Reprend le même gabarit
+      // "X enregistré ✓ — [étape suivante]" déjà utilisé par openPresetNameModal
+      // ("Préréglage chargé — confirme la durée"), plutôt que "ajouté" qui
+      // laisserait croire que la consommation est déjà tracée.
+      save('Aliment enregistré ✓ — disponible dans ta recherche');
+      closeModal();
+      render();
+    }
   };
 }
 
@@ -701,7 +733,12 @@ function bindTabEvents(){
     });
     bindMealResultEvents();
     const addBtn = document.getElementById('addCustomFoodBtn');
-    if(addBtn) addBtn.onclick = openCustomFoodModal;
+    // Jamais une référence directe (`addBtn.onclick = openCustomFoodModal`) : le
+    // navigateur passerait alors le MouseEvent du clic comme premier argument
+    // (`logAfterSave`), toujours "truthy" — même piège déjà documenté pour aiBtn/
+    // fabAi plus haut dans ce fichier. Contexte Repas -> enchaîne sur la quantité
+    // (Lot B).
+    if(addBtn) addBtn.onclick = ()=>openCustomFoodModal(true);
     const scanBtn = document.getElementById('scanBarcodeBtn');
     if(scanBtn) scanBtn.onclick = openScannerModal;
     const aiBtn = document.getElementById('aiDescribeBtn');
@@ -1062,7 +1099,10 @@ function bindTabEvents(){
       save('Objectifs enregistrés ✓');
     };
     const addBtn2 = document.getElementById('addCustomFoodBtn2');
-    if(addBtn2) addBtn2.onclick = openCustomFoodModal;
+    // Même remarque que addCustomFoodBtn ci-dessus (contexte Repas) : une référence
+    // directe passerait le MouseEvent comme `logAfterSave`. Depuis Réglages, le
+    // comportement catalogue historique reste inchangé (Lot B, hors périmètre).
+    if(addBtn2) addBtn2.onclick = ()=>openCustomFoodModal(false);
     document.querySelectorAll('[data-delfood]').forEach(b=>b.onclick=()=>{
       // BUG-007, audit Phase 2.1 — voir commentaire sur [data-del] plus haut.
       if(!confirm('Supprimer cet aliment personnalisé ?')) return;
