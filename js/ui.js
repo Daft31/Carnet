@@ -365,6 +365,175 @@ function openEditFoodModal(food){
   }
 }
 
+/* ===================== ÉDITION EN PLACE D'UNE ENTRÉE JOURNALISÉE (Phase 3, Lot A) =====================
+   openEditFoodModal() ci-dessus modifie une DÉFINITION du catalogue (customFoods/
+   foodOverrides) — jamais une entrée déjà écrite dans logEntries. Ce qui suit est un
+   chemin volontairement distinct : corriger une entrée du journal (repas/séance déjà
+   enregistrés), retrouvée par son `entry.id` (jamais par position DOM), mise à jour
+   EN PLACE (`logEntries[idx] = {...}`, id conservé, aucun `push`) — jamais recréée. Ne
+   jamais faire passer une modification de définition catalogue par ce chemin, ni
+   l'inverse : ce sont deux objets différents (une définition réutilisable vs. un fait
+   déjà journalisé), voir CLAUDE.md "Différencier catalogue et journal". */
+function openEditLogEntryModal(entry){
+  if(entry.type==='meal') openEditMealEntryModal(entry);
+  else if(entry.type==='workout') openEditWorkoutEntryModal(entry);
+}
+function openEditMealEntryModal(entry){
+  openModal(`
+    <h3>Modifier ce repas</h3>
+    <label>Date</label><input id="emeDate" type="date" value="${entry.date}">
+    <label>Repas</label>
+    <div class="seg" id="emeSlotSeg">
+      ${MEAL_SLOTS.map(s=>`<button type="button" data-slot="${s}" class="${entry.mealSlot===s?'active':''}">${s}</button>`).join('')}
+    </div>
+    <label>Nom</label><input id="emeName" type="text" value="${escapeHtml(entry.foodName||'')}">
+    <label>Quantité (g, optionnel)</label><input id="emeGrams" type="number" inputmode="numeric" value="${entry.grams!=null?entry.grams:''}">
+    <div class="row2">
+      <div><label>Calories</label><input id="emeKcal" type="number" inputmode="numeric" value="${Math.round(entry.kcal)||0}"></div>
+      <div><label>Protéines (g)</label><input id="emeP" type="number" inputmode="numeric" value="${Math.round(entry.protein)||0}"></div>
+    </div>
+    <div class="row2">
+      <div><label>Glucides (g)</label><input id="emeC" type="number" inputmode="numeric" value="${Math.round(entry.carbs)||0}"></div>
+      <div><label>Lipides (g)</label><input id="emeF" type="number" inputmode="numeric" value="${Math.round(entry.fat)||0}"></div>
+    </div>
+    <button class="btn" id="emeSave" type="button">Enregistrer les modifications</button>
+  `);
+  let mealSlotVal = entry.mealSlot;
+  document.querySelectorAll('#emeSlotSeg button').forEach(b=>b.onclick=()=>{
+    mealSlotVal = b.dataset.slot;
+    document.querySelectorAll('#emeSlotSeg button').forEach(x=>x.classList.toggle('active', x===b));
+  });
+  // Même garde anti-double-confirmation que les 4 chemins d'ajout existants
+  // (openQtyModal/openQuickAddModal/openAIResultModal/scanner) — un booléen local à
+  // cette ouverture, posé uniquement après validation réussie.
+  let confirmed = false;
+  document.getElementById('emeSave').addEventListener('click', ()=>{
+    if(confirmed) return;
+    const name = document.getElementById('emeName').value.trim();
+    if(!name){ toast('Donne un nom au repas'); return; }
+    const dateVal = document.getElementById('emeDate').value || entry.date;
+    const kcalRaw = parseFloat(document.getElementById('emeKcal').value);
+    if(!Number.isFinite(kcalRaw) || kcalRaw<0){ toast('Entre un nombre de calories valide'); return; }
+    // Même convention que openAIResultModal (js/mealparser.js) : macro vide -> 0g
+    // légitime, macro négative/non-numérique -> rejetée, jamais enregistrée.
+    const parseMacro = (id) => {
+      const raw = document.getElementById(id).value.trim();
+      if(raw==='') return 0;
+      const v = parseFloat(raw);
+      if(!Number.isFinite(v) || v<0) return null;
+      return v;
+    };
+    const proteinVal = parseMacro('emeP');
+    const carbsVal = parseMacro('emeC');
+    const fatVal = parseMacro('emeF');
+    if(proteinVal===null || carbsVal===null || fatVal===null){ toast('Entre des valeurs de macros valides'); return; }
+    const gramsRaw = document.getElementById('emeGrams').value.trim();
+    let gramsVal = null;
+    if(gramsRaw!==''){
+      const g = parseFloat(gramsRaw);
+      if(!Number.isFinite(g) || g<=0){ toast('Entre une quantité valide, ou laisse le champ vide'); return; }
+      gramsVal = g;
+    }
+    const idx = logEntries.findIndex(e=>e.id===entry.id);
+    if(idx===-1){ toast('Cette entrée n\'existe plus'); closeModal(); render(); return; }
+    confirmed = true;
+    // Remplacement en place (même `id`, même position logique) — jamais un
+    // `logEntries.push(...)` : voir invariants "même id" / "aucun doublon" (Phase 3,
+    // Lot A). `...logEntries[idx]` conserve tous les champs non couverts par ce
+    // formulaire (foodId, source, quantitySource, time…) intacts.
+    logEntries[idx] = {
+      ...logEntries[idx],
+      date: dateVal, mealSlot: mealSlotVal, foodName: name, grams: gramsVal,
+      kcal: kcalRaw, protein: proteinVal, carbs: carbsVal, fat: fatVal
+    };
+    save('Entrée modifiée ✓'); closeModal(); render();
+  });
+}
+function openEditWorkoutEntryModal(entry){
+  // Séance importée via "Coller un programme (IA)" (js/workoutparser.js) : porte un
+  // `name` éditable et duplique sa durée sous deux champs (`duration`/
+  // `estimatedDurationMin`, voir workoutSummary() dans core.js qui lit l'un ou
+  // l'autre selon le type) — les deux sont donc mis à jour ensemble pour ne jamais
+  // les faire diverger. Les autres types (tapis/vélo/sport/club) n'ont pas de champ
+  // `name` propre : leur titre vient de leur `wtype`/`params`, non éditables ici
+  // (recalculer un MET à partir de nouveaux paramètres est hors périmètre du Lot A,
+  // voir CLAUDE.md "Règle d'arrêt" — seuls les faits déjà enregistrés se corrigent).
+  const isBlocks = Array.isArray(entry.blocks) && entry.blocks.length>0;
+  const summary = workoutSummary(entry);
+  const durationDefault = entry.duration!=null ? entry.duration : (entry.estimatedDurationMin!=null ? entry.estimatedDurationMin : '');
+  openModal(`
+    <h3>Modifier cette séance</h3>
+    <div class="hint">${summary.title} — ${summary.sub}</div>
+    <label>Date</label><input id="eweDate" type="date" value="${entry.date}">
+    ${isBlocks ? `<label>Nom</label><input id="eweName" type="text" value="${escapeHtml(entry.name||'')}">` : ''}
+    <label>Durée (min)</label><input id="eweDuration" type="number" inputmode="numeric" value="${durationDefault}">
+    <label>Calories brûlées</label><input id="eweKcal" type="number" inputmode="numeric" value="${Math.round(entry.kcalBurned)||0}">
+    <button class="btn" id="eweSave" type="button">Enregistrer les modifications</button>
+  `);
+  let confirmed = false;
+  document.getElementById('eweSave').addEventListener('click', ()=>{
+    if(confirmed) return;
+    const dateVal = document.getElementById('eweDate').value || entry.date;
+    const kcalRaw = parseFloat(document.getElementById('eweKcal').value);
+    if(!Number.isFinite(kcalRaw) || kcalRaw<0){ toast('Entre un nombre de calories valide'); return; }
+    const durationRaw = parseFloat(document.getElementById('eweDuration').value);
+    if(!Number.isFinite(durationRaw) || durationRaw<=0){ toast('Entre une durée valide'); return; }
+    let nameVal = entry.name;
+    if(isBlocks){
+      nameVal = document.getElementById('eweName').value.trim();
+      if(!nameVal){ toast('Donne un nom à la séance'); return; }
+    }
+    const idx = logEntries.findIndex(e=>e.id===entry.id);
+    if(idx===-1){ toast('Cette entrée n\'existe plus'); closeModal(); render(); return; }
+    confirmed = true;
+    const updated = { ...logEntries[idx], date: dateVal, kcalBurned: kcalRaw, duration: Math.round(durationRaw) };
+    if(isBlocks){
+      updated.name = nameVal;
+      updated.estimatedDurationMin = Math.round(durationRaw);
+    }
+    logEntries[idx] = updated;
+    save('Entrée modifiée ✓'); closeModal(); render();
+  });
+}
+// Pose le bouton "✎ Modifier" à côté de chaque "✕" (data-del) des entrées meal/workout
+// affichées (Repas du jour, Séances du jour, Historique). Volontairement posé en JS
+// après coup plutôt que dans les templates de js/core.js (dayLogList()/mealsOnlyList()/
+// viewWorkouts()) : le cadrage Phase 3 Lot A confirme qu'aucun changement structurel de
+// core.js n'est nécessaire pour ce lot — cette fonction s'appuie uniquement sur le
+// marquage `data-del="<id>"` déjà présent dans ces templates, retrouve l'entrée
+// correspondante via `logEntries.find(e=>e.id===...)` (jamais une position DOM), et
+// n'ajoute rien pour les entrées `note` (hors périmètre Lot A, seuls `meal`/`workout` le
+// sont — voir CLAUDE.md). Appelée à chaque render() (bindTabEvents(), inconditionnel :
+// no-op silencieux si aucun `[data-del]` n'est présent dans l'onglet courant).
+function bindLogEntryEditButtons(){
+  // Sélecteur `button[data-del]` (équivalent à `[data-del]`, tous les boutons ✕ des
+  // templates concernés sont des <button>) plutôt que `[data-del]` seul : garde ce
+  // texte distinct du marqueur littéral que tests/delete-confirmations.test.js
+  // recherche pour extraire le corps du handler de suppression — les deux
+  // sélecteurs ciblent exactement les mêmes éléments, seule la présence de ce
+  // second appel plus haut dans le fichier aurait sinon fait matcher ce marqueur
+  // en premier et cassé l'extraction de test existante.
+  document.querySelectorAll('button[data-del]').forEach(delBtn=>{
+    const id = delBtn.dataset.del;
+    const entry = logEntries.find(e=>e.id===id);
+    // 'note' (viewNotes(), classe "jdel") est le seul type hors périmètre à partager
+    // le marquage [data-del] avec meal/workout ("del") — jamais concerné ici.
+    if(!entry || (entry.type!=='meal' && entry.type!=='workout')) return;
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'edit';
+    editBtn.dataset.editentry = id;
+    editBtn.textContent = '✎';
+    editBtn.setAttribute('aria-label', 'Modifier cette entrée');
+    delBtn.parentNode.insertBefore(editBtn, delBtn);
+    editBtn.onclick = ()=>{
+      const current = logEntries.find(e=>e.id===id);
+      if(!current){ toast('Cette entrée n\'existe plus'); return; }
+      openEditLogEntryModal(current);
+    };
+  });
+}
+
 /* Bind controls inside the meal search results without touching the search input. */
 function bindMealResultEvents(){
   document.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{
@@ -423,6 +592,11 @@ function bindTabEvents(){
     dsPicker.onchange = ()=>{ if(dsPicker.value){ currentDate = dsPicker.value; render(); } };
   }
 
+  // Phase 3, Lot A : pose le bouton "✎" à côté de chaque "✕" avant le binding de
+  // suppression ci-dessous (ordre sans effet sur le binding [data-del] lui-même,
+  // qui re-cible les boutons ✕ existants, mais garde le "✎" visible en premier
+  // dans chaque ligne).
+  bindLogEntryEditButtons();
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     // Confirmation avant suppression (BUG-007, audit Phase 2.1) — même pattern
     // que la suppression d'un livre de recettes/le reset complet plus bas dans ce

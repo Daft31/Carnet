@@ -232,6 +232,9 @@
   .list-entry button.del{
     background:none; border:none; color:var(--ink-faint); font-size:16px; padding:4px 6px; margin-left:4px; cursor:pointer;
   }
+  .list-entry button.edit{
+    background:none; border:none; color:var(--ink-faint); font-size:15px; padding:4px 6px; margin-left:4px; cursor:pointer;
+  }
   .empty{color:var(--ink-faint); font-size:13px; padding:8px 0;}
 
   input, textarea, select{
@@ -597,6 +600,7 @@
   .preset-chip{ min-height:44px; }
   .food-row{ min-height:44px; padding:12px 4px; }
   .list-entry .del{ min-width:44px; min-height:44px; display:inline-grid; place-content:center; border-radius:10px; }
+  .list-entry .edit{ min-width:44px; min-height:44px; display:inline-grid; place-content:center; border-radius:10px; }
   .food-row button.star{ min-width:44px; min-height:44px; }
   .food-row button.edit{ min-height:36px; }
   .todo-check{ min-width:44px; min-height:44px; appearance:none; position:relative; }
