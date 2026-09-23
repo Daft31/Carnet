@@ -24,12 +24,19 @@ function recipeApiUrl() {
   return `${VERCEL_API_BASE}/api/parse-recipe`;
 }
 
-function openRecipeImportModal() {
+// `prefillUrl` (Phase 3, Lot C — cohérence avec "Reformuler" de js/mealparser.js,
+// openAIDescribeModal) : URL à remettre dans le champ à l'ouverture — utilisée
+// uniquement par le bouton "Importer une autre recette" de openRecipeResultModal(),
+// qui repasse l'URL ORIGINALE (`sourceUrl`, déjà reçue par cette fonction), jamais
+// reconstruite depuis le nom/les ingrédients/les étapes retournés par l'IA.
+// Undefined au premier appel (FAB "Importer une recette") -> champ vide comme
+// avant, aucun changement de ce cas.
+function openRecipeImportModal(prefillUrl) {
   openModal(`
     <h3>Importer une recette (TikTok)</h3>
     <div class="hint">Colle le lien d'une vidéo TikTok publique de cuisine. L'IA lit la légende de la vidéo et essaie d'en extraire une recette structurée.</div>
     <label>Lien TikTok</label>
-    <input id="riUrl" type="url" inputmode="url" placeholder="https://www.tiktok.com/@.../video/..." autofocus>
+    <input id="riUrl" type="url" inputmode="url" placeholder="https://www.tiktok.com/@.../video/..." value="${escapeHtml(prefillUrl || '')}" autofocus>
     <div id="riStatus" class="hint" style="display:none;"></div>
     <button class="btn" id="riSubmitBtn" type="button">Extraire</button>
   `);
@@ -100,7 +107,10 @@ function openRecipeResultModal(data, sourceUrl) {
   document.getElementById('riSaveRecipeBtn').onclick = () => {
     openSaveRecipeModal({ name, ingredients, steps, servings: data.servings || null, sourceUrl });
   };
-  document.getElementById('riRedoBtn').onclick = openRecipeImportModal;
+  // Closure explicite (jamais une référence nue) : voir addCustomFoodBtn/aiBtn
+  // (js/ui.js, Lot B) — passer `openRecipeImportModal` directement recevrait le
+  // MouseEvent du clic comme `prefillUrl`, toujours "truthy".
+  document.getElementById('riRedoBtn').onclick = () => openRecipeImportModal(sourceUrl);
 }
 
 /* ===================== LIVRES DE RECETTES ===================== */

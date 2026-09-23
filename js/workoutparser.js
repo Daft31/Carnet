@@ -21,11 +21,18 @@ function workoutApiUrl() {
 // les autres, avec en plus les champs `blocks`/`estimatedDurationMin`/
 // `warnings` — workoutSummary() (core.js) sait afficher ce cas en plus des cas
 // existants (tapis/vélo/sport/club/renfo/manuel).
-function openWorkoutImportModal() {
+// `prefillText` (Phase 3, Lot C — cohérence avec "Reformuler" de js/mealparser.js,
+// openAIDescribeModal) : texte à remettre dans la textarea à l'ouverture — utilisé
+// uniquement par le bouton "Recommencer" de openWorkoutResultModal(), qui repasse
+// le programme ORIGINAL (celui réellement envoyé à l'analyse précédente), jamais
+// reconstruit depuis les blocks/le nom par défaut/toute autre donnée retournée par
+// l'IA. Undefined au premier appel (FAB, sélecteur "Saisie manuelle (IA)") -> textarea
+// vide comme avant, aucun changement de ce cas.
+function openWorkoutImportModal(prefillText) {
   openModal(`
     <h3>Coller un programme (IA)</h3>
     <div class="hint">Colle le texte de ta séance tel que ton coach te l'a donné (blocks, EMOM/AMRAP/Tabata, tempo, repos...). L'IA structure le programme et estime une durée totale.</div>
-    <textarea id="wiText" placeholder="ex.&#10;Block 1&#10;A1. Squat 4x8 tempo 2/2/X/1 repos 90s&#10;A2. Développé couché 4x8 repos 90s&#10;Block 2 EMOM 12min&#10;- 10 burpees&#10;- 15 kettlebell swings"></textarea>
+    <textarea id="wiText" placeholder="ex.&#10;Block 1&#10;A1. Squat 4x8 tempo 2/2/X/1 repos 90s&#10;A2. Développé couché 4x8 repos 90s&#10;Block 2 EMOM 12min&#10;- 10 burpees&#10;- 15 kettlebell swings">${escapeHtml(prefillText || '')}</textarea>
     <div id="wiStatus" class="hint" style="display:none;"></div>
     <button class="btn" id="wiSubmitBtn" type="button">Analyser avec l'IA</button>
   `);
@@ -54,7 +61,7 @@ function openWorkoutImportModal() {
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.details || json.error || 'Erreur inconnue');
-      openWorkoutResultModal(json.data);
+      openWorkoutResultModal(json.data, text);
     } catch (e) {
       // Annulation volontaire (voir js/mealparser.js) : jamais de message d'erreur, jamais
       // de manipulation de statusEl/btn (la modale peut déjà être fermée).
@@ -154,7 +161,12 @@ const WORKOUT_DURATION_REASONABLE_MAX_MIN = 300;
 // Le résultat reste éditable avant sauvegarde (nom de séance + date), comme
 // demandé : l'utilisateur relit/ajuste avant de confirmer, l'IA ne pousse
 // jamais directement dans le suivi.
-function openWorkoutResultModal(data) {
+//
+// `sourceText` (Phase 3, Lot C) : le texte RÉELLEMENT envoyé à l'analyse (celui
+// transmis par openWorkoutImportModal(), pas une reconstruction) — repassé tel
+// quel à "Recommencer" (voir wiRedoBtn plus bas), même principe que `sourceText`
+// dans openAIResultModal() (js/mealparser.js).
+function openWorkoutResultModal(data, sourceText) {
   const blocks = Array.isArray(data.blocks) ? data.blocks : [];
   const warnings = Array.isArray(data.warnings) ? data.warnings : [];
   const totalExercises = blocks.reduce((n, b) => n + (b.exercises ? b.exercises.length : 0), 0);
@@ -254,5 +266,8 @@ function openWorkoutResultModal(data) {
     });
     save('Séance enregistrée ✓'); closeModal(); render();
   };
-  document.getElementById('wiRedoBtn').onclick = openWorkoutImportModal;
+  // Closure explicite (jamais une référence nue) : voir addCustomFoodBtn/aiBtn
+  // (js/ui.js, Lot B) — passer `openWorkoutImportModal` directement recevrait le
+  // MouseEvent du clic comme `prefillText`, toujours "truthy".
+  document.getElementById('wiRedoBtn').onclick = () => openWorkoutImportModal(sourceText);
 }
