@@ -68,8 +68,17 @@ function loadSandbox() {
   vm.runInContext('this.__toastCalls = []; const _origToast = toast; toast = (msg, kind) => { this.__toastCalls.push({msg, kind}); return _origToast(msg, kind); };', sandbox);
   // render() (js/core.js) réconstruit toute la page — hors périmètre de ce test.
   vm.runInContext('render = function(){};', sandbox);
-  vm.runInContext('this.__setState = (currentDate) => { globalThis.currentDate = currentDate; };', sandbox);
-  sandbox.__setState('2026-09-18');
+  // Correctif hygiène (Phase 3) : `globalThis.currentDate = ...` ne réassignait
+  // JAMAIS la variable `let currentDate` de js/core.js lue par workoutparser.js —
+  // dans un contexte `vm`, un top-level `let` vit dans l'environnement lexical du
+  // realm, jamais comme propriété de l'objet global, donc cette écriture était sans
+  // effet (vérifié : `currentDate` valait toujours la vraie date du jour via
+  // `todayStr()`, jamais '2026-09-18'). Le test comparait donc silencieusement au
+  // jour réel d'exécution contre un littéral figé — vrai uniquement le jour où ce
+  // fichier a été écrit. On capture ici la valeur RÉELLE de `currentDate` (déjà
+  // correcte, calculée par core.js via todayStr()) pour comparer dessus plus bas,
+  // au lieu d'un littéral de date en dur.
+  vm.runInContext('this.__currentDate = currentDate;', sandbox);
   sandbox.__document = document;
   sandbox.getToastCalls = () => sandbox.__toastCalls;
   return sandbox;
@@ -228,7 +237,11 @@ test('Régression — nom/date par défaut toujours appliqués correctement sur 
   const els = openResultAndSetDuration(sandbox, SAMPLE_DATA, 45);
   els.saveBtn.onclick();
   const log = logEntriesOf(sandbox);
-  assert.strictEqual(log[0].date, '2026-09-18');
+  // `#wiDate` n'est jamais renseigné par ce test (openModal() est mocké en no-op,
+  // voir plus haut) : la date par défaut vient donc de `currentDate` tel que
+  // core.js l'a réellement calculé (todayStr()) — comparée à la valeur capturée
+  // dans loadSandbox(), jamais à un jour calendaire figé.
+  assert.strictEqual(log[0].date, sandbox.__currentDate);
   assert.ok(log[0].name && log[0].name.length > 0);
 });
 
