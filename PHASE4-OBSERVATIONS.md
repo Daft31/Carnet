@@ -224,6 +224,26 @@ la confirmation) — à évaluer uniquement si un signal d'usage réel démontre
 des entrées catalogue orphelines issues de scans abandonnés posent
 effectivement un problème.
 
+**Analyse Archiviste** *(Phase 4 — analyse signal scanner)* : mécanisme
+confirmé indépendamment par lecture directe de `js/scanner.js` (vérifié
+byte-identique à `main`) — `findOrAddScannedFood()` écrit bien `customFoods`
+avant tout affichage de la modale de quantité, contrairement à
+`openCustomFoodModal()`/`openQtyModal()` qui n'écrivent que sur un geste
+utilisateur explicite. Comportement **non nouveau** : explicitement prévu et
+review-validé lors du cadrage/review de la Side Quest P0 ("auto-ajout
+catalogue"), qui documentait déjà l'absence de rollback comme cohérente avec
+le reste de l'architecture Kalo — le même principe a ensuite été repris
+délibérément pour le Lot B (Custom Food → Quantité). Accumulation
+d'orphelins bornée à un par produit distinct réellement scanné (pas par
+tentative) — aucun doublon, aucune perte de `logEntries`, aucune entrée
+`logEntries` fantôme. Impact réel non démontré en usage réel à ce jour,
+seulement par simulation (un seul scénario direct). Corriger maintenant
+introduirait soit un nouveau pattern d'état transitoire, soit un nouveau
+champ de provenance sur `customFoods` — tous deux absents aujourd'hui de
+l'architecture Kalo pour une raison déjà documentée dans le code lui-même,
+et injustifiés sans preuve d'usage réel.
+**Statut** : SURVEILLER.
+
 ---
 
 *(Les autres observations de cette campagne V2 — sans anomalie, signal jugé
