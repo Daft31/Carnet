@@ -104,9 +104,33 @@ function openAIResultModal(data, sourceText) {
   const carbsDisplay = Math.round(parseFloat(data.carbs) || 0);
   const fatDisplay = Math.round(parseFloat(data.fat) || 0);
   const ingredients = Array.isArray(data.ingredients) ? data.ingredients : [];
+  // Phase 3, Lot D — Option A : "montrer davantage ce que Kalo sait déjà, sans
+  // prétendre savoir davantage". `knownItems` (api/parse-meal.js, réutilise
+  // matchFastfoodItems()/sumMatched() telles quelles, aucun nouveau matching) liste
+  // les éléments déjà reconnus de façon déterministe, avec leur sous-total réel
+  // (quantité déjà appliquée côté serveur). Lecture défensive : une ancienne
+  // réponse API sans ce champ (Array.isArray(undefined)===false) retombe
+  // exactement sur l'ancien affichage `ingredients` ci-dessous, aucun crash.
+  const knownItems = Array.isArray(data.knownItems) ? data.knownItems : [];
+  // "Reste du repas" (repas 'mixed' uniquement, jamais 'catalog' qui n'a aucune
+  // partie IA) : total du repas moins la somme des éléments identifiés — jamais
+  // recalculé/redécoupé par ingrédient IA (aucune fausse décomposition, voir
+  // CLAUDE.md/cadrage Lot D). Gardé défensivement : une valeur négative ou non
+  // finie (réponse API incohérente) n'est jamais affichée comme si elle avait un
+  // sens — la ligne est simplement omise plutôt que de mentir avec un chiffre.
+  const knownKcalSum = knownItems.reduce((sum, it) => sum + (Number(it.kcal) || 0), 0);
+  const remainderKcal = Math.round(kcal - knownKcalSum);
+  const showRemainder = data.confidence === 'mixed' && knownItems.length > 0 && Number.isFinite(remainderKcal) && remainderKcal > 0;
+  const knownItemsHtml = knownItems.length ? `
+    <div class="hint" style="margin-top:10px;">
+      <div style="font-weight:700; margin-bottom:4px;">Éléments identifiés</div>
+      ${knownItems.map(it => `<div style="display:flex; justify-content:space-between; gap:8px;"><span>${escapeHtml(String(it.label || ''))}</span><span>${Math.round(Number(it.kcal) || 0)} kcal</span></div>`).join('')}
+    </div>
+    ${showRemainder ? `<div class="hint">Reste du repas : ~${remainderKcal} kcal (estimation IA)</div>` : ''}
+  ` : (ingredients.length ? `<div class="hint">${ingredients.map(escapeHtml).join(' · ')}</div>` : '');
   openModal(`
     <h3>${escapeHtml(data.name || 'Repas analysé')}</h3>
-    ${ingredients.length ? `<div class="hint">${ingredients.map(escapeHtml).join(' · ')}</div>` : ''}
+    ${knownItemsHtml}
     <div class="qty-preview">
       <div class="item"><input id="aiKcalInput" type="number" inputmode="numeric" value="${kcal}"><div class="l">kcal</div></div>
       <div class="item"><input id="aiProteinInput" type="number" inputmode="numeric" value="${proteinDisplay}"><div class="l">prot g</div></div>

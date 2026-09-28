@@ -397,6 +397,31 @@ function sumMatched(matched) {
   }), { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
 }
 
+// Phase 3, Lot D — Option A : "montrer davantage ce que Kalo sait déjà, sans prétendre
+// savoir davantage". Aucun nouveau matching ni nouvelle logique de reconnaissance ici —
+// réutilise exactement `matched` (matchFastfoodItems) et calcule le sous-total réel de
+// CHAQUE élément après application de sa propre quantité (même principe que
+// sumMatched(), mais par item plutôt qu'agrégé). `label` reprend telle quelle la
+// construction déjà utilisée pour `name` (voir les deux call sites de sumMatched()
+// ci-dessous) — jamais une deuxième version qui pourrait diverger de ce que
+// l'utilisateur voit déjà dans le nom agrégé du repas.
+function buildKnownItems(matched) {
+  return matched.map(m => {
+    const item = {
+      label: (m.grams != null ? `${m.grams}g ` : (m.qty > 1 ? `${m.qty}x ` : '')) + m.name,
+      kcal: Math.round(m.calories * m.qty),
+      protein: Math.round((m.protein || 0) * m.qty * 10) / 10,
+      carbs: Math.round((m.carbs || 0) * m.qty * 10) / 10,
+      fat: Math.round((m.fat || 0) * m.qty * 10) / 10,
+    };
+    // Conservé uniquement quand utile à l'affichage (transparence de la quantité
+    // reconnue) — jamais une donnée qui n'existait pas déjà dans `m`.
+    if (m.grams != null) item.grams = m.grams;
+    else if (m.qty > 1) item.qty = m.qty;
+    return item;
+  });
+}
+
 export default async function handler(req, res) {
   const origin = req.headers && req.headers.origin;
   // AI-P2-2 : requête refusée AVANT tout traitement (donc avant tout appel Mammouth) si
@@ -449,6 +474,8 @@ export default async function handler(req, res) {
           // reconnu contre des valeurs fixes vérifiées, zéro appel IA — la confiance la
           // plus haute que ce système puisse offrir.
           confidence: 'catalog',
+          // Lot D — Option A : repas 100% catalogué, tous les éléments reconnus.
+          knownItems: buildKnownItems(matched),
         },
       });
     }
@@ -530,6 +557,9 @@ export default async function handler(req, res) {
         fat: Math.round((fixedTotals.fat + (Number(nutritionData.fat) || 0)) * 10) / 10,
         fiber: Math.round((fixedTotals.fiber + (Number(nutritionData.fiber) || 0)) * 10) / 10,
         ingredients: [...matched.map(m => m.name), ...(Array.isArray(nutritionData.ingredients) ? nutritionData.ingredients : [])],
+        // Lot D — Option A : uniquement les éléments déterministes reconnus (jamais la
+        // partie IA, qui reste agrégée dans les totaux ci-dessus, jamais décomposée).
+        knownItems: buildKnownItems(matched),
       };
     }
 
@@ -549,6 +579,15 @@ export default async function handler(req, res) {
     // (aucun élément reconnu). Distinct de 'catalog' (voir plus haut, zéro IA).
     if (nutritionData && typeof nutritionData === 'object' && !nutritionData.confidence) {
       nutritionData.confidence = isPartialMatch ? 'mixed' : 'ai';
+    }
+    // Filet de sécurité (Lot D — Option A) : couvre le cas 'ai' pur (isPartialMatch
+    // false, jamais traité par le bloc de fusion ci-dessus, `matched` est alors vide
+    // -> []) et tout chemin qui n'aurait pas déjà posé `knownItems` (ex. réponse IA en
+    // erreur, `nutritionData.error`) — jamais de décomposition artificielle de la
+    // réponse IA dans ce dernier cas, uniquement les éléments catalogue déjà connus,
+    // le cas échéant.
+    if (nutritionData && typeof nutritionData === 'object' && !Array.isArray(nutritionData.knownItems)) {
+      nutritionData.knownItems = buildKnownItems(matched);
     }
 
     return res.status(200).json({
