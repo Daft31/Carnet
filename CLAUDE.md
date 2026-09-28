@@ -262,6 +262,15 @@ Formulation conceptuelle retenue : *"l'utilisateur renseigne parfois plusieurs r
 
 Important : observation répétée sur ~3 jours seulement — **insuffisant pour conclure à un besoin général**. Aucune fonctionnalité ne doit être construite sur cette seule observation (en particulier : ne pas en déduire que Kalo devrait devenir une application de planification de repas). Elle constitue un signal à surveiller, pas un mandat de construction.
 
+## Phase 4 — Usage réel & détection des opportunités
+
+Kalo est entré en **Phase 4** après la clôture de la Phase 3 (Lots A-D intégrés, `main` = `3e3ed6d`). Principe : observer l'usage réel de Kalo plutôt que d'imaginer de nouvelles fonctionnalités, et ne transformer en lot de développement que les signaux suffisamment solides et documentés.
+
+- Journal détaillé, format d'observation, paliers de signal, fiches d'opportunité et décisions : voir **`PHASE4-OBSERVATIONS.md`** (racine du repo) — c'est la source de référence complète, ne pas la dupliquer ici.
+- Workflow : `Observation → signal → analyse → opportunité → décision (NO ACTION / SURVEILLER / CADRER) → cadrage Archiviste → lot Dev → QA → intégration`, jamais l'inverse.
+- **Aucune fonctionnalité ne doit être développée sans signal suffisamment solide et décision explicite `CADRER`** consignée dans `PHASE4-OBSERVATIONS.md`.
+
 ## Où lire le reste
 
 `README.md` : présentation courte du projet, structure des fichiers, modèle de données localStorage, détails de déploiement, vision future clairement séparée de l'état actuel.
+`PHASE4-OBSERVATIONS.md` : journal et protocole détaillé de la Phase 4 (usage réel & détection des opportunités).
