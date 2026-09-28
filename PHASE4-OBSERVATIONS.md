@@ -159,3 +159,75 @@ couvert par aucun raccourci dédié.
 faible pour un ID dédié — sont listées dans leur intégralité dans
 `PHASE4-SIMULATION-REPORT.md`, section 10 "Signaux faibles" et 14 "Scénarios sans
 problème".)*
+
+---
+
+## Campagne 2026-09-28 (V2) — Phase 4, simulation longue durée/générative
+
+**Source : SIMULATION QA.** Prolonge la campagne ci-dessus, mêmes réserves
+méthodologiques. Rapport complet : section "V2 — Simulation longue durée" de
+[`PHASE4-SIMULATION-REPORT.md`](./PHASE4-SIMULATION-REPORT.md). Scripts
+reproductibles : `tests/phase4-simulation/rng.js`, `harness-v2.js`,
+`scenarios-v2.js` (`node tests/phase4-simulation/scenarios-v2.js`, seeds
+1001-9009, un par campagne, journalisés dans le rapport). État de référence :
+`main` à `3e3ed6d` (inchangé depuis la campagne V1).
+
+Les deux observations retenues ci-dessus (grams/macros non liés à l'édition ;
+absence de date dans les modales d'ajout) **restent valables telles quelles** —
+non recherchées à nouveau, non corrigées, conservées sans modification.
+
+### Nouvelle observation retenue (V2)
+
+---
+
+**ID** : SIM-2026-09-28-05
+**Source** : SIMULATION QA
+**Profil** : Transversal (campagne "Abandons ciblés", cas scanner ; corroboré
+par la campagne "Scanner longue durée")
+**Scénarios concernés** : abandon de la modale de quantité après un scan de
+code-barres réussi (produit trouvé, jamais confirmé).
+**Contexte** : `findOrAddScannedFood()`/`openScannedProductModal()`
+(`js/scanner.js`, mécanisme "Side Quest P0").
+**Observation** : Sur les 3 flux qui peuvent créer une définition dans
+`customFoods` (recherche catalogue via `openQtyModal()`, aliment personnalisé
+via `openCustomFoodModal()`, scan via `findOrAddScannedFood()`), le scanner est
+le seul où l'écriture catalogue a lieu **avant** la confirmation de quantité —
+dès la détection réussie du code-barres, avant même l'affichage de la modale
+de quantité. Les deux autres flux n'écrivent rien tant que l'utilisateur n'a
+pas explicitement confirmé.
+**Problème** : Un utilisateur qui scanne puis abandonne (se ravise, ferme
+l'app, se trompe de produit, change d'avis) laisse une nouvelle entrée
+catalogue derrière lui, même si strictement aucun repas n'est jamais
+journalisé — contrairement à ce qui se passerait avec les deux autres flux
+d'ajout dans la même situation.
+**Impact** : Accumulation potentielle d'entrées catalogue jamais utilisées
+(un scan "pour voir", un scan par erreur, un scan suivi d'un changement
+d'avis) — aucune perte de données utilisateur (le repas lui-même n'est
+jamais fantôme), mais un effet de bord asymétrique et invisible pour
+l'utilisateur, qui n'a aucune raison de savoir qu'un simple scan — même
+abandonné — a déjà modifié son catalogue personnel.
+**Fréquence observée** : Un scénario direct (campagne "Abandons ciblés"), mais
+le mécanisme lui-même (écriture avant confirmation) est vérifié par lecture de
+code, pas seulement déduit de la simulation — donc systématique, pas
+occasionnel, dès qu'un scan aboutit à un produit reconnu.
+**Reproductibilité** : Certaine (comportement du code, indépendant de l'aléa
+de la simulation — vérifié à la fois en isolant `findOrAddScannedFood()`
+directement et via le flux complet `onDetected()`).
+**Signal** : **Suffisamment solide** au sens mécanique (asymétrie claire,
+vérifiée par code ET simulation, impact concret et démontrable) — mais reposant
+sur un seul scénario direct, donc sans mesure de fréquence réelle d'usage. À
+traiter comme un signal robuste sur le MÉCANISME, pas encore comme une preuve
+que ce mécanisme cause un problème perçu par un utilisateur réel.
+**Hypothèse** *(pas une solution imposée)* : aligner le moment d'écriture
+catalogue du flux scanner sur celui des deux autres flux (écriture différée à
+la confirmation) — à évaluer uniquement si un signal d'usage réel démontre que
+des entrées catalogue orphelines issues de scans abandonnés posent
+effectivement un problème.
+
+---
+
+*(Les autres observations de cette campagne V2 — sans anomalie, signal jugé
+trop faible pour une fiche dédiée, ou reconfirmation d'un signal déjà
+consigné ci-dessus sans rien y ajouter de qualitativement nouveau — sont
+listées dans leur intégralité dans `PHASE4-SIMULATION-REPORT.md`, section
+"V2 — Simulation longue durée".)*

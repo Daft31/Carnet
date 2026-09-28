@@ -301,3 +301,239 @@ méritent d'être gardés en mémoire (`PHASE4-OBSERVATIONS.md`) et réévalués
 par une campagne de simulation plus large, soit par un signal d'usage réel
 indépendant — jamais transformés en chantier sur la seule base de cette
 campagne.
+
+---
+
+## V2 — Simulation longue durée
+
+> **Toujours une SIMULATION QA**, jamais une observation d'usage réel — voir
+> l'avertissement en tête de ce rapport. Cette V2 prolonge la V1 : mêmes
+> outils/conventions, campagnes plus longues et génératives (seedées), profils
+> dont le comportement évolue dans le temps, et un oracle de cohérence
+> systématique. Les deux observations retenues en V1 (cohérence grams/macros à
+> l'édition, absence de date dans les modales d'ajout) restent inchangées et ne
+> sont ni corrigées ni recherchées à nouveau dans cette V2 — elles servent de
+> référence, pas de sujet.
+
+### Méthodologie V2 — ce qui change par rapport à la V1
+
+- **Génératif et seedé** : chaque campagne tire ses choix (aliments, quantités,
+  heures, décisions de corriger/abandonner/scanner) via un PRNG déterministe
+  (`mulberry32`, `tests/phase4-simulation/rng.js`), avec un `seed` explicite et
+  journalisé — toute campagne est donc rejouable **à l'identique** via
+  `node tests/phase4-simulation/scenarios-v2.js` (vérifié : deux exécutions
+  successives produisent des résultats identiques à l'exception des `id`
+  générés par le vrai `uid()` du produit, qui mélange `Date.now()`/
+  `Math.random()` — hors du seed contrôlé, normal et attendu, un identifiant
+  n'est pas une décision de simulation).
+- **Profils évolutifs** : le comportement d'un même profil change explicitement
+  d'une semaine à l'autre au sein d'une même campagne (ex. Sportif : 3 → 5 → 0 →
+  3 séances/semaine ; Nutrition : précis → IA → scanner → retour catalogue).
+- **Oracle de cohérence** (`oracleCheck()`, section 16 de la mission) : après
+  chaque campagne, comparaison systématique de l'état mémoire
+  (`logEntries`/`weightEntries`/`customFoods`) au JSON réellement écrit dans
+  `localStorage`, plus détection de doublons d'identifiants. **9/9 campagnes,
+  0 incohérence détectée.**
+- **Classification** : chaque résultat est marqué PASS / OBSERVATION /
+  FRICTION / BUG / SIGNAL (`record()`, `tests/phase4-simulation/harness-v2.js`)
+  au moment où il est produit, pas reclassé a posteriori pour le rapport.
+
+**Découverte méthodologique majeure, traitée ici en transparence (jamais comme
+un bug produit)** : `frequentMealFor()`/`recurringMealPatterns()` et
+`calorieStreak()` (`js/core.js`) ancrent leur fenêtre d'observation sur
+`todayStr()` — la vraie date système au moment de l'exécution — **et non** sur
+la variable `currentDate` que la simulation pilote. Les toutes premières
+versions des campagnes V2, datées sur des mois fictifs arbitraires (ex. janvier
+2026), rendaient donc ces deux fonctions structurellement aveugles aux données
+simulées : pas parce que le produit avait un défaut, mais parce que la fenêtre
+réelle ne recouvrait jamais les dates choisies. Corrigé en ancrant chaque
+campagne concernée sur le jour réel d'exécution (`daysAgo(0)` = aujourd'hui) —
+voir le commentaire dédié dans `scenarios-v2.js`. Cette découverte est
+elle-même un résultat utile de la V2 : elle confirme que `frequentMealFor()`/
+`calorieStreak()` répondent toujours à "où en est l'utilisateur AUJOURD'HUI",
+jamais à une notion de date que l'app aurait pu faire dériver — cohérent avec
+un usage réel (où `currentDate` vaut presque toujours aujourd'hui), mais un
+point à connaître pour quiconque écrirait une future simulation datée dans le
+passé ou le futur fictif.
+
+Une seconde limite du bac à sable (pas du produit) a été rencontrée et
+corrigée en cours de route : notre DOM stub mémoïse chaque élément par id de
+façon permanente, alors qu'un vrai navigateur détruit tout le contenu de
+`#modal-root` à chaque `openModal()`. Rouvrir deux fois le même type de modale
+SANS confirmation entre les deux empile un second listener sur l'élément déjà
+existant, produisant une entrée fantôme **dans le bac à sable uniquement**
+(jamais en usage réel). Documenté dans `harness-v2.js` ; le scénario concerné
+(abandon d'un ajout catalogue) a été restructuré pour ne jamais rouvrir le même
+id sans confirmation intermédiaire, plutôt que de rapporter un faux positif.
+
+### Campagnes V2 (table de reproductibilité)
+
+| # | Campagne | Seed | Profil | Durée | Journeys | Actions | Résultat dominant |
+|---|---|---|---|---|---|---|---|
+| 1 | Sportif évolutif | 1001 | E, évolutif (3→5→0→3 séances/sem.) | 28j | 28 | 84 | PASS (oracle) + observations |
+| 2 | Nutrition évolutive | 2002 | D/B/C combinés (précis→IA→scanner→retour) | 28j | 28 | 42 | PASS (oracle) + observations |
+| 3 | Occasionnel — absence puis rattrapage partiel | 3003 | F réaliste (10j actif, 10j absent, 2j rattrapés, 9j reprise) | 30j | 21 | 22 | PASS (oracle) + observations |
+| 4 | Corrections en cascade | 4004 | A/G combiné (séquences créer/modifier/supprimer/recréer) | 1j (session) | 3 | 12 | PASS (oracle) |
+| 5 | Repas récurrents avec variations | 5005 | C étendu (6 variantes d'un même petit-déj de base) | 14j | 14 | 27 | PASS (oracle) + observation |
+| 6 | Scanner longue durée | 6006 | H étendu (3 produits, dont 2 quasi-identiques) | 14j | 14 | 24 | PASS (oracle) + observation |
+| 7 | IA variée | 7007 | D étendu (6 descriptions contrastées) | 1j (session) | 6 | 6 | observation |
+| 8 | Abandons ciblés | 8008 | Transversal (catalogue/scanner/IA) | 1j (session) | 3 | 3 | **1 SIGNAL** (asymétrie scanner) |
+| 9 | Comparaison inter-profils | 9009 | A vs B vs F vs G, même tâche | 1j (session) | 4 | 6 | observation comparative |
+
+**Totaux V2** : 9 campagnes, 118 jours simulés (somme des durées), 121
+journeys, 226 actions exécutées via les vraies fonctions du produit.
+Résultats : 14 OBSERVATION, 10 PASS, 1 SIGNAL, **0 BUG, 0 FRICTION** (au sens
+strict de la classification automatique de cette V2 — les deux frictions
+connues de la V1 ne sont pas recherchées ici, voir plus haut).
+
+### Bugs (V2)
+
+**Aucun.** Deux faux positifs rencontrés en cours de construction des
+campagnes (stacking de listeners sur la modale quantité abandonnée ; fenêtre
+`frequentMealFor()` non peuplée à cause de dates fictives) ont été
+diagnostiqués comme des artefacts de méthode et corrigés dans le script —
+détaillés ci-dessus par transparence, jamais comptés comme des bugs produit.
+
+### Frictions (V2)
+
+Aucune nouvelle friction structurelle découverte dans cette V2 (au-delà des
+deux déjà connues de la V1). La comparaison inter-profils (campagne 9) montre
+une charge légèrement supérieure pour le profil Chaotique (2 actions/3 écrans,
+ajout puis correction) par rapport aux autres (1 action/1-2 écrans) — attendu
+et cohérent avec la nature du profil, pas une friction du produit.
+
+### Observations (V2) — sélection
+
+- **Sportif évolutif** : l'arrêt total d'une semaine (0 séance) puis la
+  reprise la semaine suivante ne perturbent ni `weeklyDeficits()` ni
+  `calorieStreak()` — recalcul propre dans les deux sens.
+- **Nutrition évolutive** : après deux semaines sans toucher au catalogue (IA
+  puis scanner), le pattern du petit-déjeuner de semaine 1 est retrouvé dès
+  que les occurrences suffisent à nouveau sur la fenêtre glissante de 30
+  jours — `frequentMealFor()` n'a pas de notion de "série" interrompue, une
+  fenêtre glissante uniquement.
+- **Nutrition évolutive, semaine scanner** : sur 7 jours et 3 produits qui
+  reviennent au hasard, le catalogue personnel n'a grandi que de 3 entrées
+  (une par produit distinct) pour 7 scans journalisés — le mécanisme de dédup
+  par barcode tient sur une semaine complète, pas seulement sur un scénario
+  isolé.
+- **Occasionnel — absence 10j + rattrapage partiel 2j** : les 8 jours du trou
+  jamais rattrapés restent à 0 kcal de façon stable (aucune donnée fabriquée),
+  `kaloInsights()` reste silencieux sur cette période (pas de fausse
+  observation bâtie sur du vide).
+- **Repas récurrents avec variations (14j)** : confirme, sur une durée plus
+  longue que la V1 (14j vs 12j), la fragilité déjà documentée de la
+  correspondance exacte — une routine reconnaissable pour un humain (avoine
+  14/14 jours, sous 6 formes légèrement différentes) ne déclenche jamais
+  `frequentMealFor()`, aucune variante seule ne dépassant 50% des jours.
+- **Comparaison inter-profils** : sur la même tâche ("logger le petit-déj
+  devenu habituel"), seul le profil Rapide emprunte réellement le raccourci
+  Quick-add (2 actions, 1 modale) ; les 3 autres repassent par la recherche
+  standard — pas une friction en soi (le raccourci reste disponible), mais une
+  confirmation chiffrée qu'il n'est structurellement utilisé que par le profil
+  qui le cherche.
+
+### Signaux faibles (V2)
+
+- Charge légèrement supérieure du profil Chaotique sur une tâche comparée
+  (campagne 9) — attendu, pas surprenant.
+
+### Signaux intéressants (V2)
+
+- **Reconfirmation, sur une fenêtre plus longue, de la fragilité de la
+  correspondance exacte des repas fréquents** (campagne 5, 14 jours) — même
+  famille que le signal V1/README déjà connu, mais avec un jeu de variantes
+  plus riche (6 formes distinctes d'un même repas de base) et une durée
+  doublée. Renforce la robustesse de l'observation sans en changer la nature.
+
+### Signaux suffisamment solides (V2)
+
+**Un signal atteint ce niveau dans cette V2** — voir ci-dessous. Un seul
+scénario direct (campagne 8), mais un mécanisme structurel univoque, vérifié
+par lecture de code en plus de la simulation, avec un impact concret et
+immédiatement démontrable (une entrée catalogue créée sans qu'aucun repas ne
+soit jamais journalisé) :
+
+> **SIGNAL — Asymétrie scanner vs. catalogue/IA sur le moment d'écriture.**
+> Contrairement à l'ajout catalogue et au flux IA (rien n'est écrit dans
+> `customFoods`/`logEntries` avant la confirmation explicite de quantité —
+> vérifié dans cette même campagne, cas 1 et 3), le flux scanner
+> (`findOrAddScannedFood()`, `js/scanner.js`) écrit déjà l'aliment dans
+> `customFoods` **dès la détection réussie du code-barres**, avant même que la
+> modale de quantité ne soit affichée. Abandonner l'étape quantité après un
+> scan (fermer l'app, se raviser, se tromper de produit) laisse donc une
+> nouvelle entrée catalogue derrière soi, même si aucun repas n'est jamais
+> journalisé — sur les 3 flux d'ajout qui créent des définitions catalogue
+> (recherche, scan, aliment personnalisé), le scanner est le seul où la
+> définition survit systématiquement à un abandon. Voir
+> `PHASE4-OBSERVATIONS.md` (SIM-2026-09-28-05) pour la fiche complète.
+
+### Opportunités potentielles (V2)
+
+Formulées en OBSERVATION → PROBLÈME → IMPACT → HYPOTHÈSE, jamais comme une
+fonctionnalité à construire :
+
+- Asymétrie scanner (ci-dessus) : hypothèse à corroborer avant toute décision
+  — un mécanisme qui traiterait la création catalogue et la confirmation de
+  quantité de façon plus symétrique aux deux autres flux, sous réserve d'un
+  signal d'usage réel démontrant que des entrées catalogue orphelines
+  s'accumulent réellement.
+
+### Scénarios sans problème (V2)
+
+- Séquences complexes de corrections en cascade (créer → modifier quantité →
+  modifier macro séparément → supprimer → recréer → modifier → consulter
+  l'historique ; et créer → quitter → revenir → modifier → supprimer →
+  recréer) : aucune donnée périmée, aucun doublon, aucun id fantôme sur les
+  deux patterns testés (campagne 4).
+- Absence totale d'activité sur une semaine entière (campagne 1, semaine 3) :
+  aucune anomalie de calcul.
+- Trou de 10 jours + rattrapage partiel + reprise (campagne 3) : historique
+  résultant cohérent à chaque étape (oracle OK), aucune exception sur
+  `kaloInsights()`.
+- 6 descriptions IA volontairement contrastées, de la plus précise à la plus
+  vague (campagne 7) : toutes traitées sans exception, préremplissage
+  systématique.
+- 3 abandons ciblés distincts (catalogue, IA après résultat) : aucune donnée
+  fantôme sur ces deux flux — seul le scanner fait exception (voir signal
+  ci-dessus).
+
+### Zones non couvertes par cette V2
+
+- **`openEditWorkoutEntryModal()`** (édition d'une séance déjà journalisée) :
+  toujours non exercée en simulation (comme en V1) — le risque d'indépendance
+  durée/kcalBurned, analogue au risque grams/macros déjà connu côté repas,
+  reste à vérifier par simulation.
+- **Rendu DOM réel** : toujours hors périmètre (voir V1) — cette V2 reste une
+  simulation au niveau du code, pas de l'interface visuelle/tactile.
+- **Journées "restaurant"/"déplacement"/"anniversaire" nommées explicitement**
+  comme telles : approchées indirectement (descriptions IA de type restaurant
+  dans les campagnes 2/7) mais jamais construites comme des campagnes dédiées
+  distinctes.
+- **Séquences 14/30 jours pour le POIDS spécifiquement** (évolution fine,
+  mesures irrégulières, ex. la série `75.0/74.8/75.2/74.5...` de la mission) :
+  le poids a été loggé dans plusieurs campagnes (Sportif, Occasionnel) mais
+  jamais comme sujet principal d'une campagne dédiée à l'interprétation de
+  tendance (`weighInSummary()`/`weighInTrend()`, non exercées cette fois).
+- **Import/export, recettes, courses, notes/todos** : toujours hors périmètre
+  (comme en V1 ; import/export reste couvert par les tests Phase 2.6 dédiés).
+- **Convergence sur un plus grand nombre de profils indépendants** : avec 9
+  campagnes (dont plusieurs combinent déjà plusieurs profils), la V2 reste en
+  deçà du volume qui permettrait de qualifier un signal comme "suffisamment
+  solide" par pure convergence statistique — le signal solide de cette V2 l'est
+  par la clarté du mécanisme, pas par le nombre d'occurrences.
+
+### Conclusion V2
+
+La V2 répond au critère de réussite de la mission sur plusieurs points à la
+fois : un comportement émergent sur plusieurs jours (le pattern de repas qui
+"revient" après deux semaines d'interruption, campagne 2), une différence
+mesurée entre profils sur une même tâche (campagne 9), une reconfirmation
+robuste d'un signal déjà connu sur une durée plus longue (campagne 5), et
+surtout un signal structurel nouveau et net (l'asymétrie scanner, campagne 8)
+qui n'était pas apparu en V1 faute d'avoir jamais été testé sous cet angle
+précis. Elle confirme aussi, par la bande, que la robustesse constatée en V1
+sur les parcours "normaux" (garde anti-double-confirmation, cohérence des
+jours, règle sport/calories) tient sur des durées bien plus longues et sous
+des comportements plus variés — sans avoir eu besoin de gonfler artificiellement
+le nombre de campagnes pour l'établir.
