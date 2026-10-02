@@ -1,9 +1,11 @@
 // Fonction serverless Vercel : structure un programme de musculation/fitness
 // collé en texte libre (format toujours variable : "Block"/"Circuit"/EMOM/
 // AMRAP/Tabata/liste simple, tempo "2/2/X/1" ou "3-1-1", repos en secondes ou
-// minutes...) via Mammouth AI (API compatible OpenAI), avec la clé stockée
-// côté serveur uniquement (jamais exposée au client) — même clé/modèle que
-// api/parse-meal.js et api/parse-recipe.js.
+// minutes...) via l'API Anthropic (Claude), avec la clé stockée côté serveur
+// uniquement (jamais exposée au client) — même clé/modèle que
+// api/parse-meal.js et api/parse-recipe.js. Migration fournisseur (Mammouth ->
+// Anthropic, voir CLAUDE.md règles 2/3) : voir le commentaire détaillé en tête
+// d'api/parse-meal.js.
 //
 // Contrairement à parse-meal/parse-recipe, la durée totale estimée
 // (estimatedDurationMin) n'est PAS demandée au modèle : elle est recalculée
@@ -14,11 +16,9 @@
 // calcul déterministe, testable, et indépendant d'une éventuelle dérive du
 // modèle sur ce point précis.
 
-const MAMMOUTH_API_URL = 'https://api.mammouth.ai/v1/chat/completions';
-// Les modèles GPT sont temporairement indisponibles côté Mammouth (confirmé par
-// leur support le 16/09/2026) — bascule sur claude-haiku-4-5 (non-GPT) en
-// attendant. Revenir à gpt-5.4-mini une fois l'incident résolu si souhaité.
-const MAMMOUTH_MODEL = 'claude-haiku-4-5';
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_VERSION = '2023-06-01';
+const ANTHROPIC_MODEL = 'claude-haiku-4-5';
 
 // AI-P2-2 (audit Phase 2.3.1) : voir le commentaire équivalent (plus détaillé) dans
 // api/parse-meal.js — même liste blanche, même limite assumée (CORS = navigateurs
@@ -197,15 +197,23 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'CARNET_API_KEY manquante côté serveur (Vercel)' });
     }
 
-    const apiRes = await fetch(MAMMOUTH_API_URL, {
+    // Voir api/parse-meal.js : même adaptation Mammouth -> Anthropic (system
+    // prompt séparé, pas un message de rôle "system" dans `messages`).
+    const chatMessages = buildMessages(programText.trim());
+    const systemPrompt = chatMessages[0].content;
+    const conversationMessages = chatMessages.slice(1);
+
+    const apiRes = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.CARNET_API_KEY}`,
+        'x-api-key': process.env.CARNET_API_KEY,
+        'anthropic-version': ANTHROPIC_VERSION,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: MAMMOUTH_MODEL,
-        messages: buildMessages(programText.trim()),
+        model: ANTHROPIC_MODEL,
+        system: systemPrompt,
+        messages: conversationMessages,
         temperature: 0.2,
         max_tokens: 1200,
       }),
@@ -213,24 +221,19 @@ export default async function handler(req, res) {
 
     if (!apiRes.ok) {
       const errText = await apiRes.text();
-      console.error('Mammouth API error:', apiRes.status, errText);
-      // Voir api/parse-meal.js : blocage compte amont (Mammouth/OpenRouter), pas une erreur
-      // liée à ce programme précis.
-      const isAccountBlocked = /policy violation|has been blocked/i.test(errText);
-      if (isAccountBlocked) {
-        return res.status(502).json({
-          error: 'Compte Mammouth bloqué',
-          details: "L'API Mammouth a bloqué ce compte suite à une violation de politique détectée sur une requête précédente (probablement un faux positif). Ce n'est pas lié à ce programme précis : va vérifier ton compte sur mammouth.ai ou contacte leur support.",
-        });
-      }
+      console.error('Anthropic API error:', apiRes.status, errText);
       return res.status(502).json({
-        error: 'Erreur API Mammouth',
+        error: 'Erreur API Anthropic',
         details: `${apiRes.status}: ${errText.slice(0, 300)}`,
       });
     }
 
     const payload = await apiRes.json();
-    const responseText = payload?.choices?.[0]?.message?.content || '';
+    // Voir api/parse-meal.js : format Anthropic (`content` est un tableau de
+    // blocs), pas `choices[0].message.content` (format OpenAI-compatible).
+    const textBlock = Array.isArray(payload?.content) ? payload.content.find(b => b.type === 'text') : null;
+    const responseText = textBlock?.text || '';
+    if (payload?.usage) console.log('[anthropic usage] parse-workout:', payload.usage);
 
     let workoutData;
     try {

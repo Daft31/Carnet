@@ -1,8 +1,8 @@
 /* ===================== IMPORT DE RECETTE (TIKTOK) + LIVRES ===================== */
 /* Appelle la fonction serverless /api/parse-recipe (Vercel) : celle-ci va
    chercher la légende de la vidéo TikTok via l'API oEmbed publique de
-   TikTok, puis la fait structurer en recette par l'IA Mammouth (même
-   modèle/clé que js/mealparser.js).
+   TikTok, puis la fait structurer en recette par l'API Anthropic (Claude)
+   (même modèle/clé que js/mealparser.js).
 
    Réutilise le même mécanisme cross-domaine que js/mealparser.js plutôt que
    d'en inventer un autre : VERCEL_API_BASE est déjà défini là-bas (ce

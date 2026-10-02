@@ -2,7 +2,7 @@
 // une fois déjà visitée. Stratégie volontairement simple : réseau en priorité,
 // copie mise en cache au passage, secours sur le cache si le réseau échoue
 // (offline). Uniquement pour les requêtes GET same-origin : les appels vers
-// l'API Mammouth (/api/parse-meal, potentiellement cross-origin sur GitHub
+// l'API Anthropic (/api/parse-meal, potentiellement cross-origin sur GitHub
 // Pages), Open Food Facts et les CDN externes ne sont jamais interceptés.
 const CACHE = 'kalo-shell-v1';
 

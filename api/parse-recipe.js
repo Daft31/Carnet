@@ -2,16 +2,16 @@
 // publique. Étape 1, récupère la légende via l'API oEmbed publique de
 // TikTok (pas de dépendance, fetch natif Node, aucune authentification
 // nécessaire pour une vidéo publique). Étape 2, fait structurer cette
-// légende en recette par Mammouth AI (API compatible OpenAI), avec la
-// clé stockée côté serveur uniquement (jamais exposée au client) — même
-// clé/modèle que api/parse-meal.js.
+// légende en recette par l'API Anthropic (Claude), avec la clé stockée
+// côté serveur uniquement (jamais exposée au client) — même clé/modèle
+// que api/parse-meal.js. Migration fournisseur (Mammouth -> Anthropic, voir
+// CLAUDE.md règles 2/3) : voir le commentaire détaillé en tête
+// d'api/parse-meal.js.
 
 const TIKTOK_OEMBED_URL = 'https://www.tiktok.com/oembed';
-const MAMMOUTH_API_URL = 'https://api.mammouth.ai/v1/chat/completions';
-// Les modèles GPT sont temporairement indisponibles côté Mammouth (confirmé par
-// leur support le 16/09/2026) — bascule sur claude-haiku-4-5 (non-GPT) en
-// attendant. Revenir à gpt-5.4-mini une fois l'incident résolu si souhaité.
-const MAMMOUTH_MODEL = 'claude-haiku-4-5';
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_VERSION = '2023-06-01';
+const ANTHROPIC_MODEL = 'claude-haiku-4-5';
 
 // AI-P2-2 (audit Phase 2.3.1) : voir le commentaire équivalent (plus détaillé) dans
 // api/parse-meal.js — même liste blanche, même limite assumée (CORS = navigateurs
@@ -145,16 +145,25 @@ export default async function handler(req, res) {
       });
     }
 
-    // Étape 2 : structurer la légende en recette via Mammouth AI.
-    const apiRes = await fetch(MAMMOUTH_API_URL, {
+    // Étape 2 : structurer la légende en recette via l'API Anthropic. Voir
+    // api/parse-meal.js : system prompt séparé, pas un message de rôle
+    // "system" dans `messages` (contrairement au format OpenAI-compatible
+    // de Mammouth).
+    const chatMessages = buildMessages(caption);
+    const systemPrompt = chatMessages[0].content;
+    const conversationMessages = chatMessages.slice(1);
+
+    const apiRes = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.CARNET_API_KEY}`,
+        'x-api-key': process.env.CARNET_API_KEY,
+        'anthropic-version': ANTHROPIC_VERSION,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: MAMMOUTH_MODEL,
-        messages: buildMessages(caption),
+        model: ANTHROPIC_MODEL,
+        system: systemPrompt,
+        messages: conversationMessages,
         temperature: 0.2,
         max_tokens: 700,
       }),
@@ -162,24 +171,19 @@ export default async function handler(req, res) {
 
     if (!apiRes.ok) {
       const errText = await apiRes.text();
-      console.error('Mammouth API error:', apiRes.status, errText);
-      // Voir api/parse-meal.js : blocage compte amont (Mammouth/OpenRouter), pas une erreur
-      // liée à cette recette précise.
-      const isAccountBlocked = /policy violation|has been blocked/i.test(errText);
-      if (isAccountBlocked) {
-        return res.status(502).json({
-          error: 'Compte Mammouth bloqué',
-          details: "L'API Mammouth a bloqué ce compte suite à une violation de politique détectée sur une requête précédente (probablement un faux positif). Ce n'est pas lié à cette recette précise : va vérifier ton compte sur mammouth.ai ou contacte leur support.",
-        });
-      }
+      console.error('Anthropic API error:', apiRes.status, errText);
       return res.status(502).json({
-        error: 'Erreur API Mammouth',
+        error: 'Erreur API Anthropic',
         details: `${apiRes.status}: ${errText.slice(0, 300)}`,
       });
     }
 
     const payload = await apiRes.json();
-    const responseText = payload?.choices?.[0]?.message?.content || '';
+    // Voir api/parse-meal.js : format Anthropic (`content` est un tableau de
+    // blocs), pas `choices[0].message.content` (format OpenAI-compatible).
+    const textBlock = Array.isArray(payload?.content) ? payload.content.find(b => b.type === 'text') : null;
+    const responseText = textBlock?.text || '';
+    if (payload?.usage) console.log('[anthropic usage] parse-recipe:', payload.usage);
 
     let recipeData;
     try {

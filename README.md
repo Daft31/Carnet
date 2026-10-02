@@ -98,9 +98,9 @@ js/mealparser.js       Feature IA "décrire un repas" : appelle /api/parse-meal
 js/recipeimport.js     Import de recette (lien TikTok) : appelle /api/parse-recipe
 js/workoutparser.js    Saisie IA d'un programme de sport (texte libre) : appelle /api/parse-workout
 js/app.js              Point d'entrée : listeners de l'en-tête (retour/réglages) et du bouton "+", thème, render() initial, enregistrement du service worker
-api/parse-meal.js     Fonction serverless Vercel : proxy sécurisé vers l'API Mammouth AI (repas)
-api/parse-recipe.js   Fonction serverless Vercel : oEmbed TikTok + structuration recette via Mammouth AI
-api/parse-workout.js  Fonction serverless Vercel : structuration d'un programme de sport via Mammouth AI
+api/parse-meal.js     Fonction serverless Vercel : proxy sécurisé vers l'API Anthropic (Claude) (repas)
+api/parse-recipe.js   Fonction serverless Vercel : oEmbed TikTok + structuration recette via l'API Anthropic
+api/parse-workout.js  Fonction serverless Vercel : structuration d'un programme de sport via l'API Anthropic
 manifest.json         Manifest PWA (nom, icônes, couleurs, display standalone)
 sw.js                  Service worker minimal (réseau en priorité + secours cache, same-origin GET uniquement)
 icons/                 Icônes PWA (icon-192.png, icon-512.png, maskable-512.png)
@@ -146,11 +146,11 @@ Aucune base de données externe, aucun compte utilisateur, aucune synchronisatio
 
 C'est le point le plus piégeux du repo, à lire avant d'y toucher.
 
-- La variable d'environnement s'appelle **`CARNET_API_KEY`** (nom historique) mais **c'est en réalité une clé de l'abonnement Mammouth AI** de l'utilisateur (API compatible OpenAI, `https://api.mammouth.ai/v1/chat/completions`), **pas** une clé Anthropic. Partagée par les trois fonctions.
-- **Modèle actuellement utilisé : `claude-haiku-4-5`** — un identifiant propre au catalogue Mammouth, pas un nom Anthropic officiel malgré son apparence. C'est un **fallback temporaire** : les modèles GPT de Mammouth sont indisponibles depuis un incident confirmé par leur support le 16/09/2026 ; le modèle "normal" avant l'incident était `gpt-5.4-mini`. Avant de changer de modèle, vérifier l'état de l'incident et la liste à jour sur `https://info.mammouth.ai/fr/docs/api-quick-start/`.
-- Les trois fonctions doivent garder leurs en-têtes **CORS** (`Access-Control-Allow-Origin: *` + gestion de `OPTIONS`), car l'appli est ouverte depuis un domaine différent (GitHub Pages) de celui qui héberge les fonctions (Vercel).
+- La variable d'environnement s'appelle **`CARNET_API_KEY`** (nom historique, conservé) et contient, depuis la migration fournisseur du 2026-10-02, **une vraie clé API Anthropic** (crédits API Claude existants, ~5$, usage ponctuel en attendant une décision durable sur le fournisseur) — appelée en direct sur `https://api.anthropic.com/v1/messages` (header `x-api-key` + `anthropic-version`, **jamais** `Authorization: Bearer`). Avant cette date, la même variable contenait une clé Mammouth AI (API compatible OpenAI) ; l'abonnement Mammouth a été résilié (crédit expiré). Partagée par les trois fonctions.
+- **Modèle actuellement utilisé : `claude-haiku-4-5`** — un identifiant de modèle Anthropic réel (déjà utilisé tel quel côté Mammouth avant la migration, coïncidence de nommage). Choisi pour rester sur un coût faible (voir CLAUDE.md règle 3) : ne pas changer de modèle sans raison concrète.
+- Les trois fonctions doivent garder leurs en-têtes **CORS** (liste blanche d'origines + gestion de `OPTIONS`), car l'appli est ouverte depuis un domaine différent (GitHub Pages) de celui qui héberge les fonctions (Vercel).
 - Côté client, `VERCEL_API_BASE` (actuellement `https://carnet-self.vercel.app`) est défini dans chacun des trois fichiers JS correspondants (`mealparser.js`, `recipeimport.js`, `workoutparser.js`) : URL absolue utilisée quand l'appli tourne sur un domaine autre que `*.vercel.app`. **Si le domaine de prod Vercel change, mettre à jour les trois**, sinon les features IA cessent de fonctionner silencieusement depuis GitHub Pages.
-- `api/parse-recipe.js` récupère d'abord la légende d'une vidéo TikTok publique via l'API oEmbed officielle (pas d'authentification), puis la structure en recette via Mammouth AI.
+- `api/parse-recipe.js` récupère d'abord la légende d'une vidéo TikTok publique via l'API oEmbed officielle (pas d'authentification), puis la structure en recette via l'API Anthropic.
 - `api/parse-workout.js` structure un programme de sport en texte libre (blocks/EMOM/tempo/repos, formats variés) ; la durée totale estimée est recalculée côté code à partir de la structure renvoyée, jamais demandée directement au modèle (l'arithmétique est plus fiable en déterministe qu'en LLM).
 
 ### Calcul des calories brûlées pour les séances (moteur, limites connues)

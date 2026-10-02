@@ -1,12 +1,17 @@
 // Fonction serverless Vercel : parse une description de repas en langage
-// naturel via Mammouth AI (API compatible OpenAI), en utilisant la clé
-// stockée côté serveur uniquement (jamais exposée au client).
+// naturel via l'API Anthropic (Claude), en utilisant la clé stockée côté
+// serveur uniquement (jamais exposée au client).
+//
+// Migration fournisseur (Mammouth -> Anthropic, voir CLAUDE.md règles 2/3) :
+// le crédit Mammouth de l'utilisateur est expiré (abonnement résilié), bascule
+// sur l'API Anthropic officielle avec des crédits API Claude existants.
+// `claude-haiku-4-5` était déjà le modèle demandé côté Mammouth (fallback GPT
+// indisponible) — conservé tel quel, c'est un identifiant de modèle Anthropic
+// réel et actuellement disponible, pas une coïncidence de nommage à changer.
 
-const MAMMOUTH_API_URL = 'https://api.mammouth.ai/v1/chat/completions';
-// Les modèles GPT sont temporairement indisponibles côté Mammouth (confirmé par
-// leur support le 16/09/2026) — bascule sur claude-haiku-4-5 (non-GPT) en
-// attendant. Revenir à gpt-5.4-mini une fois l'incident résolu si souhaité.
-const MAMMOUTH_MODEL = 'claude-haiku-4-5';
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_VERSION = '2023-06-01';
+const ANTHROPIC_MODEL = 'claude-haiku-4-5';
 
 // AI-P2-2 (audit Phase 2.3.1) : liste blanche d'origines plutôt qu'un `Access-Control-
 // Allow-Origin: *` inconditionnel. Domaines réels de prod (voir CLAUDE.md/README.md) :
@@ -424,7 +429,7 @@ function buildKnownItems(matched) {
 
 export default async function handler(req, res) {
   const origin = req.headers && req.headers.origin;
-  // AI-P2-2 : requête refusée AVANT tout traitement (donc avant tout appel Mammouth) si
+  // AI-P2-2 : requête refusée AVANT tout traitement (donc avant tout appel Anthropic) si
   // une origine de navigateur non autorisée est explicitement présente — voir la limite
   // assumée dans le commentaire d'isAllowedOrigin ci-dessus.
   if (!isAllowedOrigin(origin)) {
@@ -487,15 +492,26 @@ export default async function handler(req, res) {
     const isPartialMatch = matched.length > 0;
     const textForAI = isPartialMatch ? unmatchedSegments.join(', ') : mealDescription;
 
-    const apiRes = await fetch(MAMMOUTH_API_URL, {
+    // Format Anthropic Messages API : le system prompt est un champ séparé,
+    // jamais un message de rôle "system" dans `messages` (contrairement au
+    // format OpenAI-compatible utilisé par Mammouth) — buildMessages() n'est
+    // pas modifiée (même prompt, mêmes few-shots), on en extrait juste le
+    // premier message (toujours le system prompt) ici.
+    const chatMessages = buildMessages(textForAI, isPartialMatch);
+    const systemPrompt = chatMessages[0].content;
+    const conversationMessages = chatMessages.slice(1);
+
+    const apiRes = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.CARNET_API_KEY}`,
+        'x-api-key': process.env.CARNET_API_KEY,
+        'anthropic-version': ANTHROPIC_VERSION,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: MAMMOUTH_MODEL,
-        messages: buildMessages(textForAI, isPartialMatch),
+        model: ANTHROPIC_MODEL,
+        system: systemPrompt,
+        messages: conversationMessages,
         // Baissé de 0.2 à 0.1 : la variance élevée constatée en régénérant plusieurs fois
         // le même repas (ex. un repas McDonald's précis donnant entre 1200 et 1600 kcal
         // selon la régénération) venait surtout d'un manque de repère pour les produits de
@@ -510,27 +526,24 @@ export default async function handler(req, res) {
 
     if (!apiRes.ok) {
       const errText = await apiRes.text();
-      console.error('Mammouth API error:', apiRes.status, errText);
-      // Blocage compte amont (Mammouth/OpenRouter) plutôt qu'une erreur liée à CE repas —
-      // le message brut ("Policy Violation... this user has been blocked") est technique et
-      // ne dit pas à l'utilisateur qu'il doit vérifier son compte Mammouth, pas reformuler sa
-      // saisie. Détecté par mot-clé plutôt que par code HTTP précis (l'upstream peut varier),
-      // sans jamais masquer les vraies erreurs (mauvaise description, quota, etc.).
-      const isAccountBlocked = /policy violation|has been blocked/i.test(errText);
-      if (isAccountBlocked) {
-        return res.status(502).json({
-          error: 'Compte Mammouth bloqué',
-          details: "L'API Mammouth a bloqué ce compte suite à une violation de politique détectée sur une requête précédente (probablement un faux positif). Ce n'est pas lié à ce repas précis : va vérifier ton compte sur mammouth.ai ou contacte leur support.",
-        });
-      }
+      console.error('Anthropic API error:', apiRes.status, errText);
       return res.status(502).json({
-        error: 'Erreur API Mammouth',
+        error: 'Erreur API Anthropic',
         details: `${apiRes.status}: ${errText.slice(0, 300)}`,
       });
     }
 
     const payload = await apiRes.json();
-    const responseText = payload?.choices?.[0]?.message?.content || '';
+    // Format Anthropic : `content` est un tableau de blocs (texte, appel
+    // d'outil, ...), jamais `choices[0].message.content` (format OpenAI-
+    // compatible de Mammouth). Pas d'outil utilisé ici, donc un seul bloc
+    // texte attendu, mais on cherche explicitement le bloc de type "text"
+    // plutôt que de supposer content[0].
+    const textBlock = Array.isArray(payload?.content) ? payload.content.find(b => b.type === 'text') : null;
+    const responseText = textBlock?.text || '';
+    // Mesure ponctuelle de consommation (side quest migration, voir CLAUDE.md) :
+    // visible dans les logs Vercel, pas de pipeline de facturation construit.
+    if (payload?.usage) console.log('[anthropic usage] parse-meal:', payload.usage);
 
     let nutritionData;
     try {
