@@ -1,7 +1,7 @@
 /* ===================== IA — COLLER UN PROGRAMME DE SPORT ===================== */
 /* Appelle la fonction serverless /api/parse-workout (Vercel) : celle-ci fait
    structurer un texte de programme (collé depuis un coach, Skool, etc.) en
-   blocks/exercices par l'IA Mammouth, et calcule côté serveur une durée totale
+   blocks/exercices par l'API Anthropic (Claude), et calcule côté serveur une durée totale
    estimée (voir commentaire dans api/parse-workout.js).
 
    Réutilise le même mécanisme cross-domaine que js/mealparser.js /
